@@ -23,7 +23,7 @@ export function stage(directory, manifest, files) {
       url: `git+${repository}.git`,
       directory: relative(join(directory, '../..'), directory),
     },
-    bugs: { url: `${repository}/issues` },
+    bugs: { url: `${repository}/issues`, email: 'support@herald.run' },
     engines: { node: '>=20' },
     ...manifest,
     files: [...files.map((file) => basename(file)), 'README.md', 'LICENSE', 'CHANGELOG.md'],
