@@ -106,8 +106,13 @@ jobs:
             if [ "$PACKAGE" != all ] && [ "$PACKAGE" != npm ] && [ "$PACKAGE" != "$name" ]; then continue; fi
             tarball=./$(ls dist-npm/herald-run-"$name"-*.tgz)
             version=$(tar -xOzf "$tarball" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0)).version')
+            pkg=$(tar -xOzf "$tarball" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0)).name')
             tag=latest
-            case "$version" in *-*) tag=beta ;; esac
+            # Prereleases stay off `latest` once a stable version exists.
+            case "$version" in *-*)
+              stable=$(npm view "$pkg" versions --json 2>/dev/null | node -p 'Number([].concat(JSON.parse(String(require("fs").readFileSync(0))||"[]")).some((v) => !v.includes("-")))' || echo 0)
+              [ "$stable" = 1 ] && tag=beta ;;
+            esac
             flags=(--access public --tag "$tag")
             [ "$PROVENANCE" = true ] && flags+=(--provenance)
             [ "$DRY_RUN" = true ] && flags+=(--dry-run)
