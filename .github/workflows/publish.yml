@@ -93,9 +93,10 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC, no token) needs npm 11.5.1 or later.
+      - run: node -e "const [a,b,c]=process.argv[1].split('.').map(Number);if(a<11||(a===11&&(b<5||(b===5&&c<1))))throw new Error('npm '+process.argv[1]+' lacks trusted publishing')" "$(npm --version)"
       - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PACKAGE: ${{ inputs.package }}
           DRY_RUN: ${{ inputs.dry_run }}
           # npm provenance requires a public source repository.
