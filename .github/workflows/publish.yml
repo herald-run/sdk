@@ -103,7 +103,7 @@ jobs:
         run: |
           for name in sdk cli mcp; do
             if [ "$PACKAGE" != all ] && [ "$PACKAGE" != npm ] && [ "$PACKAGE" != "$name" ]; then continue; fi
-            tarball=$(ls dist-npm/herald-run-"$name"-*.tgz)
+            tarball=./$(ls dist-npm/herald-run-"$name"-*.tgz)
             version=$(tar -xOzf "$tarball" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0)).version')
             tag=latest
             case "$version" in *-*) tag=beta ;; esac
