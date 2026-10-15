@@ -1,6 +1,6 @@
 {
   "name": "@herald-run/sdk",
-  "version": "0.3.0-beta.1",
+  "version": "0.3.0-beta.2",
   "private": true,
   "type": "module",
   "exports": {

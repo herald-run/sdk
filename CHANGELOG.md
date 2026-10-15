@@ -2,6 +2,10 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
+## 0.3.0-beta.2
+
+- npm packages publish through trusted publishing (OIDC) with provenance; no code changes.
+
 ## 0.3.0-beta.1
 
 - Published as `@herald-run/sdk`, `@herald-run/cli` (`npx @herald-run/cli`) and `herald-run` (import `herald`); Node.js 20+, Python 3.11+.
