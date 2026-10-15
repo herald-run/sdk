@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-python/
+dist-npm/
 .venv/
 __pycache__/
 *.pyc

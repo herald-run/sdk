@@ -1,7 +1,8 @@
 name: publish
 # Publishes @herald-run/sdk, @herald-run/cli and @herald-run/mcp to npm and herald-run to PyPI.
 # Dry runs (the default) build, test and pack everything but upload nothing; real publishes run
-# from main only.
+# from main only. Only the upload jobs get the environment, OIDC and the npm token; they run no
+# installs or builds, just the artifacts the build job made.
 on:
   workflow_dispatch:
     inputs:
@@ -20,10 +21,60 @@ concurrency:
   group: publish
   cancel-in-progress: false
 jobs:
-  npm:
-    if: inputs.package != 'python'
+  build:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    steps:
+      - name: Refuse real publishes from other refs
+        if: ${{ !inputs.dry_run && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::Publish from main, not $GITHUB_REF"
+          exit 1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build
+      - name: Pack and install the tarballs outside the workspace
+        run: |
+          mkdir -p dist-npm "$RUNNER_TEMP/smoke"
+          npm pack ./packages/sdk/dist/npm ./packages/cli/dist/npm ./packages/mcp/dist/npm --pack-destination dist-npm
+          cd "$RUNNER_TEMP/smoke"
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/dist-npm/*.tgz
+          node --input-type=module -e "import { Herald, version } from '@herald-run/sdk'; import { messageInputSchema } from '@herald-run/sdk/schema'; import { seal } from '@herald-run/sdk/crypto'; new Herald({ apiKey: 'x' }); console.log(version, typeof messageInputSchema.parse, typeof seal)"
+          npx herald --version
+          npx herald help send > /dev/null
+          npx herald integrate claude-code --scope project --dry-run > integrate.txt && grep -q herald-ask integrate.txt
+          npx herald-mcp --version
+      - name: Build and test the wheel
+        run: |
+          python3 -m venv "$RUNNER_TEMP/py"
+          "$RUNNER_TEMP/py/bin/pip" install -q build
+          "$RUNNER_TEMP/py/bin/python" -m build packages/python --outdir dist-python
+          "$RUNNER_TEMP/py/bin/pip" install -q dist-python/*.whl
+          "$RUNNER_TEMP/py/bin/python" -m unittest discover -s packages/python/tests
+          ls -l dist-npm dist-python
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm
+          path: dist-npm/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python
+          path: dist-python/
+          if-no-files-found: error
+  npm:
+    if: inputs.package != 'python'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     environment: packages
     permissions:
       contents: read
@@ -34,29 +85,14 @@ jobs:
         run: |
           echo "::error::Publish from main, not $GITHUB_REF"
           exit 1
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: npm
+          path: dist-npm
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version-file: .node-version
-          cache: pnpm
+          node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm build
-      - name: Install the packed tarballs outside the workspace
-        run: |
-          dir="$RUNNER_TEMP/smoke"
-          mkdir -p "$dir"
-          npm pack ./packages/sdk/dist/npm ./packages/cli/dist/npm ./packages/mcp/dist/npm --pack-destination "$dir"
-          cd "$dir"
-          npm init -y > /dev/null
-          npm install ./herald-run-sdk-*.tgz ./herald-run-cli-*.tgz ./herald-run-mcp-*.tgz
-          node --input-type=module -e "import { Herald, version } from '@herald-run/sdk'; import { messageInputSchema } from '@herald-run/sdk/schema'; import { seal } from '@herald-run/sdk/crypto'; new Herald({ apiKey: 'x' }); console.log(version, typeof messageInputSchema.parse, typeof seal)"
-          npx herald --version
-          npx herald help send > /dev/null
-          npx herald integrate claude-code --scope project --dry-run > integrate.txt && grep -q herald-ask integrate.txt
-          npx herald-mcp --version
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -67,20 +103,21 @@ jobs:
         run: |
           for name in sdk cli mcp; do
             if [ "$PACKAGE" != all ] && [ "$PACKAGE" != npm ] && [ "$PACKAGE" != "$name" ]; then continue; fi
-            dir="./packages/$name/dist/npm"
-            version=$(node -p "require('$dir/package.json').version")
+            tarball=$(ls dist-npm/herald-run-"$name"-*.tgz)
+            version=$(tar -xOzf "$tarball" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0)).version')
             tag=latest
             case "$version" in *-*) tag=beta ;; esac
             flags=(--access public --tag "$tag")
             [ "$PROVENANCE" = true ] && flags+=(--provenance)
             [ "$DRY_RUN" = true ] && flags+=(--dry-run)
-            npm publish "$dir" "${flags[@]}"
+            npm publish "$tarball" "${flags[@]}"
           done
   pypi:
     if: inputs.package == 'all' || inputs.package == 'python'
+    needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # PyPI trusted publisher: this repository, workflow publish.yml, environment packages.
+    # PyPI trusted publisher: herald-run/sdk, workflow publish.yml, environment packages.
     environment: packages
     permissions:
       contents: read
@@ -91,15 +128,11 @@ jobs:
         run: |
           echo "::error::Publish from main, not $GITHUB_REF"
           exit 1
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Build and test the wheel
-        run: |
-          python3 -m venv "$RUNNER_TEMP/py"
-          "$RUNNER_TEMP/py/bin/pip" install -q build
-          "$RUNNER_TEMP/py/bin/python" -m build packages/python --outdir dist-python
-          "$RUNNER_TEMP/py/bin/pip" install -q dist-python/*.whl
-          "$RUNNER_TEMP/py/bin/python" -m unittest discover -s packages/python/tests
-          ls -l dist-python
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: python
+          path: dist-python
+      - run: ls -l dist-python
       - if: ${{ !inputs.dry_run }}
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
