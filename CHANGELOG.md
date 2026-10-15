@@ -2,6 +2,10 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
+## 0.3.0-beta.3
+
+- CLI: `integrate claude-code|codex` works with `--profile`, `--url` and `HERALD_PROFILE`, and re-registers the MCP server when they change.
+
 ## 0.3.0-beta.2
 
 - npm packages publish through trusted publishing (OIDC) with provenance; no code changes.
