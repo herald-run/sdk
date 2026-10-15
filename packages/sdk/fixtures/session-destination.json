@@ -1,0 +1,151 @@
+{
+  "name": "Session runner (sample)",
+  "description": "Preview session requests. This sample does not start real sessions.",
+  "transport": {
+    "kind": "pull"
+  },
+  "types": [
+    {
+      "id": "session",
+      "kind": "session",
+      "label": "Start a Session",
+      "description": "Send a prompt and session options to your connected harness.",
+      "session": {
+        "attachments": {
+          "maxFiles": 5
+        },
+        "modes": [
+          {
+            "id": "permission",
+            "label": "Permissions",
+            "default": "ask",
+            "options": [
+              {
+                "value": "ask",
+                "label": "Ask Before Actions"
+              },
+              {
+                "value": "auto",
+                "label": "Auto"
+              },
+              {
+                "value": "delegate",
+                "label": "Approve for Me"
+              }
+            ]
+          },
+          {
+            "id": "workflow",
+            "label": "Workflow",
+            "options": [
+              {
+                "value": "plan",
+                "label": "Plan"
+              },
+              {
+                "value": "execute",
+                "label": "Execute"
+              }
+            ]
+          }
+        ],
+        "model": {
+          "label": "Model",
+          "options": [
+            {
+              "value": "balanced",
+              "label": "Balanced"
+            },
+            {
+              "value": "fast",
+              "label": "Fast"
+            },
+            {
+              "value": "capable",
+              "label": "Most Capable"
+            }
+          ]
+        },
+        "effort": {
+          "label": "Effort",
+          "options": [
+            {
+              "value": "low",
+              "label": "Low"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "high",
+              "label": "High"
+            }
+          ]
+        },
+        "commands": [
+          {
+            "id": "review",
+            "label": "/review",
+            "description": "Review changes against a base branch. Focus on correctness, regressions, and missing tests.",
+            "arguments": [
+              {
+                "id": "base",
+                "label": "Base Branch",
+                "type": "text",
+                "required": true,
+                "default": "main"
+              },
+              {
+                "id": "focus",
+                "label": "Review Focus",
+                "type": "multiselect",
+                "options": [
+                  {
+                    "value": "correctness",
+                    "label": "Correctness"
+                  },
+                  {
+                    "value": "security",
+                    "label": "Security"
+                  },
+                  {
+                    "value": "tests",
+                    "label": "Tests"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "investigate",
+            "label": "/investigate",
+            "description": "Investigate a reported problem and explain the cause before changing files.",
+            "arguments": [
+              {
+                "id": "issue",
+                "label": "Issue or Reproduction Steps",
+                "type": "textarea",
+                "required": true
+              }
+            ]
+          }
+        ]
+      },
+      "fields": [
+        {
+          "id": "workspace",
+          "label": "Workspace",
+          "type": "text",
+          "placeholder": "Repository or workspace identifier"
+        }
+      ]
+    },
+    {
+      "id": "prompt_only",
+      "kind": "session",
+      "label": "Start a Simple Session",
+      "description": "Send a prompt using the connection\u2019s defaults."
+    }
+  ]
+}

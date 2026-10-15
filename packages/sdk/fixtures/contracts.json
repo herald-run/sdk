@@ -1,0 +1,595 @@
+{
+  "values": {
+    "publicKey": {
+      "kty": "RSA",
+      "n": "1I9uhCbWTOIaw8MJ-U9bm0KqpdOiay89JPf0MmXX5aICOUBpQ_Wh_tiezHe4bDfiupko-soK3mz3gOq390ssyEzg7_FlRwpKiP4s0k_g411Cxtn15DlmKV1iECgmFb_taxziy35JD_RSXI5oAxxdK2VKgFcYY0yUlkXT5bgICdph5b7EsnIBqlPEKLzdrjSHqdyW6BBqPMXvY-gp52amjXYRCRV7-451jz6I6RnPk-AvhA3PUPLGQEIgDaZJKz0a7pGAAbx4kQ_zVdd-sso-37eLHq3SDlHNztlRBeWrBU2l9okk9omoEXgq2FyfgiMVlsFJmRGPa--4V7ocd99EvQ",
+      "e": "AQAB",
+      "alg": "RSA-OAEP-256",
+      "ext": true,
+      "key_ops": ["encrypt"]
+    },
+    "envelope": {
+      "key": "kFKV6ViauwNb3eackD1BOBzuH0ue3uJGkd3YrixcIaZtBkse06lyHmhMEWnpgdXMCqzi5GjWwoJr3xTXqVVJNxN/pI6bI8mlRbxRUAAjh+dALRVvl1U34VHw/lq7lQy4yigqUCVuo+sUEpEtAPhaR5y7ce7wedB1/4w7vqHzmHpgs1/yPx+IpyMRMRAtj8Jma0HvUTFXX4CF3DlD6z8Oy9LYi2Xiqp2qAgTmpHRjq04Cl93LFDmd7SU2nAdA0x68K/4D5tXJJ3O4bodLf7KSuInT8OzXU3BqAPaRLa8tGVUfYGzeQ4vX3kMsFPLmCPU3vDrYj4XO0QEJUDpc06WN2g==",
+      "iv": "wbVwhBxT/0MpHwDu",
+      "data": "i4VnFIAhs3B+DR8hhNUD381Th+BnpXUPvjCsPomW"
+    }
+  },
+  "steps": [
+    {
+      "name": "register",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/destinations",
+        "body": {
+          "key": "laptop",
+          "types": [
+            {
+              "id": "run",
+              "label": "Run",
+              "fields": [{ "id": "prompt", "label": "Prompt", "type": "text", "required": true }]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": { "key": "laptop", "name": "Runner", "id": "<id>", "integrationId": "<id>" }
+      }
+    },
+    {
+      "name": "destinations",
+      "request": { "method": "GET", "path": "/api/v1/destinations" },
+      "response": {
+        "status": 200,
+        "body": [{ "key": "laptop", "name": "Runner", "id": "<id>", "integrationId": "<id>" }]
+      }
+    },
+    {
+      "name": "update-destination",
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/destinations/{register.id}",
+        "body": {
+          "key": "laptop",
+          "types": [
+            {
+              "id": "run",
+              "label": "Run",
+              "fields": [{ "id": "prompt", "label": "Prompt", "type": "text", "required": true }]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "key": "laptop",
+          "name": "Runner",
+          "id": "<id>",
+          "integrationId": "<id>"
+        }
+      }
+    },
+    {
+      "name": "upload",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/files",
+        "body": { "name": "notes.txt", "type": "text/plain", "size": 5 }
+      },
+      "upload": {
+        "path": "/api/v1/files/{upload.id}",
+        "text": "hello",
+        "response": { "status": 200, "body": { "ok": true } }
+      },
+      "response": {
+        "status": 201,
+        "body": { "id": "<id>", "name": "notes.txt", "size": 5, "type": "text/plain" }
+      }
+    },
+    {
+      "name": "download",
+      "request": { "method": "GET", "path": "/api/v1/files/{upload.id}" },
+      "response": { "status": 200, "body": "hello" }
+    },
+    {
+      "name": "send",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages",
+        "headers": { "Idempotency-Key": "send-1" },
+        "body": {
+          "title": "Deploy?",
+          "kind": "form",
+          "fields": [
+            { "id": "approved", "label": "Approved", "type": "boolean", "required": true }
+          ],
+          "attachments": [
+            { "id": "{upload.id}", "name": "notes.txt", "size": 5, "type": "text/plain" }
+          ]
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "<id>",
+          "title": "Deploy?",
+          "kind": "form",
+          "status": "pending",
+          "direction": "inbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>"
+        }
+      }
+    },
+    {
+      "name": "get",
+      "request": { "method": "GET", "path": "/api/v1/messages/{send.id}" },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "{send.id}",
+          "title": "Deploy?",
+          "kind": "form",
+          "status": "pending",
+          "direction": "inbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>"
+        }
+      }
+    },
+    {
+      "name": "answer",
+      "setup": true,
+      "principal": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages/{send.id}/response",
+        "body": { "values": { "approved": true } }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "<id>",
+          "title": "Deploy?",
+          "kind": "form",
+          "status": "answered",
+          "direction": "inbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>",
+          "response": {
+            "values": { "approved": true },
+            "secretFields": [],
+            "createdAt": "<time>"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread",
+      "request": { "method": "GET", "path": "/api/v1/messages/{send.id}/thread?after=0" },
+      "response": {
+        "status": 200,
+        "body": {
+          "messages": [
+            {
+              "id": "<id>",
+              "title": "Deploy?",
+              "kind": "form",
+              "status": "answered",
+              "direction": "inbound",
+              "sender": "Runner",
+              "createdAt": "<time>",
+              "revision": "<number>",
+              "response": {
+                "values": { "approved": true },
+                "secretFields": [],
+                "createdAt": "<time>"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "messages",
+      "request": { "method": "GET", "path": "/api/v1/messages?after=0" },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "id": "<id>",
+            "title": "Deploy?",
+            "kind": "form",
+            "status": "answered",
+            "direction": "inbound",
+            "sender": "Runner",
+            "createdAt": "<time>",
+            "revision": "<number>",
+            "response": {
+              "values": { "approved": true },
+              "secretFields": [],
+              "createdAt": "<time>"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "get-missing",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/messages/00000000-0000-4000-8000-000000000000"
+      },
+      "response": { "status": 404, "body": { "error": "Message not found." } }
+    },
+    {
+      "name": "send-secret-form",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages",
+        "headers": { "Idempotency-Key": "send-2" },
+        "body": {
+          "title": "Token",
+          "kind": "form",
+          "fields": [{ "id": "token", "label": "Token", "type": "secret", "required": true }],
+          "publicKey": "{values.publicKey}"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "<id>",
+          "title": "Token",
+          "kind": "form",
+          "status": "pending",
+          "direction": "inbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>"
+        }
+      }
+    },
+    {
+      "name": "answer-secret",
+      "setup": true,
+      "principal": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages/{send-secret-form.id}/response",
+        "body": { "values": {}, "secrets": { "token": "{values.envelope}" } }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "<id>",
+          "title": "Token",
+          "kind": "form",
+          "status": "answered",
+          "direction": "inbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>",
+          "response": { "values": {}, "secretFields": ["token"], "createdAt": "<time>" }
+        }
+      }
+    },
+    {
+      "name": "collect-secrets",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages/{send-secret-form.id}/secrets",
+        "body": {}
+      },
+      "response": { "status": 200, "body": { "token": "{values.envelope}" } }
+    },
+    {
+      "name": "offer-secret",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages",
+        "headers": { "Idempotency-Key": "send-3" },
+        "body": { "title": "API key", "kind": "secret" }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "<id>",
+          "title": "API key",
+          "kind": "secret",
+          "status": "pending",
+          "direction": "inbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>",
+          "secretDelivery": "offered"
+        }
+      }
+    },
+    {
+      "name": "claim-secret",
+      "setup": true,
+      "principal": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages/{offer-secret.id}/secret-receiver",
+        "body": {
+          "claimId": "11111111-1111-4111-8111-111111111111",
+          "publicKey": "{values.publicKey}"
+        }
+      },
+      "response": { "status": 200, "body": { "ok": true } }
+    },
+    {
+      "name": "secret-receiver",
+      "request": { "method": "GET", "path": "/api/v1/messages/{offer-secret.id}/secret-receiver" },
+      "response": {
+        "status": 200,
+        "body": {
+          "claimId": "11111111-1111-4111-8111-111111111111",
+          "publicKey": "{values.publicKey}"
+        }
+      }
+    },
+    {
+      "name": "deliver-secret",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages/{offer-secret.id}/secret-delivery",
+        "body": { "claimId": "{secret-receiver.claimId}", "envelope": "{values.envelope}" }
+      },
+      "response": { "status": 200, "body": { "ok": true } }
+    },
+    {
+      "name": "cancel",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/messages/{offer-secret.id}/cancel",
+        "body": {}
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "{offer-secret.id}",
+          "title": "API key",
+          "kind": "secret",
+          "status": "cancelled",
+          "direction": "inbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>",
+          "secretDelivery": "ready"
+        }
+      }
+    },
+    {
+      "name": "outbox",
+      "setup": true,
+      "principal": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/outbox",
+        "headers": { "Idempotency-Key": "task-1" },
+        "body": {
+          "destinationId": "{register.id}",
+          "typeId": "run",
+          "values": { "prompt": "Hi" }
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "<id>",
+          "title": "Run",
+          "kind": "message",
+          "status": "queued",
+          "direction": "outbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>",
+          "response": { "values": { "prompt": "Hi" }, "secretFields": [], "createdAt": "<time>" },
+          "recipientId": "<id>",
+          "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } }
+        }
+      }
+    },
+    {
+      "name": "claim-task",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/tasks/{outbox.id}/claim",
+        "body": { "runnerId": "runner-1", "heartbeat": true }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "task": {
+            "id": "<id>",
+            "title": "Run",
+            "kind": "message",
+            "status": "running",
+            "direction": "outbound",
+            "sender": "Runner",
+            "createdAt": "<time>",
+            "revision": "<number>",
+            "response": {
+              "values": { "prompt": "Hi" },
+              "secretFields": [],
+              "createdAt": "<time>"
+            },
+            "recipientId": "<id>",
+            "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } }
+          },
+          "lease": "<id>",
+          "leaseExpiresAt": "<time>"
+        }
+      }
+    },
+    {
+      "name": "heartbeat-task",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/tasks/{outbox.id}/heartbeat",
+        "body": { "lease": "{claim-task.lease}" }
+      },
+      "response": { "status": 200, "body": { "lease": "<id>", "leaseExpiresAt": "<time>" } }
+    },
+    {
+      "name": "task-logs",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/tasks/{outbox.id}/update",
+        "headers": { "Idempotency-Key": "logs-0" },
+        "body": {
+          "lease": "{claim-task.lease}",
+          "logs": [{ "sequence": 0, "stream": "stdout", "text": "hi" }]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "{outbox.id}",
+          "title": "Run",
+          "kind": "message",
+          "status": "running",
+          "direction": "outbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>",
+          "response": { "values": { "prompt": "Hi" }, "secretFields": [], "createdAt": "<time>" },
+          "recipientId": "<id>",
+          "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } }
+        }
+      }
+    },
+    {
+      "name": "read-task-logs",
+      "request": { "method": "GET", "path": "/api/v1/messages/{outbox.id}/logs" },
+      "response": {
+        "status": 200,
+        "body": { "logs": [{ "sequence": 0, "stream": "stdout", "text": "hi" }] }
+      }
+    },
+    {
+      "name": "complete-task",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/tasks/{outbox.id}/update",
+        "body": { "lease": "{claim-task.lease}", "status": "completed" }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "{outbox.id}",
+          "title": "Run",
+          "kind": "message",
+          "status": "completed",
+          "direction": "outbound",
+          "sender": "Runner",
+          "createdAt": "<time>",
+          "revision": "<number>",
+          "response": { "values": { "prompt": "Hi" }, "secretFields": [], "createdAt": "<time>" },
+          "recipientId": "<id>",
+          "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } },
+          "result": { "status": "completed", "completedAt": "<time>" }
+        }
+      }
+    },
+    {
+      "name": "rotate-secret",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/destinations/{register.id}/secret",
+        "body": {}
+      },
+      "response": {
+        "status": 409,
+        "body": { "error": "Only webhook destinations have a signing secret." }
+      }
+    },
+    {
+      "name": "account",
+      "request": { "method": "GET", "path": "/api/v1/account" },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "<id>",
+          "email": "invited@example.com",
+          "plan": "<string>",
+          "used": "<number>",
+          "storage": "<number>",
+          "usageResetsAt": "<time>"
+        }
+      }
+    },
+    {
+      "name": "delete-destination",
+      "request": { "method": "DELETE", "path": "/api/v1/destinations/{register.id}" },
+      "response": { "status": 200, "body": { "ok": true } }
+    },
+    {
+      "name": "create-integration",
+      "principal": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/integrations",
+        "body": { "name": "CLI", "scopes": ["messages:read"] }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "token": "<string>",
+          "integration": {
+            "id": "<id>",
+            "name": "CLI",
+            "scopes": ["messages:read"],
+            "createdAt": "<time>",
+            "color": { "mode": "auto" }
+          }
+        }
+      }
+    },
+    {
+      "name": "integrations",
+      "principal": "owner",
+      "request": { "method": "GET", "path": "/api/v1/integrations" },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "id": "<id>",
+            "name": "Runner",
+            "scopes": [
+              "messages:send",
+              "messages:read",
+              "destinations:manage",
+              "events:read",
+              "files:write"
+            ],
+            "color": { "mode": "auto" },
+            "createdAt": "<time>"
+          },
+          {
+            "id": "<id>",
+            "name": "CLI",
+            "scopes": ["messages:read"],
+            "color": { "mode": "auto" },
+            "createdAt": "<time>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "delete-integration",
+      "principal": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/integrations/{create-integration.integration.id}"
+      },
+      "response": { "status": 200, "body": { "ok": true } }
+    }
+  ]
+}

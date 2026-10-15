@@ -1,0 +1,27 @@
+{
+  "name": "@herald-run/sdk",
+  "version": "0.3.0-beta.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./crypto": "./src/schema/crypto.ts",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "scripts": {
+    "types": "tsc --noEmit && node build.mjs",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "ws": "^8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8",
+    "dts-bundle-generator": "^9.5.1",
+    "esbuild": "^0.28.1"
+  },
+  "license": "MIT",
+  "description": "Published from dist/npm; see build.mjs."
+}

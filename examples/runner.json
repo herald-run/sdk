@@ -1,0 +1,7 @@
+{
+  "command": "/bin/cat",
+  "args": [],
+  "cwd": "/tmp",
+  "env": [],
+  "timeout": 600
+}

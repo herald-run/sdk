@@ -1,0 +1,18 @@
+{
+  "title": "Ready to deploy?",
+  "kind": "form",
+  "body": "The checks passed. Choose the next step.",
+  "fields": [
+    {
+      "id": "approve",
+      "type": "boolean",
+      "label": "Deploy now?",
+      "required": true
+    },
+    {
+      "id": "notes",
+      "type": "textarea",
+      "label": "Anything else?"
+    }
+  ]
+}

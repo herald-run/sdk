@@ -1,0 +1,26 @@
+{
+  "name": "@herald-run/mcp",
+  "version": "0.3.0-beta.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "herald-mcp": "dist/herald-mcp.js"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@herald-run/cli": "workspace:*",
+    "@herald-run/sdk": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "ws": "^8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8",
+    "esbuild": "^0.28.1"
+  },
+  "license": "MIT",
+  "description": "Published from dist/npm; see build.mjs."
+}

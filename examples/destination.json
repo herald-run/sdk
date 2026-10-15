@@ -1,0 +1,18 @@
+{
+  "key": "laptop",
+  "description": "Start a new agent task",
+  "types": [
+    {
+      "id": "task",
+      "label": "Start a task",
+      "fields": [
+        {
+          "id": "prompt",
+          "type": "textarea",
+          "label": "What should I work on?",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

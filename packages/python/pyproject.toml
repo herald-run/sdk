@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+[project]
+name = "herald-run"
+dynamic = ["version"]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+description = "Python client for Herald, the human-in-the-loop inbox for agents"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27,<1", "websockets>=14,<17", "pydantic>=2.6,<3", "cryptography>=42"]
+classifiers = ["Development Status :: 4 - Beta", "Programming Language :: Python :: 3", "Typing :: Typed"]
+[project.urls]
+Homepage = "https://herald.run"
+Documentation = "https://herald.run/docs/python/"
+Source = "https://github.com/herald-run/sdk"
+Issues = "https://github.com/herald-run/sdk/issues"
+[tool.hatch.version]
+path = "herald/_version.py"
+[tool.hatch.build.targets.wheel]
+packages = ["herald"]
+[tool.hatch.build.targets.sdist]
+include = ["herald", "tests", "README.md", "LICENSE"]

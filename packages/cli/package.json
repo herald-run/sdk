@@ -1,0 +1,30 @@
+{
+  "name": "@herald-run/cli",
+  "version": "0.3.0-beta.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "herald": "dist/herald.js"
+  },
+  "exports": {
+    "./config": "./src/config.ts",
+    "./files": "./src/files.ts",
+    "./help": "./src/help.ts",
+    "./secrets": "./src/secrets.ts"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@herald-run/sdk": "workspace:*",
+    "ws": "^8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "@types/ws": "^8"
+  },
+  "license": "MIT",
+  "description": "Published from dist/npm; see build.mjs."
+}
