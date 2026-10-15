@@ -30,13 +30,6 @@ export const messageFilterSchema = z.object({
   exclude: z.literal('true').optional(),
 });
 export type MessageFilter = z.infer<typeof messageFilterSchema>;
-export function matchesMessageFilter(message: Message, filter: MessageFilter) {
-  if (!filter.status && !filter.direction) return true;
-  const match =
-    (!filter.status || message.status === filter.status) &&
-    (!filter.direction || message.direction === filter.direction);
-  return filter.exclude ? !match : match;
-}
 /** A deleted message in the revision feed (`GET /messages?after=N&tombstones=1`). */
 export interface Tombstone {
   id: string;
@@ -89,14 +82,6 @@ export interface Account {
   used: number;
   reserved?: number;
   credits?: number;
-  topupsAvailable?: boolean;
-  billing?: { checkoutPlans: ('starter' | 'pro')[]; portalAvailable: boolean };
-  subscription?: {
-    plan: Plan;
-    status: string;
-    renewsAt?: string;
-    endsAt?: string;
-  };
   devices?: number;
   storage: number;
   /** When the monthly included allowance resets (UTC month start). */

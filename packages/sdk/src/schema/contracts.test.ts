@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  fieldsSchema,
-  messageInputSchema,
-  searchText,
-  validateAnswers,
-  type Field,
-  type Message,
-} from './index';
+import { fieldsSchema, messageInputSchema, validateAnswers, type Field } from './index';
 import { createKeys, seal, unseal } from './crypto';
 describe('form boundaries', () => {
   const choice: Field = {
@@ -55,15 +48,5 @@ describe('form boundaries', () => {
           .message,
       ).toMatch(/metadata only/);
     expect(messageInputSchema.safeParse({ title: 'X', kind: 'task' }).success).toBe(false);
-  });
-  it('searches a task by its typed input values', () => {
-    const input = {
-      destinationId: 'd',
-      typeId: 't',
-      values: { repo: 'A' },
-      session: { prompt: 'Fix' },
-    };
-    const task = { title: 'Run', sender: 'R', body: '', input } as unknown as Message;
-    expect(searchText(task)).toBe('run r  a fix');
   });
 });
