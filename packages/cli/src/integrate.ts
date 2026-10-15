@@ -35,6 +35,20 @@ function skillsDirectory() {
   return [join(here, 'skills'), join(here, '..', 'skills')].find((dir) => existsSync(dir))!;
 }
 
+const envKeys = ['HERALD_PROFILE', 'HERALD_URL'];
+/** HERALD_* variables of a registered server: `codex mcp get --json` or `claude mcp get` text. */
+function registeredEnv(stdout: string): Record<string, string> {
+  let env: Record<string, string> = {};
+  try {
+    env = JSON.parse(stdout).transport?.env || {};
+  } catch {
+    for (const [, key, value] of stdout.matchAll(/^\s+([A-Z][A-Z0-9_]*)=(.*)$/gm)) env[key] = value;
+  }
+  return Object.fromEntries(envKeys.filter((k) => env[k] !== undefined).map((k) => [k, env[k]]));
+}
+const sameEnv = (a: Record<string, string>, b: Record<string, string>) =>
+  envKeys.every((k) => a[k] === b[k]);
+
 /** Installs the skills and registers the MCP server; prints each change. Returns an exit code. */
 export async function integrate(target: string, options: IntegrateOptions, io: IntegrateIo) {
   const scope = options.scope || 'user';
@@ -129,16 +143,27 @@ export async function integrate(target: string, options: IntegrateOptions, io: I
       cli === 'claude' ? '-e' : '--env',
       `${k}=${v}`,
     ]);
+    // The name goes first: `claude mcp add -e` takes several values and would swallow it.
     const add =
       cli === 'claude'
-        ? ['mcp', 'add', '--scope', 'user', ...envFlags, 'herald', '--', 'npx', '-y', spec]
+        ? ['mcp', 'add', '--scope', 'user', 'herald', ...envFlags, '--', 'npx', '-y', spec]
         : ['mcp', 'add', 'herald', ...envFlags, '--', 'npx', '-y', spec];
     const where = `${cli} MCP server herald (${spec})`;
-    const current = await io.run(cli, ['mcp', 'get', 'herald']);
+    const current = await io.run(cli, [
+      'mcp',
+      'get',
+      'herald',
+      ...(cli === 'codex' ? ['--json'] : []),
+    ]);
     if (current.code === 127) {
       io.err(`${cli} is not installed. Install it, then run: ${cli} ${add.join(' ')}`);
       failed = true;
-    } else if (current.code === 0 && current.stdout.includes(spec)) report('unchanged', where);
+    } else if (
+      current.code === 0 &&
+      current.stdout.includes(spec) &&
+      sameEnv(registeredEnv(current.stdout), env)
+    )
+      report('unchanged', where);
     else if (current.code === 0 && !current.stdout.includes(mcpPackage))
       io.err(`Kept the existing ${cli} MCP server named herald.`);
     else {

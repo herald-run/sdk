@@ -13,20 +13,48 @@ beforeEach(async () => {
 });
 afterEach(() => rm(home, { recursive: true, force: true }));
 const spec = `@herald-run/mcp@${version}`;
-/** A fake `claude`/`codex` whose MCP registry is `servers`. */
+/** A fake `claude`/`codex` whose MCP registry is `servers`; `claude -e` takes several values. */
 function programs(servers: Record<string, string> = {}, missing = false) {
   const calls: string[] = [];
+  const env: Record<string, Record<string, string>> = {};
   const run = async (command: string, args: string[]) => {
     calls.push([command, ...args].join(' '));
     if (missing) return { code: 127, stdout: '' };
-    const name = args.at(args.indexOf('--') > 0 ? args.indexOf('--') - 1 : -1)!;
-    if (args[1] === 'get')
-      return servers.herald ? { code: 0, stdout: servers.herald } : { code: 1, stdout: '' };
+    if (args[1] === 'get') {
+      if (!servers.herald) return { code: 1, stdout: '' };
+      const vars = env.herald || {};
+      const stdout =
+        command === 'codex'
+          ? JSON.stringify({ transport: { args: servers.herald.split(' ').slice(1), env: vars } })
+          : `herald:\n  Args: ${servers.herald}\n  Environment:\n${Object.entries(vars)
+              .map(([k, v]) => `    ${k}=${v}\n`)
+              .join('')}`;
+      return { code: 0, stdout };
+    }
     if (args[1] === 'remove') delete servers.herald;
-    if (args[1] === 'add') servers[name] = args.slice(args.indexOf('--') + 1).join(' ');
+    if (args[1] === 'add') {
+      const options = args.slice(2, args.indexOf('--'));
+      const vars: Record<string, string> = {};
+      let name: string | undefined;
+      for (let i = 0; i < options.length; i++) {
+        if (options[i] === '--scope') i++;
+        else if (options[i] === '-e' || options[i] === '--env') {
+          // claude's -e takes values up to the next option, as the real CLI does.
+          const variadic = command === 'claude';
+          do {
+            const [key, value] = (options[++i] ?? '').split(/=(.*)/s);
+            if (value === undefined) return { code: 1, stdout: '' };
+            vars[key] = value;
+          } while (variadic && options[i + 1] && !options[i + 1].startsWith('-'));
+        } else name ??= options[i];
+      }
+      if (!name) return { code: 1, stdout: '' };
+      servers[name] = args.slice(args.indexOf('--') + 1).join(' ');
+      env[name] = vars;
+    }
     return { code: 0, stdout: '' };
   };
-  return { calls, run, servers };
+  return { calls, run, servers, env };
 }
 async function integrate(argv: string[], run: Io['run']) {
   const out: string[] = [],
@@ -70,6 +98,31 @@ it('installs Claude Code skills and registers the MCP server idempotently', asyn
   expect(fake.calls).toEqual(['claude mcp get herald']);
 });
 
+it('passes the profile to Claude Code and re-registers when it changes', async () => {
+  const fake = programs();
+  const work = await integrate(['claude-code', '--profile', 'work'], fake.run);
+  expect(work.code).toBe(0);
+  expect(fake.calls.at(-1)).toBe(
+    `claude mcp add --scope user herald -e HERALD_PROFILE=work -- npx -y ${spec}`,
+  );
+  expect(fake.env.herald).toEqual({ HERALD_PROFILE: 'work' });
+  fake.calls.length = 0;
+  expect((await integrate(['claude-code', '--profile', 'work'], fake.run)).out).not.toMatch(
+    /updated|registered/,
+  );
+  expect(fake.calls).toEqual(['claude mcp get herald']);
+  const home = await integrate(['claude-code', '--profile', 'home'], fake.run);
+  expect(home.out).toContain('updated  claude MCP server herald');
+  expect(fake.env.herald).toEqual({ HERALD_PROFILE: 'home' });
+  await integrate(['claude-code'], fake.run);
+  expect(fake.env.herald).toEqual({});
+
+  const codex = programs();
+  await integrate(['codex', '--profile', 'work'], codex.run);
+  await integrate(['codex', '--profile', 'home'], codex.run);
+  expect(codex.env.herald).toEqual({ HERALD_PROFILE: 'home' });
+});
+
 it('upgrades its own entries and never overwrites foreign ones', async () => {
   const fake = programs({ herald: 'npx -y @herald-run/mcp@0.0.1' });
   const own = join(home, '.codex', 'skills', 'herald-ask');
@@ -92,7 +145,7 @@ it('upgrades its own entries and never overwrites foreign ones', async () => {
 
   const other = programs({ herald: 'node my-own-server.js' });
   expect((await integrate(['codex'], other.run)).err).toContain('Kept the existing codex MCP');
-  expect(other.calls).toEqual(['codex mcp get herald']);
+  expect(other.calls).toEqual(['codex mcp get herald --json']);
 });
 
 it('writes project config files for both targets', async () => {
