@@ -4,6 +4,7 @@ import { jsonSchemaFields } from './json-schema';
 import { actionSchema, type RequestAction } from './actions';
 import { reviewBlockSchema, reviewImageTypes, type ReviewBlock } from './review';
 import type { SessionInput, SessionRequest } from './session';
+import type { SealedEnvelope } from './e2ee';
 export const publicKeySchema = z
   .object({
     kty: z.literal('RSA'),
@@ -136,6 +137,8 @@ export interface TaskLog {
   sequence: number;
   stream: 'stdout' | 'stderr';
   text: string;
+  /** End-to-end encrypted chunk (`ctx.t = "log"`); `text` is empty. */
+  sealed?: SealedEnvelope;
 }
 export interface TaskExecution {
   attempt: number;
@@ -151,12 +154,16 @@ export interface TaskInput {
   typeId: string;
   values: Answers;
   session?: SessionInput;
+  /** End-to-end encrypted `values` and `session` (`ctx.t = "task"`). */
+  sealed?: SealedEnvelope;
 }
 /** How a task ended, as its runner reported it. */
 export interface TaskResult {
   status: 'completed' | 'failed';
   completedAt: string;
   error?: string;
+  /** End-to-end encrypted error (`ctx.t = "result"`). */
+  sealed?: SealedEnvelope;
 }
 /** Stored content. Input-only fields (`schema`, `expiresIn`, `taskId`) are never stored. */
 interface StoredContent {
@@ -188,8 +195,17 @@ interface StoredRecord extends StoredContent {
   archived: boolean;
   status: MessageStatus;
   /** On tasks (legacy) the flattened task input; see `input`. */
-  response?: { values: Answers; actionId?: string; secretFields: string[]; createdAt: string };
+  response?: {
+    values: Answers;
+    actionId?: string;
+    secretFields: string[];
+    createdAt: string;
+    /** End-to-end encrypted `values` and `actionId` (`ctx.t = "response"`). */
+    sealed?: SealedEnvelope;
+  };
   deleteAt?: string;
+  /** End-to-end encrypted content (`ctx.t = "message"`); content fields hold placeholders. */
+  sealed?: SealedEnvelope;
 }
 export interface InboundMessage extends StoredRecord {
   direction: 'inbound';
