@@ -19,9 +19,36 @@ import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
 import { integrate, type Run } from './integrate';
 import { listen } from './listen';
-import { login, userAgent } from './login';
+import { encryptionLine, login, savedToken, userAgent } from './login';
 import { requestSecret, sendSecret, secretFailure } from './secrets';
 
+/** A keyed client's verified account safety code; undefined for legacy tokens. */
+async function safetyCode(client: Herald) {
+  if (!client.keyed) return undefined;
+  await client.keys();
+  return client.fingerprint;
+}
+/** The server cannot search sealed content: filter up to five opened pages locally. */
+async function searchOpened(client: Herald, query: Parameters<Herald['messages']>[0] & object) {
+  const text = query.search!.toLowerCase();
+  const found: Message[] = [];
+  let before = query.before;
+  for (let page = 0; page < 5; page++) {
+    const list = await client.messages({ ...query, search: undefined, before });
+    for (const m of list)
+      if (
+        [m.title, m.body, ...(m.fields || []).map((f) => f.label)]
+          .join('\n')
+          .toLowerCase()
+          .includes(text)
+      )
+        found.push(m);
+    if (!list.length || query.after !== undefined) break;
+    const last = list.at(-1)!;
+    before = `${last.createdAt}|${last.id}`;
+  }
+  return found;
+}
 export type Io = {
   out: (line: string) => void;
   err: (line: string) => void;
@@ -64,6 +91,7 @@ const options = {
   after: { type: 'string' },
   before: { type: 'string' },
   search: { type: 'string' },
+  message: { type: 'string' },
   status: { type: 'string' },
   direction: { type: 'string' },
   name: { type: 'string' },
@@ -139,7 +167,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
     }
     const savedPath = tokenPath(directory, profile, host);
     const saved = await readSaved(savedPath);
-    const token = io.env.HERALD_API_KEY || io.env.HERALD_TOKEN || saved.token || '';
+    const token = io.env.HERALD_API_KEY || io.env.HERALD_TOKEN || savedToken(saved) || '';
     const client = new Herald({ url: base, apiKey: token, userAgent });
     const arg = (index: number, name: string) => {
       const value = positionals[index];
@@ -190,6 +218,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             ? `Connected. Reusing the stored token for ${result.saved.name}.`
             : `Connected to ${host}${profile === 'default' ? '' : ` as profile ${profile}`}. The token is stored locally.`,
         );
+        if (result.saved.fingerprint) io.err(encryptionLine(result.saved.fingerprint));
         return 0;
       }
       case 'logout': {
@@ -211,10 +240,16 @@ export async function main(argv: string[], io: Io): Promise<number> {
         return 0;
       }
       case 'whoami': {
-        const [info, account] = await Promise.all([client.token(), client.account()]);
-        print(format.tokenSummary(info) + '\n' + format.accountSummary(account), {
+        const [info, account, fingerprint] = await Promise.all([
+          client.token(),
+          client.account(),
+          safetyCode(client),
+        ]);
+        const lines = [format.tokenSummary(info), format.accountSummary(account)];
+        print([...lines, encryptionLine(fingerprint)].join('\n'), {
           token: info,
           account,
+          e2ee: { enabled: !!fingerprint, safetyCode: fingerprint },
         });
         return 0;
       }
@@ -232,6 +267,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
           try {
             info = await client.token();
             lines.push(`token    ${info.name} for ${info.account.email}`);
+            const code = await safetyCode(client);
+            lines.push(`e2ee     ${code ? `on (safety code ${code})` : 'off'}`);
           } catch (error) {
             problem = `token rejected: ${(error as Error).message}`;
           }
@@ -287,13 +324,17 @@ export async function main(argv: string[], io: Io): Promise<number> {
         const direction = values.direction as 'inbound' | 'outbound' | undefined;
         if (direction && !['inbound', 'outbound'].includes(direction))
           throw new UsageError('--direction is inbound or outbound.');
-        const list = await client.messages({
+        const query = {
           search: command === 'search' ? arg(1, '<text>') : values.search,
           status,
           direction,
           before: values.before,
           after: integer(values.after, '--after'),
-        });
+        };
+        const list =
+          client.keyed && query.search
+            ? await searchOpened(client, query)
+            : await client.messages(query);
         print(list.map(format.messageLine).join('\n') || 'No messages.', list);
         return 0;
       }
@@ -327,6 +368,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
       }
       case 'download': {
         const id = arg(1, '<file-id>');
+        // Opening the message teaches a keyed client its attachments' keys.
+        if (values.message) await client.get(values.message);
         const file = await client.download(id);
         const name = [...file.name]
           .filter((c) => c >= ' ' && c !== '\x7f')

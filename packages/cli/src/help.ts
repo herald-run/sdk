@@ -1,15 +1,17 @@
 /** Every command: arguments, summary and the options it accepts besides the global ones. */
 export type Spec = { args?: string; summary: string; options?: string[]; detail?: string };
+const searchNote =
+  'With end-to-end encryption the server cannot search content: the newest five pages are decrypted and filtered locally.';
 const message = ['input', 'title', 'body', 'file', 'reply-to', 'deadline', 'key'];
 export const commands: Record<string, Spec> = {
   login: {
     summary: 'Connect this device in the browser and store a token',
     options: ['name', 'scopes', 'no-browser'],
     detail:
-      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.',
+      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.\nOn accounts with end-to-end encryption, the approval also certifies a key stored with the token.',
   },
   logout: { summary: 'Revoke the stored token and delete it locally' },
-  whoami: { summary: 'Show the token, its scopes and the account' },
+  whoami: { summary: 'Show the token, its scopes, the account and end-to-end encryption' },
   status: { summary: 'Check the server and the stored token' },
   send: {
     summary: 'Send a message; --wait waits for an answer',
@@ -21,8 +23,14 @@ export const commands: Record<string, Spec> = {
   messages: {
     summary: 'List messages, newest first',
     options: ['search', 'status', 'direction', 'before', 'after'],
+    detail: searchNote,
   },
-  search: { args: '<text>', summary: 'Search messages', options: ['status', 'direction'] },
+  search: {
+    args: '<text>',
+    summary: 'Search messages',
+    options: ['status', 'direction'],
+    detail: searchNote,
+  },
   show: { args: '<message-id>', summary: 'Show a message with its answer and logs' },
   thread: { args: '<message-id>', summary: 'List a thread, oldest first' },
   logs: { args: '<task-id>', summary: 'Print task logs', options: ['after'] },
@@ -30,7 +38,8 @@ export const commands: Record<string, Spec> = {
   download: {
     args: '<file-id>',
     summary: 'Download an attachment (--out - writes stdout)',
-    options: ['out'],
+    options: ['out', 'message'],
+    detail: 'End-to-end encrypted files need --message, the message that carries them.',
   },
   destinations: {
     args: '[list | update <id> -i file | remove <id> | rotate-secret <id>]',
@@ -87,6 +96,7 @@ const describe: Record<string, string> = {
   config: '--config FILE      Runner config',
   concurrency: '--concurrency N    Tasks at once (1-16)',
   label: '--label TEXT',
+  message: '--message ID       Message with the attachment (decrypts it)',
   scope: '--scope SCOPE      user (default) or project (current directory)',
   'dry-run': '--dry-run          Print the changes without making them',
 };

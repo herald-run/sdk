@@ -1,10 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { scopes } from '@herald-run/sdk/schema';
+import * as e2ee from '@herald-run/sdk/e2ee';
 import { defaultScopes, login, parseScopes } from './login';
 afterEach(() => vi.restoreAllMocks());
 type Server = {
   integrations: Array<{ id: string; name: string; scopes: string[] }>;
   destinations?: Array<{ id: string; integrationId: string }>;
+  keys?: unknown;
+  certificate?: () => Promise<unknown>;
 };
 function server(state: Server) {
   const calls: string[] = [];
@@ -37,6 +40,8 @@ function server(state: Server) {
       );
     }
     if (path === '/api/v1/destinations') return Response.json(state.destinations || []);
+    if (path === '/api/v1/keys') return Response.json(state.keys || { account: null });
+    if (path === '/api/v1/keys/device-code/U') return Response.json(await state.certificate!());
     return Response.json({ ok: true });
   });
   return { calls, created };
@@ -98,7 +103,9 @@ it('requests the default scopes without asking and rejects unknown scopes before
   const log = io();
   await login('https://herald.test', {}, {}, { ...log, ask, open });
   expect(ask).not.toHaveBeenCalled();
-  expect(open).toHaveBeenCalledWith('https://herald.test/device');
+  expect(open).toHaveBeenCalledWith(
+    expect.stringMatching(/^https:\/\/herald\.test\/device#k=[\w-]+\.[\w-]+$/),
+  );
   expect(log.log).toHaveBeenCalledWith(
     expect.stringContaining('Opened https://herald.test/device'),
   );
@@ -128,7 +135,9 @@ it('prefers the complete verification link and never opens other schemes', async
   );
   const open = vi.fn(() => true);
   await login('https://herald.test', {}, {}, { ...io(), open });
-  expect(open).toHaveBeenCalledWith('https://herald.test/device?user_code=U');
+  expect(open).toHaveBeenCalledWith(
+    expect.stringMatching(/^https:\/\/herald\.test\/device\?user_code=U#k=[\w-]+\.[\w-]+$/),
+  );
   vi.mocked(globalThis.fetch).mockImplementationOnce(async () =>
     Response.json({
       device_code: 'd',
@@ -140,4 +149,34 @@ it('prefers the complete verification link and never opens other schemes', async
   open.mockClear();
   await login('https://herald.test', {}, {}, { ...io(), open });
   expect(open).not.toHaveBeenCalled();
+});
+it('certifies the key from the approval link on enrolled accounts', async () => {
+  const keyring = e2ee.createKeyring('acct');
+  const account = await e2ee.accountStatement(keyring);
+  let link = '';
+  const key = () => link.split('#k=')[1].split('.');
+  const open = vi.fn((url: string) => !!(link = url));
+  const certify = (sign: string, box: string) => e2ee.certify(keyring, { sign, box });
+  const { created } = server({
+    integrations: [],
+    keys: { account, certificates: [] },
+    certificate: () => certify(key()[0], key()[1]),
+  });
+  const { saved } = await login('https://herald.test', {}, {}, { ...io(), open });
+  const fingerprint = await e2ee.fingerprint(account.statement.identity);
+  expect(saved).toMatchObject({ token: 'hdr_new', fingerprint });
+  expect((await e2ee.keySet(saved.seed)).signPub).toBe(key()[0]);
+  const [sign, box] = key();
+  const certificate = expect.objectContaining({
+    certificate: expect.objectContaining({ sign, box }),
+  });
+  expect(created).toEqual([expect.objectContaining({ certificate })]);
+  server({
+    integrations: [],
+    keys: { account, certificates: [] },
+    certificate: async () => certify(key()[1], key()[0]),
+  });
+  await expect(login('https://herald.test', {}, {}, { ...io(), open })).rejects.toThrow(
+    'different key',
+  );
 });

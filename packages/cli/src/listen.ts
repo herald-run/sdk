@@ -174,11 +174,15 @@ export async function listen(
         if (e instanceof HeraldError && e.status === 409) return;
         throw e;
       }
-      if (message.status === 'running') {
+      const task = claim.task ?? message;
+      const unreadable = task.locked || task.unverified;
+      if (message.status === 'running' || unreadable) {
         await client.updateTask(message.id, {
           lease: claim.lease,
           status: 'failed',
-          error: 'Listener journal is missing; execution outcome is uncertain.',
+          error: unreadable
+            ? 'This runner could not decrypt or verify the task.'
+            : 'Listener journal is missing; execution outcome is uncertain.',
         });
         journal.jobs[message.id] = { lease: claim.lease, state: 'failed' };
         await save();
@@ -259,9 +263,9 @@ export async function listen(
           replyTo: message.replyTo,
           threadId: message.threadId,
           threadSequence: message.threadSequence,
-          values: message.response?.values,
-          session: message.session,
-          attachments: message.attachments,
+          values: task.response?.values,
+          session: task.session,
+          attachments: task.attachments,
         }) + '\n',
       );
       const timeout = setTimeout(() => {
