@@ -26,22 +26,44 @@
             {
               "id": "run",
               "label": "Run",
-              "fields": [{ "id": "prompt", "label": "Prompt", "type": "text", "required": true }]
+              "fields": [
+                {
+                  "id": "prompt",
+                  "label": "Prompt",
+                  "type": "text",
+                  "required": true
+                }
+              ]
             }
           ]
         }
       },
       "response": {
         "status": 201,
-        "body": { "key": "laptop", "name": "Runner", "id": "<id>", "integrationId": "<id>" }
+        "body": {
+          "key": "laptop",
+          "name": "Runner",
+          "id": "<id>",
+          "integrationId": "<id>"
+        }
       }
     },
     {
       "name": "destinations",
-      "request": { "method": "GET", "path": "/api/v1/destinations" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/destinations"
+      },
       "response": {
         "status": 200,
-        "body": [{ "key": "laptop", "name": "Runner", "id": "<id>", "integrationId": "<id>" }]
+        "body": [
+          {
+            "key": "laptop",
+            "name": "Runner",
+            "id": "<id>",
+            "integrationId": "<id>"
+          }
+        ]
       }
     },
     {
@@ -55,7 +77,14 @@
             {
               "id": "run",
               "label": "Run",
-              "fields": [{ "id": "prompt", "label": "Prompt", "type": "text", "required": true }]
+              "fields": [
+                {
+                  "id": "prompt",
+                  "label": "Prompt",
+                  "type": "text",
+                  "required": true
+                }
+              ]
             }
           ]
         }
@@ -75,37 +104,69 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/files",
-        "body": { "name": "notes.txt", "type": "text/plain", "size": 5 }
+        "body": {
+          "name": "notes.txt",
+          "type": "text/plain",
+          "size": 5
+        }
       },
       "upload": {
         "path": "/api/v1/files/{upload.id}",
         "text": "hello",
-        "response": { "status": 200, "body": { "ok": true } }
+        "response": {
+          "status": 200,
+          "body": {
+            "ok": true
+          }
+        }
       },
       "response": {
         "status": 201,
-        "body": { "id": "<id>", "name": "notes.txt", "size": 5, "type": "text/plain" }
+        "body": {
+          "id": "<id>",
+          "name": "notes.txt",
+          "size": 5,
+          "type": "text/plain"
+        }
       }
     },
     {
       "name": "download",
-      "request": { "method": "GET", "path": "/api/v1/files/{upload.id}" },
-      "response": { "status": 200, "body": "hello" }
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/files/{upload.id}"
+      },
+      "response": {
+        "status": 200,
+        "body": "hello"
+      }
     },
     {
       "name": "send",
       "request": {
         "method": "POST",
         "path": "/api/v1/messages",
-        "headers": { "Idempotency-Key": "send-1" },
+        "headers": {
+          "Idempotency-Key": "send-1"
+        },
         "body": {
           "title": "Deploy?",
           "kind": "form",
           "fields": [
-            { "id": "approved", "label": "Approved", "type": "boolean", "required": true }
+            {
+              "id": "approved",
+              "label": "Approved",
+              "type": "boolean",
+              "required": true
+            }
           ],
           "attachments": [
-            { "id": "{upload.id}", "name": "notes.txt", "size": 5, "type": "text/plain" }
+            {
+              "id": "{upload.id}",
+              "name": "notes.txt",
+              "size": 5,
+              "type": "text/plain"
+            }
           ]
         }
       },
@@ -125,7 +186,10 @@
     },
     {
       "name": "get",
-      "request": { "method": "GET", "path": "/api/v1/messages/{send.id}" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/messages/{send.id}"
+      },
       "response": {
         "status": 200,
         "body": {
@@ -147,7 +211,11 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/messages/{send.id}/response",
-        "body": { "values": { "approved": true } }
+        "body": {
+          "values": {
+            "approved": true
+          }
+        }
       },
       "response": {
         "status": 200,
@@ -161,7 +229,9 @@
           "createdAt": "<time>",
           "revision": "<number>",
           "response": {
-            "values": { "approved": true },
+            "values": {
+              "approved": true
+            },
             "secretFields": [],
             "createdAt": "<time>"
           }
@@ -170,7 +240,10 @@
     },
     {
       "name": "thread",
-      "request": { "method": "GET", "path": "/api/v1/messages/{send.id}/thread?after=0" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/messages/{send.id}/thread?after=0"
+      },
       "response": {
         "status": 200,
         "body": {
@@ -185,7 +258,9 @@
               "createdAt": "<time>",
               "revision": "<number>",
               "response": {
-                "values": { "approved": true },
+                "values": {
+                  "approved": true
+                },
                 "secretFields": [],
                 "createdAt": "<time>"
               }
@@ -196,7 +271,10 @@
     },
     {
       "name": "messages",
-      "request": { "method": "GET", "path": "/api/v1/messages?after=0" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/messages?after=0"
+      },
       "response": {
         "status": 200,
         "body": [
@@ -210,7 +288,9 @@
             "createdAt": "<time>",
             "revision": "<number>",
             "response": {
-              "values": { "approved": true },
+              "values": {
+                "approved": true
+              },
               "secretFields": [],
               "createdAt": "<time>"
             }
@@ -224,18 +304,32 @@
         "method": "GET",
         "path": "/api/v1/messages/00000000-0000-4000-8000-000000000000"
       },
-      "response": { "status": 404, "body": { "error": "Message not found." } }
+      "response": {
+        "status": 404,
+        "body": {
+          "error": "Message not found."
+        }
+      }
     },
     {
       "name": "send-secret-form",
       "request": {
         "method": "POST",
         "path": "/api/v1/messages",
-        "headers": { "Idempotency-Key": "send-2" },
+        "headers": {
+          "Idempotency-Key": "send-2"
+        },
         "body": {
           "title": "Token",
           "kind": "form",
-          "fields": [{ "id": "token", "label": "Token", "type": "secret", "required": true }],
+          "fields": [
+            {
+              "id": "token",
+              "label": "Token",
+              "type": "secret",
+              "required": true
+            }
+          ],
           "publicKey": "{values.publicKey}"
         }
       },
@@ -260,7 +354,12 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/messages/{send-secret-form.id}/response",
-        "body": { "values": {}, "secrets": { "token": "{values.envelope}" } }
+        "body": {
+          "values": {},
+          "secrets": {
+            "token": "{values.envelope}"
+          }
+        }
       },
       "response": {
         "status": 200,
@@ -273,7 +372,11 @@
           "sender": "Runner",
           "createdAt": "<time>",
           "revision": "<number>",
-          "response": { "values": {}, "secretFields": ["token"], "createdAt": "<time>" }
+          "response": {
+            "values": {},
+            "secretFields": ["token"],
+            "createdAt": "<time>"
+          }
         }
       }
     },
@@ -284,15 +387,25 @@
         "path": "/api/v1/messages/{send-secret-form.id}/secrets",
         "body": {}
       },
-      "response": { "status": 200, "body": { "token": "{values.envelope}" } }
+      "response": {
+        "status": 200,
+        "body": {
+          "token": "{values.envelope}"
+        }
+      }
     },
     {
       "name": "offer-secret",
       "request": {
         "method": "POST",
         "path": "/api/v1/messages",
-        "headers": { "Idempotency-Key": "send-3" },
-        "body": { "title": "API key", "kind": "secret" }
+        "headers": {
+          "Idempotency-Key": "send-3"
+        },
+        "body": {
+          "title": "API key",
+          "kind": "secret"
+        }
       },
       "response": {
         "status": 201,
@@ -321,11 +434,19 @@
           "publicKey": "{values.publicKey}"
         }
       },
-      "response": { "status": 200, "body": { "ok": true } }
+      "response": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      }
     },
     {
       "name": "secret-receiver",
-      "request": { "method": "GET", "path": "/api/v1/messages/{offer-secret.id}/secret-receiver" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/messages/{offer-secret.id}/secret-receiver"
+      },
       "response": {
         "status": 200,
         "body": {
@@ -339,9 +460,17 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/messages/{offer-secret.id}/secret-delivery",
-        "body": { "claimId": "{secret-receiver.claimId}", "envelope": "{values.envelope}" }
+        "body": {
+          "claimId": "{secret-receiver.claimId}",
+          "envelope": "{values.envelope}"
+        }
       },
-      "response": { "status": 200, "body": { "ok": true } }
+      "response": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      }
     },
     {
       "name": "cancel",
@@ -372,11 +501,15 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/outbox",
-        "headers": { "Idempotency-Key": "task-1" },
+        "headers": {
+          "Idempotency-Key": "task-1"
+        },
         "body": {
           "destinationId": "{register.id}",
           "typeId": "run",
-          "values": { "prompt": "Hi" }
+          "values": {
+            "prompt": "Hi"
+          }
         }
       },
       "response": {
@@ -390,9 +523,21 @@
           "sender": "Runner",
           "createdAt": "<time>",
           "revision": "<number>",
-          "response": { "values": { "prompt": "Hi" }, "secretFields": [], "createdAt": "<time>" },
+          "response": {
+            "values": {
+              "prompt": "Hi"
+            },
+            "secretFields": [],
+            "createdAt": "<time>"
+          },
           "recipientId": "<id>",
-          "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } }
+          "input": {
+            "destinationId": "<id>",
+            "typeId": "run",
+            "values": {
+              "prompt": "Hi"
+            }
+          }
         }
       }
     },
@@ -401,7 +546,10 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/tasks/{outbox.id}/claim",
-        "body": { "runnerId": "runner-1", "heartbeat": true }
+        "body": {
+          "runnerId": "runner-1",
+          "heartbeat": true
+        }
       },
       "response": {
         "status": 200,
@@ -416,12 +564,20 @@
             "createdAt": "<time>",
             "revision": "<number>",
             "response": {
-              "values": { "prompt": "Hi" },
+              "values": {
+                "prompt": "Hi"
+              },
               "secretFields": [],
               "createdAt": "<time>"
             },
             "recipientId": "<id>",
-            "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } }
+            "input": {
+              "destinationId": "<id>",
+              "typeId": "run",
+              "values": {
+                "prompt": "Hi"
+              }
+            }
           },
           "lease": "<id>",
           "leaseExpiresAt": "<time>"
@@ -433,19 +589,35 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/tasks/{outbox.id}/heartbeat",
-        "body": { "lease": "{claim-task.lease}" }
+        "body": {
+          "lease": "{claim-task.lease}"
+        }
       },
-      "response": { "status": 200, "body": { "lease": "<id>", "leaseExpiresAt": "<time>" } }
+      "response": {
+        "status": 200,
+        "body": {
+          "lease": "<id>",
+          "leaseExpiresAt": "<time>"
+        }
+      }
     },
     {
       "name": "task-logs",
       "request": {
         "method": "POST",
         "path": "/api/v1/tasks/{outbox.id}/update",
-        "headers": { "Idempotency-Key": "logs-0" },
+        "headers": {
+          "Idempotency-Key": "logs-0"
+        },
         "body": {
           "lease": "{claim-task.lease}",
-          "logs": [{ "sequence": 0, "stream": "stdout", "text": "hi" }]
+          "logs": [
+            {
+              "sequence": 0,
+              "stream": "stdout",
+              "text": "hi"
+            }
+          ]
         }
       },
       "response": {
@@ -459,18 +631,41 @@
           "sender": "Runner",
           "createdAt": "<time>",
           "revision": "<number>",
-          "response": { "values": { "prompt": "Hi" }, "secretFields": [], "createdAt": "<time>" },
+          "response": {
+            "values": {
+              "prompt": "Hi"
+            },
+            "secretFields": [],
+            "createdAt": "<time>"
+          },
           "recipientId": "<id>",
-          "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } }
+          "input": {
+            "destinationId": "<id>",
+            "typeId": "run",
+            "values": {
+              "prompt": "Hi"
+            }
+          }
         }
       }
     },
     {
       "name": "read-task-logs",
-      "request": { "method": "GET", "path": "/api/v1/messages/{outbox.id}/logs" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/messages/{outbox.id}/logs"
+      },
       "response": {
         "status": 200,
-        "body": { "logs": [{ "sequence": 0, "stream": "stdout", "text": "hi" }] }
+        "body": {
+          "logs": [
+            {
+              "sequence": 0,
+              "stream": "stdout",
+              "text": "hi"
+            }
+          ]
+        }
       }
     },
     {
@@ -478,7 +673,10 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/tasks/{outbox.id}/update",
-        "body": { "lease": "{claim-task.lease}", "status": "completed" }
+        "body": {
+          "lease": "{claim-task.lease}",
+          "status": "completed"
+        }
       },
       "response": {
         "status": 200,
@@ -491,10 +689,25 @@
           "sender": "Runner",
           "createdAt": "<time>",
           "revision": "<number>",
-          "response": { "values": { "prompt": "Hi" }, "secretFields": [], "createdAt": "<time>" },
+          "response": {
+            "values": {
+              "prompt": "Hi"
+            },
+            "secretFields": [],
+            "createdAt": "<time>"
+          },
           "recipientId": "<id>",
-          "input": { "destinationId": "<id>", "typeId": "run", "values": { "prompt": "Hi" } },
-          "result": { "status": "completed", "completedAt": "<time>" }
+          "input": {
+            "destinationId": "<id>",
+            "typeId": "run",
+            "values": {
+              "prompt": "Hi"
+            }
+          },
+          "result": {
+            "status": "completed",
+            "completedAt": "<time>"
+          }
         }
       }
     },
@@ -507,12 +720,17 @@
       },
       "response": {
         "status": 409,
-        "body": { "error": "Only webhook destinations have a signing secret." }
+        "body": {
+          "error": "Only webhook destinations have a signing secret."
+        }
       }
     },
     {
       "name": "account",
-      "request": { "method": "GET", "path": "/api/v1/account" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/account"
+      },
       "response": {
         "status": 200,
         "body": {
@@ -526,9 +744,31 @@
       }
     },
     {
+      "name": "keys",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/keys"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "account": null,
+          "certificates": []
+        }
+      }
+    },
+    {
       "name": "delete-destination",
-      "request": { "method": "DELETE", "path": "/api/v1/destinations/{register.id}" },
-      "response": { "status": 200, "body": { "ok": true } }
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/destinations/{register.id}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      }
     },
     {
       "name": "create-integration",
@@ -536,7 +776,10 @@
       "request": {
         "method": "POST",
         "path": "/api/v1/integrations",
-        "body": { "name": "CLI", "scopes": ["messages:read"] }
+        "body": {
+          "name": "CLI",
+          "scopes": ["messages:read"]
+        }
       },
       "response": {
         "status": 201,
@@ -547,7 +790,9 @@
             "name": "CLI",
             "scopes": ["messages:read"],
             "createdAt": "<time>",
-            "color": { "mode": "auto" }
+            "color": {
+              "mode": "auto"
+            }
           }
         }
       }
@@ -555,7 +800,10 @@
     {
       "name": "integrations",
       "principal": "owner",
-      "request": { "method": "GET", "path": "/api/v1/integrations" },
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/integrations"
+      },
       "response": {
         "status": 200,
         "body": [
@@ -569,14 +817,18 @@
               "events:read",
               "files:write"
             ],
-            "color": { "mode": "auto" },
+            "color": {
+              "mode": "auto"
+            },
             "createdAt": "<time>"
           },
           {
             "id": "<id>",
             "name": "CLI",
             "scopes": ["messages:read"],
-            "color": { "mode": "auto" },
+            "color": {
+              "mode": "auto"
+            },
             "createdAt": "<time>"
           }
         ]
@@ -589,7 +841,1914 @@
         "method": "DELETE",
         "path": "/api/v1/integrations/{create-integration.integration.id}"
       },
-      "response": { "status": 200, "body": { "ok": true } }
+      "response": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      }
     }
-  ]
+  ],
+  "e2ee": {
+    "token": "hdr_test-only.r8Xxha3Z1FyonjFs7ujuxBW_UXiSCnvtQQcpU96Qrg0.df5aai_4pLciocfKgqiiHg",
+    "keyring": {
+      "v": 1,
+      "account": "acct-contracts",
+      "identity": "hzN7uxm3Y05fxKtwq0hR-wcQwcz09_TxgUfaIzFsYAs",
+      "inbox": [
+        {
+          "seed": "TwbgfHI5qx3Tr3OCSvSZiNyEGr1zfKZJ4t8W3W0tm1Q",
+          "created": "2030-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "steps": [
+      {
+        "name": "keys",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/keys"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "account": {
+              "statement": {
+                "v": 1,
+                "account": "acct-contracts",
+                "identity": "GY_tZOfZlgcuscIAg7asDc8pYCGkuoJXGAeX5F0WNqE",
+                "inbox": "WKJxXVUilaooTch95dm_4vuDpeXKG_bJfVbc-o2ZnhU",
+                "created": "2030-01-01T00:00:00.000Z"
+              },
+              "sig": "h52gus-I76mO0edc-xcbI90x0rMVSr0rhQ6eVFWroxpYjrtz8bCdh0Hn39Yt4o6ebaQ5bFN4jX_Vc7BkLt0RAg"
+            },
+            "certificates": [
+              {
+                "integrationId": "00000000-0000-4000-8000-000000000001",
+                "certificate": {
+                  "v": 1,
+                  "account": "acct-contracts",
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "sign": "HrPJoPGWi5mIsIsD231c5CD7HvZ1k2G_WXoG9MMeAsM",
+                  "box": "rSZXEemp_Kved3ajXlONW8TY4cGmkaNd2pPxTwRfGGU",
+                  "created": "2030-01-01T00:00:00.000Z"
+                },
+                "sig": "8TP20_8Ux_kr2nIyW4Q17Yil7QntERkwAVQEqWSNhTOj9RTX_TfxkvVN5Zv8HgxLpVEeHyCk7dQDJ5jFma19Bw"
+              },
+              {
+                "integrationId": "00000000-0000-4000-8000-000000000002",
+                "certificate": {
+                  "v": 1,
+                  "account": "acct-contracts",
+                  "kid": "AsGD3qA34ObS8dKuSKNAZw",
+                  "sign": "XhZZVZ78X_WaHI1QqElxU3Yfi-czDrAvb3jbOqhYHLE",
+                  "box": "QWkNmxXxYGUdcYo3KBnyHImhagl9KV1cMdtr1FCilw4",
+                  "created": "2030-01-01T00:00:00.000Z"
+                },
+                "sig": "t9_6dE9Op7jMq8CcvTOCRw_ULG9h6MbRnFG-PPAwGVyK_54ACeELwDyJMUOy_Hs_m5qHK88hr5pwoUfjwJmSAw"
+              }
+            ]
+          }
+        },
+        "result": {
+          "account": {
+            "statement": {
+              "v": 1,
+              "account": "acct-contracts",
+              "identity": "GY_tZOfZlgcuscIAg7asDc8pYCGkuoJXGAeX5F0WNqE",
+              "inbox": "WKJxXVUilaooTch95dm_4vuDpeXKG_bJfVbc-o2ZnhU",
+              "created": "2030-01-01T00:00:00.000Z"
+            },
+            "sig": "h52gus-I76mO0edc-xcbI90x0rMVSr0rhQ6eVFWroxpYjrtz8bCdh0Hn39Yt4o6ebaQ5bFN4jX_Vc7BkLt0RAg"
+          },
+          "certificates": [
+            {
+              "integrationId": "00000000-0000-4000-8000-000000000001",
+              "certificate": {
+                "v": 1,
+                "account": "acct-contracts",
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "sign": "HrPJoPGWi5mIsIsD231c5CD7HvZ1k2G_WXoG9MMeAsM",
+                "box": "rSZXEemp_Kved3ajXlONW8TY4cGmkaNd2pPxTwRfGGU",
+                "created": "2030-01-01T00:00:00.000Z"
+              },
+              "sig": "8TP20_8Ux_kr2nIyW4Q17Yil7QntERkwAVQEqWSNhTOj9RTX_TfxkvVN5Zv8HgxLpVEeHyCk7dQDJ5jFma19Bw"
+            },
+            {
+              "integrationId": "00000000-0000-4000-8000-000000000002",
+              "certificate": {
+                "v": 1,
+                "account": "acct-contracts",
+                "kid": "AsGD3qA34ObS8dKuSKNAZw",
+                "sign": "XhZZVZ78X_WaHI1QqElxU3Yfi-czDrAvb3jbOqhYHLE",
+                "box": "QWkNmxXxYGUdcYo3KBnyHImhagl9KV1cMdtr1FCilw4",
+                "created": "2030-01-01T00:00:00.000Z"
+              },
+              "sig": "t9_6dE9Op7jMq8CcvTOCRw_ULG9h6MbRnFG-PPAwGVyK_54ACeELwDyJMUOy_Hs_m5qHK88hr5pwoUfjwJmSAw"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upload",
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/files",
+          "body": {
+            "name": "encrypted",
+            "type": "application/octet-stream",
+            "size": 28
+          }
+        },
+        "response": {
+          "status": 201,
+          "body": {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "name": "encrypted",
+            "type": "application/octet-stream",
+            "size": 28
+          }
+        },
+        "upload": {
+          "path": "/api/v1/files/00000000-0000-4000-8000-000000000003",
+          "plain": "hello",
+          "response": {
+            "status": 200,
+            "body": {
+              "ok": true
+            }
+          }
+        },
+        "result": {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "name": "notes.txt",
+          "size": 5,
+          "type": "text/plain",
+          "key": "<string>"
+        }
+      },
+      {
+        "name": "send",
+        "input": {
+          "title": "Deploy v2?",
+          "body": "Ship **v2** to production.",
+          "kind": "form",
+          "fields": [
+            {
+              "id": "approve",
+              "label": "Approve",
+              "type": "boolean",
+              "required": true
+            }
+          ],
+          "attachments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000003",
+              "name": "notes.txt",
+              "size": 5,
+              "type": "text/plain",
+              "key": "y5gGI0iascAFyVvtPHKm5bm4Xqtx7q2NSrYTSwJ1qIY"
+            }
+          ],
+          "expiresIn": 600
+        },
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/messages",
+          "headers": {
+            "Idempotency-Key": "sealed-1"
+          },
+          "body": {
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "account": "acct-contracts",
+                "cid": "ShlQ1BREFKnYosQxepE-kw"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
+                  "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                }
+              ],
+              "iv": "Ga-flkg8c8KL1tfC",
+              "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
+              "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+            },
+            "digest": "pxYbTrziFn3GFAZAQP0XK_h7BhHK_NkmsJUMAUTJx4Q",
+            "asks": true,
+            "attachments": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003"
+              }
+            ],
+            "expiresIn": 600
+          }
+        },
+        "sealed": {
+          "sealed": {
+            "v": 1,
+            "title": "Deploy v2?",
+            "body": "Ship **v2** to production.",
+            "kind": "form",
+            "fields": [
+              {
+                "id": "approve",
+                "label": "Approve",
+                "type": "boolean",
+                "required": true
+              }
+            ],
+            "attachments": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003",
+                "name": "notes.txt",
+                "size": 5,
+                "type": "text/plain",
+                "key": "y5gGI0iascAFyVvtPHKm5bm4Xqtx7q2NSrYTSwJ1qIY"
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 201,
+          "body": {
+            "title": "Encrypted message",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003",
+                "name": "encrypted",
+                "type": "application/octet-stream",
+                "size": 28
+              }
+            ],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "pending",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000004",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "account": "acct-contracts",
+                "cid": "ShlQ1BREFKnYosQxepE-kw"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
+                  "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                }
+              ],
+              "iv": "Ga-flkg8c8KL1tfC",
+              "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
+              "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+            },
+            "expiresAt": "2030-01-01T00:10:00.000Z",
+            "threadId": "00000000-0000-4000-8000-000000000004",
+            "revision": 1
+          }
+        },
+        "result": {
+          "title": "Deploy v2?",
+          "body": "Ship **v2** to production.",
+          "kind": "form",
+          "fields": [
+            {
+              "id": "approve",
+              "label": "Approve",
+              "type": "boolean",
+              "required": true
+            }
+          ],
+          "attachments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000003",
+              "name": "notes.txt",
+              "size": 5,
+              "type": "text/plain",
+              "key": "y5gGI0iascAFyVvtPHKm5bm4Xqtx7q2NSrYTSwJ1qIY"
+            }
+          ],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "pending",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "account": "acct-contracts",
+              "cid": "ShlQ1BREFKnYosQxepE-kw"
+            },
+            "from": "UTC9R7VS01CHnRZxyd6YWw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+              },
+              {
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
+                "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+              }
+            ],
+            "iv": "Ga-flkg8c8KL1tfC",
+            "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
+            "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+          },
+          "expiresAt": "2030-01-01T00:10:00.000Z",
+          "threadId": "00000000-0000-4000-8000-000000000004",
+          "revision": 1,
+          "e2ee": true
+        }
+      },
+      {
+        "name": "get",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000004"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Encrypted message",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003",
+                "name": "encrypted",
+                "type": "application/octet-stream",
+                "size": 28
+              }
+            ],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "answered",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000004",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "account": "acct-contracts",
+                "cid": "ShlQ1BREFKnYosQxepE-kw"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
+                  "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                }
+              ],
+              "iv": "Ga-flkg8c8KL1tfC",
+              "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
+              "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+            },
+            "expiresAt": "2030-01-01T00:10:00.000Z",
+            "threadId": "00000000-0000-4000-8000-000000000004",
+            "revision": 2,
+            "response": {
+              "values": {},
+              "secretFields": [],
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "response",
+                  "message": "00000000-0000-4000-8000-000000000004",
+                  "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                  "account": "acct-contracts"
+                },
+                "from": "0LSgy8KOdQpuT0L1fgznKQ",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                    "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
+                    "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                  }
+                ],
+                "iv": "xJLymqMVMPe1iqmR",
+                "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
+                "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+              }
+            }
+          }
+        },
+        "result": {
+          "title": "Deploy v2?",
+          "body": "Ship **v2** to production.",
+          "kind": "form",
+          "fields": [
+            {
+              "id": "approve",
+              "label": "Approve",
+              "type": "boolean",
+              "required": true
+            }
+          ],
+          "attachments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000003",
+              "name": "notes.txt",
+              "size": 5,
+              "type": "text/plain",
+              "key": "y5gGI0iascAFyVvtPHKm5bm4Xqtx7q2NSrYTSwJ1qIY"
+            }
+          ],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "answered",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "account": "acct-contracts",
+              "cid": "ShlQ1BREFKnYosQxepE-kw"
+            },
+            "from": "UTC9R7VS01CHnRZxyd6YWw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+              },
+              {
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
+                "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+              }
+            ],
+            "iv": "Ga-flkg8c8KL1tfC",
+            "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
+            "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+          },
+          "expiresAt": "2030-01-01T00:10:00.000Z",
+          "threadId": "00000000-0000-4000-8000-000000000004",
+          "revision": 2,
+          "response": {
+            "values": {
+              "approve": true
+            },
+            "secretFields": [],
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "response",
+                "message": "00000000-0000-4000-8000-000000000004",
+                "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                "account": "acct-contracts"
+              },
+              "from": "0LSgy8KOdQpuT0L1fgznKQ",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                  "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
+                  "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                }
+              ],
+              "iv": "xJLymqMVMPe1iqmR",
+              "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
+              "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+            }
+          },
+          "e2ee": true
+        }
+      },
+      {
+        "name": "thread",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000004/thread?after=0"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "messages": [
+              {
+                "title": "Encrypted message",
+                "body": "",
+                "kind": "message",
+                "fields": [],
+                "attachments": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000003",
+                    "name": "encrypted",
+                    "type": "application/octet-stream",
+                    "size": 28
+                  }
+                ],
+                "sender": "Runner",
+                "senderId": "00000000-0000-4000-8000-000000000001",
+                "direction": "inbound",
+                "status": "answered",
+                "createdAt": "2030-01-01T00:00:00.000Z",
+                "read": false,
+                "archived": false,
+                "id": "00000000-0000-4000-8000-000000000004",
+                "sealed": {
+                  "v": 1,
+                  "ctx": {
+                    "t": "message",
+                    "account": "acct-contracts",
+                    "cid": "ShlQ1BREFKnYosQxepE-kw"
+                  },
+                  "from": "UTC9R7VS01CHnRZxyd6YWw",
+                  "to": [
+                    {
+                      "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                      "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                      "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                    },
+                    {
+                      "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                      "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
+                      "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                    }
+                  ],
+                  "iv": "Ga-flkg8c8KL1tfC",
+                  "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
+                  "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+                },
+                "expiresAt": "2030-01-01T00:10:00.000Z",
+                "threadId": "00000000-0000-4000-8000-000000000004",
+                "revision": 2,
+                "response": {
+                  "values": {},
+                  "secretFields": [],
+                  "createdAt": "2030-01-01T00:00:00.000Z",
+                  "sealed": {
+                    "v": 1,
+                    "ctx": {
+                      "t": "response",
+                      "message": "00000000-0000-4000-8000-000000000004",
+                      "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                      "account": "acct-contracts"
+                    },
+                    "from": "0LSgy8KOdQpuT0L1fgznKQ",
+                    "to": [
+                      {
+                        "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                        "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                        "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                      },
+                      {
+                        "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                        "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
+                        "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                      }
+                    ],
+                    "iv": "xJLymqMVMPe1iqmR",
+                    "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
+                    "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "result": {
+          "messages": [
+            {
+              "title": "Deploy v2?",
+              "body": "Ship **v2** to production.",
+              "kind": "form",
+              "fields": [
+                {
+                  "id": "approve",
+                  "label": "Approve",
+                  "type": "boolean",
+                  "required": true
+                }
+              ],
+              "attachments": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000003",
+                  "name": "notes.txt",
+                  "size": 5,
+                  "type": "text/plain",
+                  "key": "y5gGI0iascAFyVvtPHKm5bm4Xqtx7q2NSrYTSwJ1qIY"
+                }
+              ],
+              "sender": "Runner",
+              "senderId": "00000000-0000-4000-8000-000000000001",
+              "direction": "inbound",
+              "status": "answered",
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "read": false,
+              "archived": false,
+              "id": "00000000-0000-4000-8000-000000000004",
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "message",
+                  "account": "acct-contracts",
+                  "cid": "ShlQ1BREFKnYosQxepE-kw"
+                },
+                "from": "UTC9R7VS01CHnRZxyd6YWw",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                    "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
+                    "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                  }
+                ],
+                "iv": "Ga-flkg8c8KL1tfC",
+                "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
+                "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+              },
+              "expiresAt": "2030-01-01T00:10:00.000Z",
+              "threadId": "00000000-0000-4000-8000-000000000004",
+              "revision": 2,
+              "response": {
+                "values": {
+                  "approve": true
+                },
+                "secretFields": [],
+                "createdAt": "2030-01-01T00:00:00.000Z",
+                "sealed": {
+                  "v": 1,
+                  "ctx": {
+                    "t": "response",
+                    "message": "00000000-0000-4000-8000-000000000004",
+                    "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                    "account": "acct-contracts"
+                  },
+                  "from": "0LSgy8KOdQpuT0L1fgznKQ",
+                  "to": [
+                    {
+                      "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                      "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                      "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                    },
+                    {
+                      "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                      "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
+                      "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                    }
+                  ],
+                  "iv": "xJLymqMVMPe1iqmR",
+                  "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
+                  "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+                }
+              },
+              "e2ee": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "get-tampered",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000005"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Encrypted message",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "pending",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000005",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "account": "acct-contracts",
+                "cid": "Qv1i-lQjp-uCf6wDqe4qzQ"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "OplVRggSHpWFFvf4vyyItsc7hz50IhjmpwRn_zayUzc",
+                  "key": "o9DFt4Shum1MZ0qYihWdnFwWt43n2TCJxt2NUOxC-kYvfv_RUS3W8AVKTbrqu7Fr"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "JQxCW_DUtKnNdb8E-KjKLYvHfpBk9zGn4SvVECxXUVc",
+                  "key": "1FqqIrWVH0JG0-65fbXClT7D35RGz-dxIbhMIpdQRP2qS7xpkVJQESIfhIxQdYa2"
+                }
+              ],
+              "iv": "DQre2PyqEAnOYpPl",
+              "ct": "S26_GO508_aJgkBA7ZVCYtI6s65c_2EUHLyq4LVzktbL9elpRTpemfIBRe9N5XOsCpYFOqU5QkiRGODKiUGFSbwEXvUWitoUm-rOQN-NDdhyG602Z3Dfr7uBNxEg1uHysZYxMqzLD_DkwjZNVxI-opMrsZgAEW4jisUh1YOxk9WOCzXY98aUSGLz5s22l1zWToQMKjeQOjv3mXq90s9h9TZYkDoStgIyua8bMcs",
+              "sig": "OZAM_f9rzkxdYUfM9CozCoPWlbtrgLFxPhH2iOlaFKXAKnhYp-LKtvAf2YRCpbgMLyb9f0gsxWD75Hb9ildvDg"
+            }
+          }
+        },
+        "result": {
+          "title": "Encrypted message",
+          "body": "",
+          "kind": "message",
+          "fields": [],
+          "attachments": [],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "pending",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000005",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "account": "acct-contracts",
+              "cid": "Qv1i-lQjp-uCf6wDqe4qzQ"
+            },
+            "from": "UTC9R7VS01CHnRZxyd6YWw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "OplVRggSHpWFFvf4vyyItsc7hz50IhjmpwRn_zayUzc",
+                "key": "o9DFt4Shum1MZ0qYihWdnFwWt43n2TCJxt2NUOxC-kYvfv_RUS3W8AVKTbrqu7Fr"
+              },
+              {
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "enc": "JQxCW_DUtKnNdb8E-KjKLYvHfpBk9zGn4SvVECxXUVc",
+                "key": "1FqqIrWVH0JG0-65fbXClT7D35RGz-dxIbhMIpdQRP2qS7xpkVJQESIfhIxQdYa2"
+              }
+            ],
+            "iv": "DQre2PyqEAnOYpPl",
+            "ct": "S26_GO508_aJgkBA7ZVCYtI6s65c_2EUHLyq4LVzktbL9elpRTpemfIBRe9N5XOsCpYFOqU5QkiRGODKiUGFSbwEXvUWitoUm-rOQN-NDdhyG602Z3Dfr7uBNxEg1uHysZYxMqzLD_DkwjZNVxI-opMrsZgAEW4jisUh1YOxk9WOCzXY98aUSGLz5s22l1zWToQMKjeQOjv3mXq90s9h9TZYkDoStgIyua8bMcs",
+            "sig": "OZAM_f9rzkxdYUfM9CozCoPWlbtrgLFxPhH2iOlaFKXAKnhYp-LKtvAf2YRCpbgMLyb9f0gsxWD75Hb9ildvDg"
+          },
+          "e2ee": true,
+          "unverified": true
+        }
+      },
+      {
+        "name": "get-locked",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000006"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Encrypted message",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Mailer",
+            "senderId": "00000000-0000-4000-8000-000000000002",
+            "direction": "inbound",
+            "status": "pending",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000006",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "account": "acct-contracts",
+                "cid": "wmSU_Pa0Qww35n4io_1giA"
+              },
+              "from": "AsGD3qA34ObS8dKuSKNAZw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "i6zgNJ1cGIVUTa-IYaPSZ_mbu4vjYKMzwpDp2kAWFgw",
+                  "key": "tILp-GyZMHrjcVhrwVhs1nDe2BXbHVQ_Rf8qjgT0SqqVqH_8GxWtoDHPPEsTApta"
+                },
+                {
+                  "kid": "AsGD3qA34ObS8dKuSKNAZw",
+                  "enc": "ljukFCaQwZEnHRuWmaE2PX30JZlMB6Nby3SZvtmv6SY",
+                  "key": "2fK0moyPrlzzzX5pSCwk3Q4fqAXYeEvW2WSyztbtbTbclXJTYXcMrIs4xuBPQKyR"
+                }
+              ],
+              "iv": "12QyvewEBg_PCqPb",
+              "ct": "RlD_Sk4RSqMM_gGQ9PrfQLIENJvtwQumZ3JHYFGXrV_d7iTEByhLjls4wFDgtr9L7z6DNCECBrtkAiX_G9ws2xSWRaVV6YKurcq9EiuhZc-2dfz8knHjlokX5C1fA1nAIJxQL-lU7tW5acLUD7jkvt3McabHenZW4K3Rk7QnaXtoJ-_bznZcmCWeYzJepfrw90VZq0He9FsapRQ1i8DrDSmkb0CbLGHDkhtgkc0",
+              "sig": "K4wZQd5-wpURyfmj-bxEOYpK73fLNxkaAcGOE9vxVLenvtP2w4Rwz_CI1fRnV-yg3nagBzAtTBUZvb1r_xpqDg"
+            }
+          }
+        },
+        "result": {
+          "title": "Encrypted message",
+          "body": "",
+          "kind": "message",
+          "fields": [],
+          "attachments": [],
+          "sender": "Mailer",
+          "senderId": "00000000-0000-4000-8000-000000000002",
+          "direction": "inbound",
+          "status": "pending",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000006",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "account": "acct-contracts",
+              "cid": "wmSU_Pa0Qww35n4io_1giA"
+            },
+            "from": "AsGD3qA34ObS8dKuSKNAZw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "i6zgNJ1cGIVUTa-IYaPSZ_mbu4vjYKMzwpDp2kAWFgw",
+                "key": "tILp-GyZMHrjcVhrwVhs1nDe2BXbHVQ_Rf8qjgT0SqqVqH_8GxWtoDHPPEsTApta"
+              },
+              {
+                "kid": "AsGD3qA34ObS8dKuSKNAZw",
+                "enc": "ljukFCaQwZEnHRuWmaE2PX30JZlMB6Nby3SZvtmv6SY",
+                "key": "2fK0moyPrlzzzX5pSCwk3Q4fqAXYeEvW2WSyztbtbTbclXJTYXcMrIs4xuBPQKyR"
+              }
+            ],
+            "iv": "12QyvewEBg_PCqPb",
+            "ct": "RlD_Sk4RSqMM_gGQ9PrfQLIENJvtwQumZ3JHYFGXrV_d7iTEByhLjls4wFDgtr9L7z6DNCECBrtkAiX_G9ws2xSWRaVV6YKurcq9EiuhZc-2dfz8knHjlokX5C1fA1nAIJxQL-lU7tW5acLUD7jkvt3McabHenZW4K3Rk7QnaXtoJ-_bznZcmCWeYzJepfrw90VZq0He9FsapRQ1i8DrDSmkb0CbLGHDkhtgkc0",
+            "sig": "K4wZQd5-wpURyfmj-bxEOYpK73fLNxkaAcGOE9vxVLenvtP2w4Rwz_CI1fRnV-yg3nagBzAtTBUZvb1r_xpqDg"
+          },
+          "e2ee": true,
+          "locked": true
+        }
+      },
+      {
+        "name": "send-secret-form",
+        "input": {
+          "title": "Token needed",
+          "kind": "form",
+          "fields": [
+            {
+              "id": "secret",
+              "label": "Token",
+              "type": "secret",
+              "required": true
+            }
+          ]
+        },
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/messages",
+          "headers": {
+            "Idempotency-Key": "sealed-2"
+          },
+          "body": {
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "account": "acct-contracts",
+                "cid": "WPo22pOR5fpPV10lYgydBg"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "dKwhTyFYCV5ZYXye1YABvcCTaj6U08MqNOVBPvCwqAA",
+                  "key": "ZyFCpKA8GD0APPZq_HybxkY54hJz6j2TOE6230djuBm84ctB1looYcLFaf4ygFJW"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "uPhxIdFpoDdIZyiGTlkcjEe_DZgQiV65znA-GtMJmk0",
+                  "key": "6AZKjgubB9ZS2Wr0OD4NtB7p1ZqmWk9d_ratflb94xhPMqNMtptFuYLvD8w_NWDm"
+                }
+              ],
+              "iv": "uQzqFKm3yiWYIdkf",
+              "ct": "EO65GgLvbnT6tIspM0a4s1Fv1z-LnGW8_8DfTt5B30HTkR5k_q-C7hytVJ4D02hT4MHwuWtOOPjjP2QhOQLbYq8u1Jrs6LT1g1Q4TzMs-zPx7lVmEmez2Jc8wiVCWC7kMFz8wNnzy5Xv87sM0-dYazvO9r1ocbnOyS_bvaGa0rt3znEp-Y6NCc6jYSCmMLomiHZz5kyT_3_knQhS0OSddFGE",
+              "sig": "OdndxCGTTEyAC1yW7l3Qus6Ue8nLXsSsa7SXS0bo6Vtzxm99x-5GuRtm8SGib2feMk3uLxgc3ifjQLlHf1hdCw"
+            },
+            "digest": "qxSCqkCmXDvyxOJtbi1ZF-TDnEO5_SvSAl7zEXgoAQE",
+            "asks": true,
+            "attachments": []
+          }
+        },
+        "sealed": {
+          "sealed": {
+            "v": 1,
+            "title": "Token needed",
+            "kind": "form",
+            "fields": [
+              {
+                "id": "secret",
+                "label": "Token",
+                "type": "secret",
+                "required": true
+              }
+            ],
+            "body": "",
+            "attachments": []
+          }
+        },
+        "response": {
+          "status": 201,
+          "body": {
+            "title": "Encrypted message",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "pending",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000007",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "account": "acct-contracts",
+                "cid": "WPo22pOR5fpPV10lYgydBg"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "dKwhTyFYCV5ZYXye1YABvcCTaj6U08MqNOVBPvCwqAA",
+                  "key": "ZyFCpKA8GD0APPZq_HybxkY54hJz6j2TOE6230djuBm84ctB1looYcLFaf4ygFJW"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "uPhxIdFpoDdIZyiGTlkcjEe_DZgQiV65znA-GtMJmk0",
+                  "key": "6AZKjgubB9ZS2Wr0OD4NtB7p1ZqmWk9d_ratflb94xhPMqNMtptFuYLvD8w_NWDm"
+                }
+              ],
+              "iv": "uQzqFKm3yiWYIdkf",
+              "ct": "EO65GgLvbnT6tIspM0a4s1Fv1z-LnGW8_8DfTt5B30HTkR5k_q-C7hytVJ4D02hT4MHwuWtOOPjjP2QhOQLbYq8u1Jrs6LT1g1Q4TzMs-zPx7lVmEmez2Jc8wiVCWC7kMFz8wNnzy5Xv87sM0-dYazvO9r1ocbnOyS_bvaGa0rt3znEp-Y6NCc6jYSCmMLomiHZz5kyT_3_knQhS0OSddFGE",
+              "sig": "OdndxCGTTEyAC1yW7l3Qus6Ue8nLXsSsa7SXS0bo6Vtzxm99x-5GuRtm8SGib2feMk3uLxgc3ifjQLlHf1hdCw"
+            },
+            "threadId": "00000000-0000-4000-8000-000000000007",
+            "revision": 3
+          }
+        },
+        "result": {
+          "title": "Token needed",
+          "body": "",
+          "kind": "form",
+          "fields": [
+            {
+              "id": "secret",
+              "label": "Token",
+              "type": "secret",
+              "required": true
+            }
+          ],
+          "attachments": [],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "pending",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000007",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "account": "acct-contracts",
+              "cid": "WPo22pOR5fpPV10lYgydBg"
+            },
+            "from": "UTC9R7VS01CHnRZxyd6YWw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "dKwhTyFYCV5ZYXye1YABvcCTaj6U08MqNOVBPvCwqAA",
+                "key": "ZyFCpKA8GD0APPZq_HybxkY54hJz6j2TOE6230djuBm84ctB1looYcLFaf4ygFJW"
+              },
+              {
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "enc": "uPhxIdFpoDdIZyiGTlkcjEe_DZgQiV65znA-GtMJmk0",
+                "key": "6AZKjgubB9ZS2Wr0OD4NtB7p1ZqmWk9d_ratflb94xhPMqNMtptFuYLvD8w_NWDm"
+              }
+            ],
+            "iv": "uQzqFKm3yiWYIdkf",
+            "ct": "EO65GgLvbnT6tIspM0a4s1Fv1z-LnGW8_8DfTt5B30HTkR5k_q-C7hytVJ4D02hT4MHwuWtOOPjjP2QhOQLbYq8u1Jrs6LT1g1Q4TzMs-zPx7lVmEmez2Jc8wiVCWC7kMFz8wNnzy5Xv87sM0-dYazvO9r1ocbnOyS_bvaGa0rt3znEp-Y6NCc6jYSCmMLomiHZz5kyT_3_knQhS0OSddFGE",
+            "sig": "OdndxCGTTEyAC1yW7l3Qus6Ue8nLXsSsa7SXS0bo6Vtzxm99x-5GuRtm8SGib2feMk3uLxgc3ifjQLlHf1hdCw"
+          },
+          "threadId": "00000000-0000-4000-8000-000000000007",
+          "revision": 3,
+          "e2ee": true
+        }
+      },
+      {
+        "name": "collect-secrets",
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000007/secrets",
+          "body": {}
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "secret": {
+              "v": 1,
+              "ctx": {
+                "t": "secret",
+                "message": "00000000-0000-4000-8000-000000000007",
+                "field": "secret",
+                "account": "acct-contracts"
+              },
+              "from": "0LSgy8KOdQpuT0L1fgznKQ",
+              "to": [
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
+                  "key": "W5JfEvV21WmsaEyhNM1TYbP-aoHhpN7sWVYspbk5bLxZQMJvaPCoAKHTJpxPajZ2"
+                }
+              ],
+              "iv": "LGVfyGM5p2oa8vFG",
+              "ct": "0N0L6aOYBhOp-aSe9BMCDPjwJ9bxgwz7it0_q4LaxaV_i9vK7RPznlfr1TL1jStyoQ",
+              "sig": "4GzujB_7lN6V1BYnbgWXh2-kxujLWvH60Zt3qkcsmX1sEMAuCeJzud5KyvsAVRUtcRaOM7uVtLj-cEm_cRVjBw"
+            }
+          }
+        },
+        "result": {
+          "secret": "test-only-token"
+        }
+      },
+      {
+        "name": "claim-task",
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/tasks/00000000-0000-4000-8000-000000000008/claim",
+          "body": {
+            "runnerId": "runner-1",
+            "heartbeat": true
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "task": {
+              "title": "Run",
+              "body": "",
+              "kind": "message",
+              "fields": [],
+              "attachments": [],
+              "sender": "Runner",
+              "senderId": "00000000-0000-4000-8000-000000000001",
+              "direction": "outbound",
+              "status": "running",
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "read": false,
+              "archived": false,
+              "id": "00000000-0000-4000-8000-000000000008",
+              "recipientId": "00000000-0000-4000-8000-000000000001",
+              "destinationId": "00000000-0000-4000-8000-000000000009",
+              "typeId": "run",
+              "runId": "00000000-0000-4000-8000-000000000008",
+              "threadId": "00000000-0000-4000-8000-000000000008",
+              "input": {
+                "destinationId": "00000000-0000-4000-8000-000000000009",
+                "typeId": "run",
+                "values": {},
+                "sealed": {
+                  "v": 1,
+                  "ctx": {
+                    "t": "task",
+                    "destination": "00000000-0000-4000-8000-000000000009",
+                    "type": "run",
+                    "account": "acct-contracts"
+                  },
+                  "from": "0LSgy8KOdQpuT0L1fgznKQ",
+                  "to": [
+                    {
+                      "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                      "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                      "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                    },
+                    {
+                      "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                      "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                      "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                    }
+                  ],
+                  "iv": "ZFN4kc5tRbBna2IV",
+                  "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
+                  "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+                }
+              },
+              "response": {
+                "values": {},
+                "secretFields": [],
+                "createdAt": "2030-01-01T00:00:00.000Z"
+              },
+              "execution": {
+                "attempt": 1
+              }
+            },
+            "lease": "lease-1",
+            "leaseExpiresAt": "2030-01-01T00:00:00.000Z"
+          }
+        },
+        "result": {
+          "task": {
+            "title": "Run",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "outbound",
+            "status": "running",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000008",
+            "recipientId": "00000000-0000-4000-8000-000000000001",
+            "destinationId": "00000000-0000-4000-8000-000000000009",
+            "typeId": "run",
+            "runId": "00000000-0000-4000-8000-000000000008",
+            "threadId": "00000000-0000-4000-8000-000000000008",
+            "input": {
+              "destinationId": "00000000-0000-4000-8000-000000000009",
+              "typeId": "run",
+              "values": {
+                "prompt": "Summarize the report"
+              },
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "task",
+                  "destination": "00000000-0000-4000-8000-000000000009",
+                  "type": "run",
+                  "account": "acct-contracts"
+                },
+                "from": "0LSgy8KOdQpuT0L1fgznKQ",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                    "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                    "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                  }
+                ],
+                "iv": "ZFN4kc5tRbBna2IV",
+                "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
+                "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+              }
+            },
+            "response": {
+              "values": {
+                "prompt": "Summarize the report"
+              },
+              "secretFields": [],
+              "createdAt": "2030-01-01T00:00:00.000Z"
+            },
+            "execution": {
+              "attempt": 1
+            },
+            "e2ee": true
+          },
+          "lease": "lease-1",
+          "leaseExpiresAt": "2030-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "name": "task-logs",
+        "input": {
+          "lease": "lease-1",
+          "logs": [
+            {
+              "sequence": 0,
+              "stream": "stdout",
+              "text": "hello\n"
+            }
+          ]
+        },
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/tasks/00000000-0000-4000-8000-000000000008/update",
+          "headers": {
+            "Idempotency-Key": "00000000-0000-4000-8000-000000000008:logs:0"
+          },
+          "body": {
+            "lease": "lease-1",
+            "logs": [
+              {
+                "sequence": 0,
+                "stream": "stdout",
+                "text": "",
+                "sealed": {
+                  "v": 1,
+                  "ctx": {
+                    "t": "log",
+                    "task": "00000000-0000-4000-8000-000000000008",
+                    "seq": 0,
+                    "account": "acct-contracts"
+                  },
+                  "from": "UTC9R7VS01CHnRZxyd6YWw",
+                  "to": [
+                    {
+                      "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                      "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                      "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4caB4UrsDoH0rn-lBbdQGEu7"
+                    },
+                    {
+                      "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                      "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                      "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVjyHe99LTANQBkrQ1dttYZr"
+                    }
+                  ],
+                  "iv": "Hy0BPl02hE88QAUB",
+                  "ct": "pWE0VNl_PaUTFI_EXGmesaekpNguoyuirvZ83H5S3xsNfph51KsBYA",
+                  "sig": "Jwtv_rrowCsvO2TbhCvGDGQP5ArUaECso97HRfPWKjlqcuQ3yn-y6w_TfJcamrr7dwWiK7ULPU-_FJt2nslxCg"
+                }
+              }
+            ]
+          }
+        },
+        "sealed": {
+          "logs.0.sealed": {
+            "v": 1,
+            "text": "hello\n"
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Run",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "outbound",
+            "status": "running",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000008",
+            "recipientId": "00000000-0000-4000-8000-000000000001",
+            "destinationId": "00000000-0000-4000-8000-000000000009",
+            "typeId": "run",
+            "runId": "00000000-0000-4000-8000-000000000008",
+            "threadId": "00000000-0000-4000-8000-000000000008",
+            "input": {
+              "destinationId": "00000000-0000-4000-8000-000000000009",
+              "typeId": "run",
+              "values": {},
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "task",
+                  "destination": "00000000-0000-4000-8000-000000000009",
+                  "type": "run",
+                  "account": "acct-contracts"
+                },
+                "from": "0LSgy8KOdQpuT0L1fgznKQ",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                    "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                    "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                  }
+                ],
+                "iv": "ZFN4kc5tRbBna2IV",
+                "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
+                "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+              }
+            },
+            "response": {
+              "values": {},
+              "secretFields": [],
+              "createdAt": "2030-01-01T00:00:00.000Z"
+            },
+            "execution": {
+              "attempt": 1
+            }
+          }
+        },
+        "result": {
+          "title": "Run",
+          "body": "",
+          "kind": "message",
+          "fields": [],
+          "attachments": [],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "outbound",
+          "status": "running",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000008",
+          "recipientId": "00000000-0000-4000-8000-000000000001",
+          "destinationId": "00000000-0000-4000-8000-000000000009",
+          "typeId": "run",
+          "runId": "00000000-0000-4000-8000-000000000008",
+          "threadId": "00000000-0000-4000-8000-000000000008",
+          "input": {
+            "destinationId": "00000000-0000-4000-8000-000000000009",
+            "typeId": "run",
+            "values": {
+              "prompt": "Summarize the report"
+            },
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "task",
+                "destination": "00000000-0000-4000-8000-000000000009",
+                "type": "run",
+                "account": "acct-contracts"
+              },
+              "from": "0LSgy8KOdQpuT0L1fgznKQ",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                  "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                  "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                }
+              ],
+              "iv": "ZFN4kc5tRbBna2IV",
+              "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
+              "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+            }
+          },
+          "response": {
+            "values": {
+              "prompt": "Summarize the report"
+            },
+            "secretFields": [],
+            "createdAt": "2030-01-01T00:00:00.000Z"
+          },
+          "execution": {
+            "attempt": 1
+          },
+          "e2ee": true
+        }
+      },
+      {
+        "name": "read-task-logs",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000008/logs"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "logs": [
+              {
+                "sequence": 0,
+                "stream": "stdout",
+                "text": "",
+                "sealed": {
+                  "v": 1,
+                  "ctx": {
+                    "t": "log",
+                    "task": "00000000-0000-4000-8000-000000000008",
+                    "seq": 0,
+                    "account": "acct-contracts"
+                  },
+                  "from": "UTC9R7VS01CHnRZxyd6YWw",
+                  "to": [
+                    {
+                      "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                      "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                      "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4caB4UrsDoH0rn-lBbdQGEu7"
+                    },
+                    {
+                      "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                      "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                      "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVjyHe99LTANQBkrQ1dttYZr"
+                    }
+                  ],
+                  "iv": "Hy0BPl02hE88QAUB",
+                  "ct": "pWE0VNl_PaUTFI_EXGmesaekpNguoyuirvZ83H5S3xsNfph51KsBYA",
+                  "sig": "Jwtv_rrowCsvO2TbhCvGDGQP5ArUaECso97HRfPWKjlqcuQ3yn-y6w_TfJcamrr7dwWiK7ULPU-_FJt2nslxCg"
+                }
+              }
+            ]
+          }
+        },
+        "result": {
+          "logs": [
+            {
+              "sequence": 0,
+              "stream": "stdout",
+              "text": "hello\n",
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "log",
+                  "task": "00000000-0000-4000-8000-000000000008",
+                  "seq": 0,
+                  "account": "acct-contracts"
+                },
+                "from": "UTC9R7VS01CHnRZxyd6YWw",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                    "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4caB4UrsDoH0rn-lBbdQGEu7"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                    "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVjyHe99LTANQBkrQ1dttYZr"
+                  }
+                ],
+                "iv": "Hy0BPl02hE88QAUB",
+                "ct": "pWE0VNl_PaUTFI_EXGmesaekpNguoyuirvZ83H5S3xsNfph51KsBYA",
+                "sig": "Jwtv_rrowCsvO2TbhCvGDGQP5ArUaECso97HRfPWKjlqcuQ3yn-y6w_TfJcamrr7dwWiK7ULPU-_FJt2nslxCg"
+              },
+              "e2ee": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "complete-task",
+        "input": {
+          "lease": "lease-1",
+          "status": "failed",
+          "error": "boom"
+        },
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/tasks/00000000-0000-4000-8000-000000000008/update",
+          "body": {
+            "lease": "lease-1",
+            "status": "failed",
+            "errorSealed": {
+              "v": 1,
+              "ctx": {
+                "t": "result",
+                "task": "00000000-0000-4000-8000-000000000008",
+                "account": "acct-contracts"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
+                  "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
+                  "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                }
+              ],
+              "iv": "BMF_MW72XNse-L80",
+              "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
+              "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+            }
+          }
+        },
+        "sealed": {
+          "errorSealed": {
+            "v": 1,
+            "error": "boom"
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Run",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "outbound",
+            "status": "failed",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000008",
+            "recipientId": "00000000-0000-4000-8000-000000000001",
+            "destinationId": "00000000-0000-4000-8000-000000000009",
+            "typeId": "run",
+            "runId": "00000000-0000-4000-8000-000000000008",
+            "threadId": "00000000-0000-4000-8000-000000000008",
+            "input": {
+              "destinationId": "00000000-0000-4000-8000-000000000009",
+              "typeId": "run",
+              "values": {},
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "task",
+                  "destination": "00000000-0000-4000-8000-000000000009",
+                  "type": "run",
+                  "account": "acct-contracts"
+                },
+                "from": "0LSgy8KOdQpuT0L1fgznKQ",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                    "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                    "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                  }
+                ],
+                "iv": "ZFN4kc5tRbBna2IV",
+                "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
+                "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+              }
+            },
+            "response": {
+              "values": {},
+              "secretFields": [],
+              "createdAt": "2030-01-01T00:00:00.000Z"
+            },
+            "execution": {
+              "attempt": 1,
+              "completedAt": "2030-01-01T00:00:00.000Z",
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "result",
+                  "task": "00000000-0000-4000-8000-000000000008",
+                  "account": "acct-contracts"
+                },
+                "from": "UTC9R7VS01CHnRZxyd6YWw",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
+                    "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
+                    "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                  }
+                ],
+                "iv": "BMF_MW72XNse-L80",
+                "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
+                "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+              }
+            },
+            "result": {
+              "status": "failed",
+              "completedAt": "2030-01-01T00:00:00.000Z",
+              "sealed": {
+                "v": 1,
+                "ctx": {
+                  "t": "result",
+                  "task": "00000000-0000-4000-8000-000000000008",
+                  "account": "acct-contracts"
+                },
+                "from": "UTC9R7VS01CHnRZxyd6YWw",
+                "to": [
+                  {
+                    "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                    "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
+                    "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                  },
+                  {
+                    "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                    "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
+                    "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                  }
+                ],
+                "iv": "BMF_MW72XNse-L80",
+                "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
+                "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+              }
+            }
+          }
+        },
+        "result": {
+          "title": "Run",
+          "body": "",
+          "kind": "message",
+          "fields": [],
+          "attachments": [],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "outbound",
+          "status": "failed",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000008",
+          "recipientId": "00000000-0000-4000-8000-000000000001",
+          "destinationId": "00000000-0000-4000-8000-000000000009",
+          "typeId": "run",
+          "runId": "00000000-0000-4000-8000-000000000008",
+          "threadId": "00000000-0000-4000-8000-000000000008",
+          "input": {
+            "destinationId": "00000000-0000-4000-8000-000000000009",
+            "typeId": "run",
+            "values": {
+              "prompt": "Summarize the report"
+            },
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "task",
+                "destination": "00000000-0000-4000-8000-000000000009",
+                "type": "run",
+                "account": "acct-contracts"
+              },
+              "from": "0LSgy8KOdQpuT0L1fgznKQ",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                  "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                  "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                }
+              ],
+              "iv": "ZFN4kc5tRbBna2IV",
+              "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
+              "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+            }
+          },
+          "response": {
+            "values": {
+              "prompt": "Summarize the report"
+            },
+            "secretFields": [],
+            "createdAt": "2030-01-01T00:00:00.000Z"
+          },
+          "execution": {
+            "attempt": 1,
+            "completedAt": "2030-01-01T00:00:00.000Z",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "result",
+                "task": "00000000-0000-4000-8000-000000000008",
+                "account": "acct-contracts"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
+                  "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
+                  "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                }
+              ],
+              "iv": "BMF_MW72XNse-L80",
+              "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
+              "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+            },
+            "error": "boom"
+          },
+          "result": {
+            "status": "failed",
+            "completedAt": "2030-01-01T00:00:00.000Z",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "result",
+                "task": "00000000-0000-4000-8000-000000000008",
+                "account": "acct-contracts"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
+                  "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
+                  "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                }
+              ],
+              "iv": "BMF_MW72XNse-L80",
+              "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
+              "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+            },
+            "error": "boom"
+          },
+          "e2ee": true
+        }
+      },
+      {
+        "name": "download",
+        "input": {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "name": "notes.txt",
+          "size": 5,
+          "type": "text/plain",
+          "key": "y5gGI0iascAFyVvtPHKm5bm4Xqtx7q2NSrYTSwJ1qIY"
+        },
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/files/00000000-0000-4000-8000-000000000003"
+        },
+        "response": {
+          "status": 200,
+          "body": "_b__N0nwUdeIyz1Ipf5X4UtnWnvP5bSwSxZ20g"
+        },
+        "bytes": true,
+        "result": "hello"
+      },
+      {
+        "name": "offer-secret",
+        "input": {
+          "title": "Staging key",
+          "kind": "secret"
+        },
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/messages",
+          "headers": {
+            "Idempotency-Key": "sealed-3"
+          },
+          "body": {
+            "title": "Staging key",
+            "kind": "secret"
+          }
+        },
+        "response": {
+          "status": 201,
+          "body": {
+            "title": "Staging key",
+            "body": "",
+            "kind": "secret",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "pending",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000010",
+            "secretDelivery": "offered",
+            "threadId": "00000000-0000-4000-8000-000000000010"
+          }
+        },
+        "result": {
+          "title": "Staging key",
+          "body": "",
+          "kind": "secret",
+          "fields": [],
+          "attachments": [],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "pending",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000010",
+          "secretDelivery": "offered",
+          "threadId": "00000000-0000-4000-8000-000000000010"
+        }
+      },
+      {
+        "name": "secret-receiver",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000010/secret-receiver"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "claimId": "00000000-0000-4000-8000-000000000011",
+            "publicKey": {
+              "kty": "RSA",
+              "n": "1I9uhCbWTOIaw8MJ-U9bm0KqpdOiay89JPf0MmXX5aICOUBpQ_Wh_tiezHe4bDfiupko-soK3mz3gOq390ssyEzg7_FlRwpKiP4s0k_g411Cxtn15DlmKV1iECgmFb_taxziy35JD_RSXI5oAxxdK2VKgFcYY0yUlkXT5bgICdph5b7EsnIBqlPEKLzdrjSHqdyW6BBqPMXvY-gp52amjXYRCRV7-451jz6I6RnPk-AvhA3PUPLGQEIgDaZJKz0a7pGAAbx4kQ_zVdd-sso-37eLHq3SDlHNztlRBeWrBU2l9okk9omoEXgq2FyfgiMVlsFJmRGPa--4V7ocd99EvQ",
+              "e": "AQAB",
+              "alg": "RSA-OAEP-256",
+              "ext": true,
+              "key_ops": ["encrypt"]
+            },
+            "sig": "xLUGBVxYZBU98UV23_luS7m8xroCpKw7Dcty2EXnnn6a6kqBW8S2k3S446GJZ-VWf6hFKIVxneW8j3-xl01cBg"
+          }
+        },
+        "result": {
+          "claimId": "00000000-0000-4000-8000-000000000011",
+          "publicKey": {
+            "kty": "RSA",
+            "n": "1I9uhCbWTOIaw8MJ-U9bm0KqpdOiay89JPf0MmXX5aICOUBpQ_Wh_tiezHe4bDfiupko-soK3mz3gOq390ssyEzg7_FlRwpKiP4s0k_g411Cxtn15DlmKV1iECgmFb_taxziy35JD_RSXI5oAxxdK2VKgFcYY0yUlkXT5bgICdph5b7EsnIBqlPEKLzdrjSHqdyW6BBqPMXvY-gp52amjXYRCRV7-451jz6I6RnPk-AvhA3PUPLGQEIgDaZJKz0a7pGAAbx4kQ_zVdd-sso-37eLHq3SDlHNztlRBeWrBU2l9okk9omoEXgq2FyfgiMVlsFJmRGPa--4V7ocd99EvQ",
+            "e": "AQAB",
+            "alg": "RSA-OAEP-256",
+            "ext": true,
+            "key_ops": ["encrypt"]
+          },
+          "sig": "xLUGBVxYZBU98UV23_luS7m8xroCpKw7Dcty2EXnnn6a6kqBW8S2k3S446GJZ-VWf6hFKIVxneW8j3-xl01cBg"
+        }
+      },
+      {
+        "name": "secret-receiver-forged",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000010/secret-receiver"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "claimId": "00000000-0000-4000-8000-000000000011",
+            "publicKey": {
+              "kty": "RSA",
+              "n": "1I9uhCbWTOIaw8MJ-U9bm0KqpdOiay89JPf0MmXX5aICOUBpQ_Wh_tiezHe4bDfiupko-soK3mz3gOq390ssyEzg7_FlRwpKiP4s0k_g411Cxtn15DlmKV1iECgmFb_taxziy35JD_RSXI5oAxxdK2VKgFcYY0yUlkXT5bgICdph5b7EsnIBqlPEKLzdrjSHqdyW6BBqPMXvY-gp52amjXYRCRV7-451jz6I6RnPk-AvhA3PUPLGQEIgDaZJKz0a7pGAAbx4kQ_zVdd-sso-37eLHq3SDlHNztlRBeWrBU2l9okk9omoEXgq2FyfgiMVlsFJmRGPa--4V7ocd99EvQ",
+              "e": "AQAB",
+              "alg": "RSA-OAEP-256",
+              "ext": true,
+              "key_ops": ["encrypt"]
+            },
+            "sig": "_jlesXVDzLJt3Kj_B7EZXl6sJ9PJ-DgDpNKDiKu3kUmRLtIGMTaFZobcc_4ukz2wAiKGB65rccD-B5q-NTKrCg"
+          }
+        },
+        "error": "Bad receiver signature."
+      }
+    ]
+  }
 }

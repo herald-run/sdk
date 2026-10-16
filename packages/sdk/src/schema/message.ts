@@ -147,6 +147,8 @@ export interface TaskExecution {
   error?: string;
   /** @deprecated Read `GET /messages/:id/logs`. */
   logs?: TaskLog[];
+  /** End-to-end encrypted error (`ctx.t = "result"`). */
+  sealed?: SealedEnvelope;
 }
 /** `POST /outbox` input as stored: custom field values plus the typed session, if any. */
 export interface TaskInput {
@@ -242,4 +244,10 @@ export interface Message extends StoredRecord {
   session?: SessionRequest;
   execution?: TaskExecution;
   projection?: MessageProjection;
+  /** Client-side: content was opened from `sealed` (end-to-end encrypted). */
+  e2ee?: boolean;
+  /** Client-side: sealed, and this client holds no key for it; content fields are placeholders. */
+  locked?: boolean;
+  /** Client-side: sealed, but a signature, context or answer check failed; content is withheld. */
+  unverified?: boolean;
 }

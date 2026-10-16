@@ -24,6 +24,29 @@ export type Step = {
   upload?: { path: string; text: string; response: Reply };
 };
 export const steps = contracts.steps as Step[];
+/**
+ * A keyed integration's step (`e2ee.steps`), replayed by the SDKs with concrete values. Sealed
+ * request parts are random, so `sealed` names each one by dotted path with the payload it carries.
+ */
+export type SealedStep = Omit<Step, 'upload'> & {
+  /** The SDK call's input, when it is not the request body. */
+  input?: unknown;
+  sealed?: Record<string, unknown>;
+  /** `upload` only: the PUT of the encrypted bytes of `plain`. */
+  upload?: { path: string; plain: string; response: Reply };
+  /** The response body is base64url file bytes. */
+  bytes?: boolean;
+  /** What the SDK returns; `<string>` matches any string. */
+  result?: unknown;
+  /** The SDK rejects with this message instead. */
+  error?: string;
+};
+export type SealedContracts = {
+  token: string;
+  keyring: import('../src/e2ee/index').Keyring;
+  steps: SealedStep[];
+};
+export const sealedContracts = (contracts as { e2ee?: SealedContracts }).e2ee!;
 type Results = Record<string, unknown>;
 /** Results before the first step: only the shared literals. */
 export const initialResults = (): Results => ({ values: contracts.values });
