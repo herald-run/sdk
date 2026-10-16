@@ -31,7 +31,7 @@ export const H = (label: string, ...parts: (Uint8Array | string)[]) =>
     Uint8Array.of(0),
     ...parts.map((part) => (typeof part === 'string' ? utf8(part) : part)),
   );
-async function aesKey(key: Uint8Array, usage: KeyUsage) {
+async function aesKey(key: Uint8Array, usage: 'encrypt' | 'decrypt') {
   return crypto.subtle.importKey('raw', concat(key), 'AES-GCM', false, [usage]);
 }
 export async function aesEncrypt(

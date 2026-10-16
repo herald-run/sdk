@@ -7,12 +7,15 @@ const PKCS8 = {
 };
 /** Imports a raw 32-byte private key and returns it with its public key. */
 export async function importPrivate(alg: 'Ed25519' | 'X25519', raw: Uint8Array) {
-  const usages: KeyUsage[] = alg === 'Ed25519' ? ['sign'] : ['deriveBits'];
+  const usages: ('sign' | 'deriveBits')[] = alg === 'Ed25519' ? ['sign'] : ['deriveBits'];
   const der = concat(PKCS8[alg], bytesOf(raw, 32));
   const priv = await crypto.subtle.importKey('pkcs8', der, { name: alg }, true, usages);
-  const { x } = await crypto.subtle.exportKey('jwk', priv);
+  const { x } = (await crypto.subtle.exportKey('jwk', priv)) as JsonWebKey;
   return { priv, pub: b64u.decode(x!) };
 }
+// Typed loosely: DOM and Workers typings name the `public` member differently.
+const x25519 = (key: CryptoKey) =>
+  ({ name: 'X25519', public: key }) as unknown as Parameters<SubtleCrypto['deriveBits']>[0];
 export async function dh(priv: CryptoKey, pub: Uint8Array): Promise<Bytes> {
   let out: Bytes | undefined;
   try {
@@ -24,7 +27,7 @@ export async function dh(priv: CryptoKey, pub: Uint8Array): Promise<Bytes> {
       [],
     );
     out = new Uint8Array(
-      await crypto.subtle.deriveBits({ name: 'X25519', public: key }, priv, 256),
+      await crypto.subtle.deriveBits(x25519(key), priv, 256),
     );
   } catch {
     fail('Invalid X25519 public key.');

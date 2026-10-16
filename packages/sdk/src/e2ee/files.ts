@@ -22,7 +22,7 @@ function nonce(prefix: Uint8Array, index: number, last: boolean) {
   out[11] = last ? 1 : 0;
   return out;
 }
-async function cipher(key: Uint8Array | string, usage: KeyUsage) {
+async function cipher(key: Uint8Array | string, usage: 'encrypt' | 'decrypt') {
   const k = await crypto.subtle.importKey('raw', bytesOf(key, 32), 'AES-GCM', false, [usage]);
   const additionalData = await H('file');
   let index = 0;

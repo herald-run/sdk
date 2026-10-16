@@ -27,7 +27,7 @@ export const b64u = {
 const encoder = new TextEncoder();
 export const utf8 = (text: string): Bytes => encoder.encode(text) as Bytes;
 export const fromUtf8 = (bytes: Uint8Array) =>
-  new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes);
 export function concat(...parts: Uint8Array[]): Bytes {
   const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
   let offset = 0;
