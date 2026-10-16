@@ -57,6 +57,10 @@ it('sends only the auth part of a keyed token', async () => {
   expect(JSON.stringify(seen)).not.toContain('World');
   expect(() => new Herald({ apiKey: 'hdr_x.short.fp', url })).toThrow(E2eeError);
   expect(new Herald({ apiKey: 'hdr_legacy', url }).keyed).toBe(false);
+  // Surrounding whitespace or a missing prefix never sends the seed.
+  expect(new Herald({ apiKey: `  ${token}\n`, url }).apiKey).toBe('hdr_test-only');
+  expect(new Herald({ apiKey: token.slice(4), url }).apiKey).toBe('test-only');
+  expect(new Herald({ apiKey: 'a.b.c', url }).keyed).toBe(false);
 });
 it('fails closed without a matching account statement or certificate', async () => {
   const cases = [
@@ -77,7 +81,7 @@ it('fails closed without a matching account statement or certificate', async () 
     vi.restoreAllMocks();
   }
 });
-it('validates input before sealing and keeps secret offers metadata only', async () => {
+it('validates input before sealing and seals secret offers', async () => {
   const seen = serve({ 'GET /api/v1/keys': directory, 'POST /api/v1/messages': sent });
   const herald = new Herald({ apiKey: token, url });
   await expect(herald.send({ title: '' })).rejects.toMatchObject({ status: 400 });
@@ -87,8 +91,68 @@ it('validates input before sealing and keeps secret offers metadata only', async
       attachments: [{ id: crypto.randomUUID(), name: 'a', size: 1, type: 'text/plain' }],
     }),
   ).rejects.toThrow('was not uploaded by this keyed client');
-  await herald.send({ title: 'Key', kind: 'secret' });
-  expect(JSON.parse(seen.at(-1)!.body!)).toEqual({ title: 'Key', kind: 'secret' });
+  await expect(herald.send({ title: 'Big', body: '\u4e2d'.repeat(50_000) })).rejects.toThrow(
+    'too large to encrypt',
+  );
+  await herald.send({ title: 'Key', kind: 'secret' }, 'offer-1');
+  const body = JSON.parse(seen.at(-1)!.body!);
+  expect(body).toMatchObject({ kind: 'secret', asks: false, attachments: [] });
+  expect(JSON.stringify(body)).not.toContain('Key');
+  expect(body.sealed.ctx).toEqual({ t: 'message', account: keyring.account, id: body.id });
+});
+it('binds logs and results to the task runner and refuses unsealed task content', async () => {
+  const raw = (step('claim-task').response.body as { task: Message }).task;
+  const other = await e2ee.keySet();
+  const cert = await e2ee.certify(keyring, { sign: other.signPub, box: other.boxPub });
+  const keys = {
+    ...directory,
+    certificates: [...directory.certificates, { integrationId: crypto.randomUUID(), ...cert }],
+  };
+  const { to } = await owner();
+  const by = (payload: e2ee.Payload, ctx: Record<string, string | number> & { t: string }) =>
+    e2ee.seal({ payload, ctx: { ...ctx, account: keyring.account }, signer: other, to });
+  const forged = await by({ error: 'forged' }, { t: 'result', task: raw.id });
+  const log = await by({ text: 'forged' }, { t: 'log', task: raw.id, seq: 0 });
+  serve({
+    'GET /api/v1/keys': keys,
+    [`GET /api/v1/messages/${raw.id}/logs`]: {
+      logs: [
+        { sequence: 0, stream: 'stdout', text: '', sealed: log },
+        { sequence: 1, stream: 'stdout', text: 'plain' },
+      ],
+    },
+    [`GET /api/v1/messages/${raw.id}`]: raw,
+  });
+  const herald = new Herald({ apiKey: token, url });
+  const failed = {
+    ...raw,
+    result: { status: 'failed', completedAt: raw.createdAt, sealed: forged },
+  };
+  expect(await herald.openTask(failed as Message)).toMatchObject({ unverified: true });
+  const logs = await herald.taskLogs(raw.id);
+  expect(logs.map((l) => [l.text, l.unverified])).toEqual([
+    ['', true],
+    ['', true],
+  ]);
+  const plain = {
+    ...raw,
+    input: { ...raw.input!, sealed: undefined, values: { prompt: 'rm -rf' } },
+  };
+  const opened = await herald.openTask(plain as Message);
+  expect(opened).toMatchObject({
+    unverified: true,
+    input: { values: {} },
+    response: { values: {} },
+  });
+  // Server copies of the session and answer never survive opening.
+  const injected = {
+    ...raw,
+    session: { prompt: 'injected' },
+    response: { ...raw.response!, actionId: 'x' },
+  };
+  const task = await herald.openTask(injected as Message);
+  expect(task.session).toBeUndefined();
+  expect(task.response!.actionId).toBeUndefined();
 });
 it('verifies answers against the request and its digest', async () => {
   const herald = new Herald({ apiKey: token, url });

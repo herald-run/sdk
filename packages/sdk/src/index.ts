@@ -161,9 +161,16 @@ export class Herald {
       throw new Error('Use HTTPS for Herald.');
     if (url.username || url.password || url.search || url.hash || url.pathname !== '/')
       throw new Error('Use a server origin without credentials, path, query or fragment.');
-    const token = options.apiKey || process.env.HERALD_API_KEY || process.env.HERALD_TOKEN || '';
+    const token = (
+      options.apiKey ||
+      process.env.HERALD_API_KEY ||
+      process.env.HERALD_TOKEN ||
+      ''
+    ).trim();
     // End-to-end tokens (`hdr_<auth>.<seed>.<fingerprint>`): only `hdr_<auth>` leaves the process.
-    const parsed = token.startsWith('hdr_') && token.includes('.') ? parseToken(token) : undefined;
+    // Anything shaped like one is parsed, so a malformed keyed token fails instead of leaking.
+    const keyed = token.startsWith('hdr_') || /\.[\w-]{43}\.[\w-]{22}$/.test(token);
+    const parsed = keyed && token.includes('.') ? parseToken(token) : undefined;
     this.apiKey = parsed?.auth ?? token;
     if (parsed?.seed)
       this.#keyed = new KeyedSession(parsed.seed, parsed.fingerprint!, () => this.request('/keys'));
@@ -180,9 +187,14 @@ export class Herald {
   }
   #open = <M extends Message>(m: M): Promise<M> =>
     this.#keyed ? this.#keyed.openRecord(m) : Promise.resolve(m);
-  /** Opens a task delivered outside this client, such as a webhook's `task`. */
+  #openTask = <M extends Message>(m: M): Promise<M> =>
+    this.#keyed ? this.#keyed.openRecord(m, { task: true }) : Promise.resolve(m);
+  /**
+   * Opens a task delivered outside this client, such as a webhook's `task`. Keyed clients flag a
+   * task without sealed input as `unverified`.
+   */
   openTask(task: Message): Promise<Message> {
-    return this.#open(task);
+    return this.#openTask(task);
   }
   #headers(extra: Record<string, string> = {}) {
     return { Authorization: 'Bearer ' + this.apiKey, 'User-Agent': this.userAgent, ...extra };
@@ -265,7 +277,7 @@ export class Herald {
   ): Promise<Message> {
     const idempotencyKey =
       (typeof options === 'string' ? options : options.idempotencyKey) || crypto.randomUUID();
-    const body = this.#keyed ? await this.#keyed.sealMessage(input) : input;
+    const body = this.#keyed ? await this.#keyed.sealMessage(input, idempotencyKey) : input;
     return this.#open(await this.request<Message>('/messages', body, { idempotencyKey }));
   }
   async get(id: string): Promise<Message> {
@@ -301,7 +313,10 @@ export class Herald {
   async taskLogs(id: string, options: { after?: number } = {}): Promise<OpenedLog[]> {
     const query = options.after === undefined ? '' : `?after=${options.after}`;
     const page = await this.request<{ logs: TaskLog[] }>(`/messages/${path(id)}/logs${query}`);
-    return this.#keyed ? this.#keyed.openLogs(id, page.logs) : page.logs;
+    if (!this.#keyed) return page.logs;
+    return this.#keyed.openLogs(id, page.logs, () =>
+      this.request<Message>('/messages/' + path(id)),
+    );
   }
   /**
    * Streams an attachment's bytes. Pass the attachment from an opened record (or its ID once this
@@ -393,7 +408,7 @@ export class Herald {
     input: { runnerId: string; heartbeat?: boolean },
   ): Promise<TaskClaim> {
     const claim = await this.request<TaskClaim>(`/tasks/${path(id)}/claim`, input);
-    return { ...claim, task: await this.#open(claim.task) };
+    return { ...claim, task: await this.#openTask(claim.task) };
   }
   heartbeatTask(id: string, lease: string): Promise<{ lease: string; leaseExpiresAt: string }> {
     return this.request(`/tasks/${path(id)}/heartbeat`, { lease });
@@ -405,7 +420,7 @@ export class Herald {
     options: Pick<RequestOptions, 'idempotencyKey' | 'retry'> = {},
   ): Promise<Message> {
     const body = this.#keyed ? await this.#keyed.sealUpdate(id, update) : update;
-    return this.#open(await this.request<Message>(`/tasks/${path(id)}/update`, body, options));
+    return this.#openTask(await this.request<Message>(`/tasks/${path(id)}/update`, body, options));
   }
   /** Consumes the encrypted envelopes of an answered request's secret fields. */
   collectSecrets(id: string): Promise<Record<string, Envelope | SealedEnvelope>> {

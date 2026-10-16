@@ -132,6 +132,20 @@ def check_input(message):
     return m
 
 
+def check_secret_offer(message):
+    """A secret offer: a title and body only; the value goes to the receiver the account signs."""
+    m = {k: v for k, v in message.items() if v is not None}
+    if not isinstance(m.get("title"), str) or not 0 < len(m["title"]) <= 180:
+        _invalid("Titles hold 1 to 180 characters.")
+    if not isinstance(m.setdefault("body", ""), str) or len(m["body"]) > 50000:
+        _invalid("Bodies hold at most 50,000 characters.")
+    if any(m.get(k) for k in ("fields", "attachments", "blocks", "actions", "schema", "publicKey")):
+        _invalid("Secret deliveries contain metadata only; use the encrypted delivery endpoint.")
+    if "expiresAt" in m and "expiresIn" in m:
+        _invalid("Use expiresAt or expiresIn, not both.")
+    return m
+
+
 def check_answers(values):
     ok = isinstance(values, dict) and all(
         isinstance(k, str) and len(k) <= 64 and (v is None or isinstance(v, bool) or _number(v) or (isinstance(v, str) and len(v) <= 16000) or (isinstance(v, list) and len(v) <= 50 and all(isinstance(x, str) and len(x) <= 100 for x in v)))
@@ -209,10 +223,10 @@ def _omit(value, *keys):
 
 
 def strip(m, flag):
-    """Placeholder content for a record that could not be opened."""
+    """Placeholder content for a record that could not be opened or verified."""
     out = {**_omit(m, "blocks", "actions", "session"), "e2ee": True, flag: True}
-    if m.get("sealed"):
-        out.update(title="Encrypted message", body="", fields=[])
+    if m.get("direction") != "outbound":
+        out.update(title="Encrypted secret" if m.get("kind") == "secret" else "Encrypted message", body="", fields=[])
     if m.get("response"):
         out["response"] = {**_omit(m["response"], "actionId"), "values": {}}
     if m.get("input"):
@@ -228,6 +242,8 @@ class KeyedSession:
         self.seed, self.fingerprint, self._directory = seed, fingerprint, directory
         # File keys learned from uploads and opened records, by file ID.
         self.files = {}
+        # Task IDs -> the integration that runs them, so logs open only under its key.
+        self._runners = {}
         self._state, self._loaded = None, 0.0
 
     async def state(self, refresh=False):
@@ -259,14 +275,22 @@ class KeyedSession:
     def _to(self, s):
         return [s["inbox"], {"kid": s["me"].kid, "box": s["me"].box_pub}]
 
-    async def _open(self, env, expect, by):
+    async def _open(self, env, expect, signer):
+        """Opens `env` if exactly the kid `signer(state)` picks signed it; a new certificate triggers a refetch."""
         s = await self.state()
-        if by == "integration" and env.get("from") not in s["signers"]:
+        if signer(s) != env.get("from"):
             s = await self.state(True)
+        kid = signer(s)
+        key = s["identity"] if kid == s["identity_kid"] else s["signers"].get(kid)
+        return e2ee.open(env, recipients=[s["me"]], signers=lambda k: key if k == kid else None, expect={**expect, "account": s["account"]})
 
-        def signers(kid):
-            return (s["identity"] if kid == s["identity_kid"] else None) if by == "identity" else s["signers"].get(kid)
-        return e2ee.open(env, recipients=[s["me"]], signers=signers, expect={**expect, "account": s["account"]})
+    @staticmethod
+    def _identity(s):
+        return s["identity_kid"]
+
+    @staticmethod
+    def _integration(integration_id):
+        return lambda s: s["kids"].get(integration_id) if integration_id else None
 
     def _learn(self, files):
         for f in files:
@@ -276,10 +300,14 @@ class KeyedSession:
         s = await self.state()
         return e2ee.seal(payload=payload, ctx={**ctx, "account": s["account"]}, signer=s["me"], to=self._to(s))
 
-    async def seal_message(self, message):
-        """A sealed request body; secret offers stay metadata only, as the server delivers them."""
+    async def seal_message(self, message, idempotency_key):
+        """A sealed request body under a new record ID; secret offers seal their title and body."""
+        record_id = str(uuid.uuid4())
         if message.get("kind") == "secret":
-            return message
+            m = check_secret_offer(message)
+            payload = {"kind": "secret", "title": m["title"], "body": m["body"]}
+            body = {"id": record_id, "kind": "secret", "sealed": await self._seal(payload, {"t": "message", "id": record_id}), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": False, "attachments": []}
+            return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}
         m = check_input(message)
         files = []
         for file in m.get("attachments") or []:
@@ -288,67 +316,85 @@ class KeyedSession:
                 e2ee._fail(f"Attachment {file['id']} was not uploaded by this keyed client.")
             files.append({k: known[k] for k in ("id", "name", "type", "size", "key")})
         payload = {"attachments": files, **{k: m[k] for k in CONTENT if k in m}}
-        body = {"sealed": await self._seal(payload, {"t": "message"}), "digest": e2ee.idempotency_digest(self.seed, payload), "asks": m["kind"] == "form" or bool(m["fields"]) or bool(m.get("actions")), "attachments": [{"id": f["id"]} for f in files]}
+        body = {"id": record_id, "kind": "message", "sealed": await self._seal(payload, {"t": "message", "id": record_id}), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": m["kind"] == "form" or bool(m["fields"]) or bool(m.get("actions")), "attachments": [{"id": f["id"]} for f in files]}
         return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}
 
-    async def open_record(self, m):
-        """A record's sealed parts opened, with `e2ee: True`; failures are flagged `locked` or `unverified`."""
-        if not isinstance(m, dict) or not (m.get("sealed") or (m.get("input") or {}).get("sealed") or (m.get("response") or {}).get("sealed") or (m.get("result") or {}).get("sealed") or (m.get("execution") or {}).get("sealed")):
+    async def open_record(self, m, task=False):
+        """A record's sealed parts opened, with `e2ee: True`; failures are flagged `locked` or `unverified`.
+
+        Content comes only from verified envelopes: a task (or `task=True`) without sealed input, an
+        unsealed record from a keyed connection and a sealed request with an unsealed answer are all
+        `unverified`. Plaintext from connections without keys is returned as is, without `e2ee`."""
+        if not isinstance(m, dict):
             return m
         s = await self.state()
+        task = task or m.get("direction") == "outbound"
+        response = m.get("response") or {}
         try:
-            out = {**m, "e2ee": True}
-            if m.get("sealed"):
-                out = await self._content(out, m["sealed"], s)
-            if (m.get("input") or {}).get("sealed"):
-                out = await self._task(out, m["input"]["sealed"])
-            if (m.get("response") or {}).get("sealed"):
-                if not m.get("sealed"):
+            if task:
+                if not (m.get("input") or {}).get("sealed"):
+                    e2ee._fail("This task is not end-to-end encrypted.")
+                if m.get("recipientId"):
+                    self._runners[m["id"]] = m["recipientId"]
+            elif not m.get("sealed"):
+                if response.get("sealed"):
                     e2ee._fail("A sealed answer needs a sealed request.")
-                out = await self._response(out, m["sealed"], m["response"]["sealed"])
+                if m.get("senderId") in s["kids"]:
+                    e2ee._fail("A keyed connection sent this record unsealed.")
+                return m
+            out = {**m, "e2ee": True}
+            out = await (self._task(out, m["input"]["sealed"]) if task else self._content(out, m["sealed"]))
+            if not task and response.get("sealed"):
+                out = await self._response(out, m["sealed"], response["sealed"])
+            elif not task and out.get("kind") != "secret" and (m.get("response") or m.get("status") == "answered"):
+                e2ee._fail("A sealed request needs a sealed answer.")
             for key in ("result", "execution"):
-                env = (m.get(key) or {}).get("sealed")
+                if not m.get(key):
+                    continue
+                env, error = m[key].get("sealed"), None
                 if env:
-                    error = (await self._open(env, {"t": "result", "task": m["id"]}, "integration")).get("error")
+                    error = (await self._open(env, {"t": "result", "task": m["id"]}, self._integration(m.get("recipientId")))).get("error")
                     if error is not None and not isinstance(error, str):
                         e2ee._fail("Malformed task result.")
-                    out[key] = _omit({**out[key], "error": error})
+                out[key] = _omit({**_omit(m[key], "error"), "error": error})
             return out
         except E2eeError as error:
             return strip(m, "locked" if str(error) == NO_ENTRY else "unverified")
 
-    async def _content(self, out, env, s):
-        sender = s["kids"].get(out.get("senderId"))
-        if sender and sender != env["from"]:
-            e2ee._fail("The message signer is not its sender.")
-        payload = await self._open(env, {"t": "message"}, "integration")
+    async def _content(self, out, env):
+        payload = await self._open(env, {"t": "message", "id": out.get("id")}, self._integration(out.get("senderId")))
         files = check_files(payload.pop("attachments", None))
+        fields = {k: v for k, v in payload.items() if k != "v"}
         try:
-            content = check_input({k: v for k, v in payload.items() if k != "v"})
+            content = check_secret_offer(fields) if fields.get("kind") == "secret" else check_input(fields)
         except HeraldError:
             e2ee._fail("Malformed message content.")
+        if (content.get("kind") == "secret") != (out.get("kind") == "secret"):
+            e2ee._fail("The message kind does not match its record.")
+        if content.get("kind") == "secret":
+            content["fields"] = []
         self._learn(files)
-        ids = {f["id"] for f in files}
-        return {**out, **{k: content[k] for k in CONTENT if k in content}, "attachments": files + [f for f in out.get("attachments") or [] if f["id"] not in ids]}
+        # Server copies of content fields are dropped; only the envelope's count.
+        return {**_omit(out, *CONTENT), **{k: content[k] for k in CONTENT if k in content}, "attachments": files}
 
     async def _task(self, out, env):
-        payload = await self._open(env, {"t": "task", "destination": out.get("destinationId"), "type": out.get("typeId")}, "identity")
+        payload = await self._open(env, {"t": "task", "id": out.get("id"), "destination": out.get("destinationId"), "type": out.get("typeId")}, self._identity)
         values, session = check_answers(payload.get("values", {})), payload.get("session")
         if session is not None and not (isinstance(session, dict) and isinstance(session.get("prompt"), str)):
             e2ee._fail("Malformed task input.")
         files = check_files(payload.get("attachments"))
         self._learn(files)
-        ids = {f["id"] for f in files}
-        out = {**out, "input": {**out["input"], "values": values, **({"session": session} if session else {})}, "attachments": files + [f for f in out.get("attachments") or [] if f["id"] not in ids]}
+        # Server copies of the input, session and answer are dropped; only the envelope's count.
+        out = {**_omit(out, "session", "blocks", "actions"), "input": {**_omit(out["input"], "session"), "values": values, **({"session": session} if session else {})}, "attachments": files}
         if out.get("response"):
-            out["response"] = {**out["response"], "values": {**values, **session_values(session)} if session else values}
+            out["response"] = {**_omit(out["response"], "actionId"), "values": {**values, **session_values(session)} if session else values}
         if session:
             out["session"] = _omit(session, "attachments")
         return out
 
     async def _response(self, out, request, env):
         expect = {"t": "response", "message": out["id"], "request": e2ee.envelope_digest(request)}
-        payload = await self._open(env, expect, "identity")
+        payload = await self._open(env, expect, self._identity)
         values, action, files = check_answers(payload.get("values")), payload.get("actionId"), check_files(payload.get("attachments"))
         actions, fields = out.get("actions") or [], out.get("fields") or []
         if action is not None:
@@ -359,17 +405,28 @@ class KeyedSession:
         if not valid:
             e2ee._fail("The answer does not match the request.")
         self._learn(files)
-        keyed = {f["id"]: f for f in files}
-        return {**out, "response": _omit({**out["response"], "values": values, "actionId": action}), "attachments": [keyed.get(f["id"], f) for f in out.get("attachments") or []]}
+        known = {f["id"] for f in out.get("attachments") or []}
+        return {**out, "response": _omit({**out["response"], "values": values, "actionId": action}), "attachments": (out.get("attachments") or []) + [f for f in files if f["id"] not in known]}
 
-    async def open_logs(self, task, logs):
+    async def open_logs(self, task, logs, fetch):
+        """A task's log lines opened; only the integration running the task may sign them. `fetch` loads the task record when this session has not opened it."""
+        if not logs:
+            return logs
+        s = await self.state()
+        if task not in self._runners:
+            await self.open_record(await fetch(), task=True)
+        runner = self._runners.get(task)
+        # Plaintext lines from a keyed runner are not trusted.
+        keyed = runner in s["kids"]
         opened = []
         for log in logs:
-            if not log.get("sealed"):
+            if not log.get("sealed") and not keyed:
                 opened.append(log)
                 continue
             try:
-                text = (await self._open(log["sealed"], {"t": "log", "task": task, "seq": log["sequence"]}, "integration")).get("text")
+                if not log.get("sealed"):
+                    e2ee._fail("A keyed runner sent this log line unsealed.")
+                text = (await self._open(log["sealed"], {"t": "log", "task": task, "seq": log["sequence"]}, self._integration(runner))).get("text")
                 opened.append({**log, "text": text, "e2ee": True} if isinstance(text, str) else e2ee._fail("Malformed log."))
             except E2eeError as error:
                 opened.append({**log, "text": "", "e2ee": True, ("locked" if str(error) == NO_ENTRY else "unverified"): True})
@@ -396,7 +453,7 @@ class KeyedSession:
         return out
 
     async def open_secret(self, message, field, env):
-        value = (await self._open(env, {"t": "secret", "message": message, "field": field}, "identity")).get("value")
+        value = (await self._open(env, {"t": "secret", "message": message, "field": field}, self._identity)).get("value")
         return value if isinstance(value, str) else e2ee._fail("Malformed secret.")
 
     async def check_receiver(self, message, receiver):

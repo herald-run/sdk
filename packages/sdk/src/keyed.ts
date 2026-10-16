@@ -33,6 +33,8 @@ type State = {
   kids: Map<string, string>;
 };
 type Payload = Record<string, unknown>;
+/** Picks the one kid allowed to sign an envelope, from the verified directory. */
+type SignerOf = (s: State) => string | undefined;
 const NO_ENTRY = 'No recipient entry for these keys.';
 const SECRET_KEY = 'Secret fields require a requester public key.';
 // Keyed requests receive secrets sealed to the integration key, so no RSA key is needed.
@@ -73,10 +75,11 @@ function omit<T extends object>(value: T, ...keys: string[]): T {
   const entries = Object.entries(value).filter(([k, v]) => v !== undefined && !keys.includes(k));
   return Object.fromEntries(entries) as T;
 }
-/** Placeholder content for a record that could not be opened. */
+/** Placeholder content for a record that could not be opened or verified. */
 function strip<M extends Message>(m: M, flag: 'locked' | 'unverified'): M {
   const out: Message = { ...omit(m, 'blocks', 'actions', 'session'), e2ee: true, [flag]: true };
-  if (m.sealed) Object.assign(out, { title: 'Encrypted message', body: '', fields: [] });
+  const title = m.kind === 'secret' ? 'Encrypted secret' : 'Encrypted message';
+  if (m.direction !== 'outbound') Object.assign(out, { title, body: '', fields: [] });
   if (m.response) out.response = { ...omit(m.response, 'actionId'), values: {} };
   if (m.input) out.input = { ...omit(m.input, 'session'), values: {} };
   if (m.result) out.result = omit(m.result, 'error');
@@ -139,30 +142,62 @@ export class KeyedSession {
     };
   }
   #to = (s: State): RecipientKey[] => [s.inbox, { kid: s.me.kid, box: s.me.boxPub }];
+  /** Opens `env` if exactly the kid `signer` picks signed it; a new certificate triggers a refetch. */
   async #open<T extends Payload>(
     env: SealedEnvelope,
     expect: Record<string, string | number> & { t: string },
-    by: 'identity' | 'integration',
+    signer: SignerOf,
   ): Promise<T> {
     let s = await this.state();
-    if (by === 'integration' && !s.signers.has(env.from)) s = await this.state(true);
+    if (signer(s) !== env.from) s = await this.state(true);
+    const kid = signer(s);
+    const key = kid === s.identityKid ? s.identity : kid && s.signers.get(kid);
     return e2ee.open<T>(env, {
       recipients: [s.me],
-      signers: (kid) =>
-        by === 'identity' ? (kid === s.identityKid ? s.identity : undefined) : s.signers.get(kid),
+      signers: (from) => (from === kid && key) || undefined,
       expect: { ...expect, account: s.account },
     });
   }
+  static #identity: SignerOf = (s) => s.identityKid;
+  static #integration =
+    (id?: string): SignerOf =>
+    (s) =>
+      id ? s.kids.get(id) : undefined;
   #learn(files: FileAttachment[] = []) {
     for (const file of files) if (file.key) this.files.set(file.id, file);
   }
-  /** Seals a message request; secret offers stay metadata only, as the server delivers them. */
-  async sealMessage(input: MessageRequest): Promise<SealedMessageInput | MessageRequest> {
-    if (input.kind === 'secret') return input;
+  /**
+   * Seals a message request under a new record ID. Secret offers seal their title and body; the
+   * value itself goes to the receiver the account signs.
+   */
+  async sealMessage(input: MessageRequest, idempotencyKey: string): Promise<SealedMessageInput> {
     const parsed = parseInput(input);
     if (!parsed.success) throw new HeraldError(z.prettifyError(parsed.error), 400);
-    const data = parsed.data as Exclude<typeof parsed.data, { kind: 'secret' }>;
     const s = await this.state();
+    const id = crypto.randomUUID();
+    const seal = async (payload: Payload) => ({
+      id,
+      sealed: await e2ee.seal({
+        payload,
+        ctx: { t: 'message', account: s.account, id },
+        signer: s.me,
+        to: this.#to(s),
+      }),
+      digest: await e2ee.idempotencyDigest(this.seed, payload, idempotencyKey),
+      taskId: parsed.data.taskId,
+      replyTo: parsed.data.replyTo,
+      expiresAt: parsed.data.expiresAt,
+      expiresIn: parsed.data.expiresIn,
+    });
+    if (parsed.data.kind === 'secret') {
+      const { title, body } = parsed.data;
+      return sealedMessageInputSchema.parse({
+        ...(await seal({ kind: 'secret', title, body })),
+        kind: 'secret',
+        asks: false,
+      });
+    }
+    const data = parsed.data;
     const attachments = ((input.attachments || []) as FileAttachment[]).map((file) => {
       const known = { ...this.files.get(file.id), ...file };
       if (!known.key) fail(`Attachment ${file.id} was not uploaded by this keyed client.`);
@@ -176,42 +211,49 @@ export class KeyedSession {
     });
     const payload: Payload = { attachments };
     for (const key of CONTENT) if (data[key] !== undefined) payload[key] = data[key];
-    const sealed = await e2ee.seal({
-      payload,
-      ctx: { t: 'message', account: s.account },
-      signer: s.me,
-      to: this.#to(s),
-    });
     return sealedMessageInputSchema.parse({
-      sealed,
-      digest: await e2ee.idempotencyDigest(this.seed, payload),
+      ...(await seal(payload)),
       asks: data.kind === 'form' || !!data.fields.length || !!data.actions?.length,
-      attachments: attachments.map(({ id }) => ({ id })),
-      taskId: data.taskId,
-      replyTo: data.replyTo,
-      expiresAt: data.expiresAt,
-      expiresIn: data.expiresIn,
+      attachments: attachments.map((file) => ({ id: file.id })),
     });
   }
-  /** Opens a record's sealed parts into a plain record with `e2ee: true`; failures are flagged. */
-  async openRecord<M extends Message>(m: M): Promise<M> {
-    const results = [m?.result?.sealed, m?.execution?.sealed];
-    if (!m?.sealed && !m?.input?.sealed && !m?.response?.sealed && !results.some(Boolean)) return m;
+  /**
+   * Opens a record's sealed parts into a plain record with `e2ee: true`; failures are flagged.
+   * Content comes only from verified envelopes: a task (or `task: true`) without sealed input, an
+   * unsealed record from a keyed connection and a sealed request with an unsealed answer are all
+   * `unverified`. Plaintext from connections without keys is returned as is, without `e2ee`.
+   */
+  async openRecord<M extends Message>(m: M, options: { task?: boolean } = {}): Promise<M> {
+    if (!m || typeof m !== 'object') return m;
     const s = await this.state();
+    const task = options.task || m.direction === 'outbound';
     try {
-      let out: M = { ...m, e2ee: true };
-      if (m.sealed) out = await this.#content(out, m.sealed, s);
-      if (m.input?.sealed) out = await this.#task(out, m.input.sealed);
-      if (m.response?.sealed) {
-        if (!m.sealed) fail('A sealed answer needs a sealed request.');
-        out = await this.#response(out, m.sealed!, m.response.sealed);
+      if (task) {
+        if (!m.input?.sealed) fail('This task is not end-to-end encrypted.');
+        if (m.recipientId) this.#runners.set(m.id, m.recipientId);
+      } else if (!m.sealed) {
+        if (m.response?.sealed) fail('A sealed answer needs a sealed request.');
+        if (s.kids.has(m.senderId)) fail('A keyed connection sent this record unsealed.');
+        return m;
       }
+      let out: M = { ...m, e2ee: true };
+      if (task) out = await this.#task(out, m.input!.sealed!);
+      else out = await this.#content(out, m.sealed!);
+      if (!task && m.response?.sealed)
+        out = await this.#response(out, m.sealed!, m.response.sealed);
+      else if (!task && out.kind !== 'secret' && (m.response || m.status === 'answered'))
+        fail('A sealed request needs a sealed answer.');
       for (const key of ['result', 'execution'] as const) {
-        const env = m[key]?.sealed;
-        if (!env) continue;
-        const { error } = await this.#open(env, { t: 'result', task: m.id }, 'integration');
-        if (error !== undefined && typeof error !== 'string') fail('Malformed task result.');
-        out = { ...out, [key]: omit({ ...out[key], error }) };
+        if (!m[key]) continue;
+        const env = m[key].sealed;
+        let error: unknown;
+        if (env) {
+          const runner = KeyedSession.#integration(m.recipientId);
+          ({ error } = await this.#open(env, { t: 'result', task: m.id }, runner));
+          if (error !== undefined && error !== null && typeof error !== 'string')
+            fail('Malformed task result.');
+        }
+        out = { ...out, [key]: omit({ ...omit(m[key], 'error'), error: error ?? undefined }) };
       }
       return out;
     } catch (error) {
@@ -219,47 +261,48 @@ export class KeyedSession {
       return strip(m, error.message === NO_ENTRY ? 'locked' : 'unverified');
     }
   }
-  async #content<M extends Message>(out: M, env: SealedEnvelope, s: State): Promise<M> {
-    const sender = out.senderId && s.kids.get(out.senderId);
-    if (sender && sender !== env.from) fail('The message signer is not its sender.');
-    const { attachments, ...rest } = await this.#open(env, { t: 'message' }, 'integration');
+  /** Task IDs → the integration that runs them, so logs open only under its key. */
+  #runners = new Map<string, string>();
+  async #content<M extends Message>(out: M, env: SealedEnvelope): Promise<M> {
+    const sender = KeyedSession.#integration(out.senderId);
+    const opened = await this.#open(env, { t: 'message', id: out.id }, sender);
+    const { attachments, ...rest } = opened;
     const files = fileList.safeParse(attachments);
     const parsed = parseInput({ ...rest, attachments: files.data } as MessageRequest);
     if (!files.success || !parsed.success) return fail('Malformed message content.');
+    if ((parsed.data.kind === 'secret') !== (out.kind === 'secret'))
+      fail('The message kind does not match its record.');
     this.#learn(files.data);
     const content: Payload = {};
     for (const key of CONTENT) content[key] = (parsed.data as Payload)[key];
-    const ids = new Set(files.data?.map((f) => f.id));
-    return {
-      ...out,
-      ...omit(content),
-      attachments: [...(files.data || []), ...out.attachments.filter((f) => !ids.has(f.id))],
-    };
+    // Server copies of content fields are dropped; only the envelope's count.
+    return { ...omit(out, ...CONTENT), ...omit(content), attachments: files.data || [] } as M;
   }
   async #task<M extends Message>(out: M, env: SealedEnvelope): Promise<M> {
-    const expect = { t: 'task', destination: out.destinationId!, type: out.typeId! };
-    const { values = {}, session, attachments } = await this.#open(env, expect, 'identity');
+    const expect = { t: 'task', id: out.id, destination: out.destinationId!, type: out.typeId! };
+    const opened = await this.#open(env, expect, KeyedSession.#identity);
+    const { values = {}, session, attachments } = opened;
     const answers = answersSchema.safeParse(values);
     const typed = session === undefined ? undefined : sessionInputSchema.safeParse(session);
     const files = fileList.safeParse(attachments);
     if (!answers.success || !files.success || (typed && !typed.success))
       fail('Malformed task input.');
     this.#learn(files.data);
-    const ids = new Set(files.data?.map((f) => f.id));
     const run = typed?.data;
     // Like plaintext tasks: flat values for runners reading `response.values`, plus `session`.
     const flat = run ? { ...answers.data!, ...sessionValues(run) } : answers.data!;
+    // Server copies of the input, session and answer are dropped; only the envelope's count.
     return {
-      ...out,
-      input: { ...out.input!, values: answers.data!, ...(run ? { session } : {}) },
-      response: out.response && { ...out.response, values: flat },
+      ...omit(out, 'session', 'blocks', 'actions'),
+      input: { ...omit(out.input!, 'session'), values: answers.data!, ...(run ? { session } : {}) },
+      response: out.response && { ...omit(out.response, 'actionId'), values: flat },
       ...(run ? { session: omit({ ...run, attachments: undefined }) } : {}),
-      attachments: [...(files.data || []), ...out.attachments.filter((f) => !ids.has(f.id))],
-    };
+      attachments: files.data || [],
+    } as M;
   }
   async #response<M extends Message>(out: M, request: SealedEnvelope, env: SealedEnvelope) {
     const expect = { t: 'response', message: out.id, request: await e2ee.envelopeDigest(request) };
-    const { values, actionId, attachments } = await this.#open(env, expect, 'identity');
+    const { values, actionId, attachments } = await this.#open(env, expect, KeyedSession.#identity);
     const answers = answersSchema.safeParse(values);
     const files = fileList.safeParse(attachments);
     if (
@@ -275,22 +318,32 @@ export class KeyedSession {
         !Object.keys(validateAnswers(out.fields, answers.data, out.response!.secretFields)).length;
     if (!valid) fail('The answer does not match the request.');
     this.#learn(files.data);
-    const keyed = new Map(files.data?.map((f) => [f.id, f]));
+    const answer = (files.data || []).filter((f) => !out.attachments.some((a) => a.id === f.id));
     return {
       ...out,
       response: omit({ ...out.response!, values: answers.data, actionId: action }),
-      attachments: out.attachments.map((f) => keyed.get(f.id) || f),
+      attachments: [...out.attachments, ...answer],
     };
   }
-  async openLogs(task: string, logs: TaskLog[]): Promise<OpenedLog[]> {
-    if (!logs.some((log) => log.sealed)) return logs;
-    await this.state();
+  /**
+   * Opens a task's log lines; only the integration running the task may sign them. `task`
+   * fetches the record when this session has not opened it yet.
+   */
+  async openLogs(id: string, logs: TaskLog[], task: () => Promise<Message>): Promise<OpenedLog[]> {
+    if (!logs.length) return logs;
+    const s = await this.state();
+    if (!this.#runners.has(id)) await this.openRecord(await task(), { task: true });
+    const runner = this.#runners.get(id);
+    // Plaintext lines from a keyed runner are not trusted.
+    const keyed = !!runner && s.kids.has(runner);
     return Promise.all(
       logs.map(async (log): Promise<OpenedLog> => {
-        if (!log.sealed) return log;
+        if (!log.sealed && !keyed) return log;
         try {
-          const expect = { t: 'log', task, seq: log.sequence };
-          const { text } = await this.#open(log.sealed, expect, 'integration');
+          if (!log.sealed) fail('A keyed runner sent this log line unsealed.');
+          const expect = { t: 'log', task: id, seq: log.sequence };
+          const signer = KeyedSession.#integration(runner);
+          const { text } = await this.#open(log.sealed!, expect, signer);
           return typeof text === 'string' ? { ...log, text, e2ee: true } : fail('Malformed log.');
         } catch (error) {
           if (!(error instanceof E2eeError)) throw error;
@@ -338,7 +391,8 @@ export class KeyedSession {
   }
   /** A secret answer sealed by the account to this integration only. */
   async openSecret(message: string, field: string, env: SealedEnvelope): Promise<string> {
-    const { value } = await this.#open(env, { t: 'secret', message, field }, 'identity');
+    const expect = { t: 'secret', message, field };
+    const { value } = await this.#open(env, expect, KeyedSession.#identity);
     return typeof value === 'string' ? value : fail('Malformed secret.');
   }
   /** Checks that the account identity signed a claimed secret receiver's one-time key. */

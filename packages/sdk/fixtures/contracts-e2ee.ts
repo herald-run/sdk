@@ -13,6 +13,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 const [RUNNER, MAILER, FILE, MESSAGE, TAMPERED, LOCKED, SECRET, TASK, DEST, OFFER] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 ].map(id);
+const [REPLAYED, PLAIN, PLAIN_TASK] = [12, 13, 14].map(id);
 const octet = 'application/octet-stream';
 const record = (fields: Record<string, unknown>) => ({
   title: 'Encrypted message',
@@ -83,7 +84,7 @@ export async function generateSealedContracts() {
       fields: [{ id: 'approve', label: 'Approve', type: 'boolean', required: true }],
     };
     const formPayload = { ...form, attachments: [{ ...notes, key: fileKey }] };
-    const formEnv = await seal(formPayload, { t: 'message' });
+    const formEnv = await seal(formPayload, { t: 'message', id: MESSAGE });
     const expiresAt = '2030-01-01T00:10:00.000Z';
     const sent = record({
       id: MESSAGE,
@@ -116,13 +117,13 @@ export async function generateSealedContracts() {
       response: { ...answer, sealed: answerEnv, values: { approve: true } },
     });
     const strip = { title: 'Encrypted message', body: '', fields: [], e2ee: true };
-    const forgedEnv = await seal(form, { t: 'message' });
+    const forgedEnv = await seal(form, { t: 'message', id: TAMPERED });
     const tampered = record({ id: TAMPERED, sealed: { ...forgedEnv, ct: flip(forgedEnv.ct) } });
     const locked = record({
       id: LOCKED,
       sender: 'Mailer',
       senderId: MAILER,
-      sealed: await seal(form, { t: 'message' }, mailer, [
+      sealed: await seal(form, { t: 'message', id: LOCKED }, mailer, [
         inbox,
         { kid: mailer.kid, box: mailer.boxPub },
       ]),
@@ -133,7 +134,7 @@ export async function generateSealedContracts() {
       fields: [{ id: 'secret', label: 'Token', type: 'secret', required: true }],
     };
     const secretPayload = { ...secretForm, body: '', attachments: [] };
-    const secretEnv = await seal(secretPayload, { t: 'message' });
+    const secretEnv = await seal(secretPayload, { t: 'message', id: SECRET });
     const secretRecord = record({ id: SECRET, sealed: secretEnv, threadId: SECRET, revision: 3 });
     const secretValue = await seal(
       { value: 'test-only-token' },
@@ -143,7 +144,7 @@ export async function generateSealedContracts() {
     );
     const taskEnv = await seal(
       { values: { prompt: 'Summarize the report' } },
-      { t: 'task', destination: DEST, type: 'run' },
+      { t: 'task', id: TASK, destination: DEST, type: 'run' },
       identity,
     );
     const taskInput = { destinationId: DEST, typeId: 'run', values: {} };
@@ -194,12 +195,29 @@ export async function generateSealedContracts() {
       sig: await e2ee.signReceiver(e2ee.createKeyring(ACCOUNT), claim),
     };
     const offer = { title: 'Staging key', kind: 'secret' };
+    const offerPayload = { kind: 'secret', title: 'Staging key', body: '' };
+    const offerEnv = await seal(offerPayload, { t: 'message', id: OFFER });
     const offered = record({
-      ...offer,
       id: OFFER,
+      title: 'Encrypted secret',
+      kind: 'secret',
+      sealed: offerEnv,
       secretDelivery: 'offered',
       threadId: OFFER,
     });
+    // Records a keyed client must not trust: content replayed under another ID, unsealed
+    // answers to sealed requests, unsealed records from keyed connections and unsealed tasks.
+    const replayed = record({ id: REPLAYED, sealed: formEnv });
+    const plainAnswer = { ...answered, response: { ...answer, values: { approve: false } } };
+    const plain = record({ id: PLAIN, title: 'Hi', body: 'There', status: 'delivered' });
+    const plainTask = { ...task, id: PLAIN_TASK, input: { ...taskInput, values: { prompt: 'x' } } };
+    const plainTaskStrip = {
+      ...plainTask,
+      e2ee: true,
+      unverified: true,
+      input: { ...taskInput, values: {} },
+      response: { ...answer, values: {} },
+    };
     const messages = '/api/v1/messages';
     return {
       token: e2ee.formatToken('hdr_test-only', runner.seed, fp),
@@ -234,8 +252,10 @@ export async function generateSealedContracts() {
             path: messages,
             headers: { 'Idempotency-Key': 'sealed-1' },
             body: {
+              id: MESSAGE,
+              kind: 'message',
               sealed: formEnv,
-              digest: await e2ee.idempotencyDigest(runner.seed, formPayload),
+              digest: await e2ee.idempotencyDigest(runner.seed, formPayload, 'sealed-1'),
               asks: true,
               attachments: [{ id: FILE }],
               expiresIn: 600,
@@ -270,6 +290,24 @@ export async function generateSealedContracts() {
           result: { ...locked, ...strip, locked: true },
         },
         {
+          name: 'get-replayed',
+          request: { method: 'GET', path: `${messages}/${REPLAYED}` },
+          response: { status: 200, body: replayed },
+          result: { ...replayed, ...strip, unverified: true },
+        },
+        {
+          name: 'get-unsealed-answer',
+          request: { method: 'GET', path: `${messages}/${MESSAGE}` },
+          response: { status: 200, body: plainAnswer },
+          result: { ...plainAnswer, ...strip, unverified: true, response: answer },
+        },
+        {
+          name: 'get-unsealed-from-keyed',
+          request: { method: 'GET', path: `${messages}/${PLAIN}` },
+          response: { status: 200, body: plain },
+          result: { ...plain, ...strip, unverified: true },
+        },
+        {
           name: 'send-secret-form',
           input: secretForm,
           request: {
@@ -277,8 +315,10 @@ export async function generateSealedContracts() {
             path: messages,
             headers: { 'Idempotency-Key': 'sealed-2' },
             body: {
+              id: SECRET,
+              kind: 'message',
               sealed: secretEnv,
-              digest: await e2ee.idempotencyDigest(runner.seed, secretPayload),
+              digest: await e2ee.idempotencyDigest(runner.seed, secretPayload, 'sealed-2'),
               asks: true,
               attachments: [],
             },
@@ -302,6 +342,16 @@ export async function generateSealedContracts() {
           },
           response: { status: 200, body: { task, lease: 'lease-1', leaseExpiresAt: NOW } },
           result: { task: taskOpen(task), lease: 'lease-1', leaseExpiresAt: NOW },
+        },
+        {
+          name: 'claim-unsealed-task',
+          request: {
+            method: 'POST',
+            path: `/api/v1/tasks/${PLAIN_TASK}/claim`,
+            body: { runnerId: 'runner-1', heartbeat: true },
+          },
+          response: { status: 200, body: { task: plainTask, lease: 'lease-2' } },
+          result: { task: plainTaskStrip, lease: 'lease-2' },
         },
         {
           name: 'task-logs',
@@ -357,10 +407,18 @@ export async function generateSealedContracts() {
             method: 'POST',
             path: messages,
             headers: { 'Idempotency-Key': 'sealed-3' },
-            body: offer,
+            body: {
+              id: OFFER,
+              kind: 'secret',
+              sealed: offerEnv,
+              digest: await e2ee.idempotencyDigest(runner.seed, offerPayload, 'sealed-3'),
+              asks: false,
+              attachments: [],
+            },
           },
+          sealed: { sealed: { v: 1, ...offerPayload } },
           response: { status: 201, body: offered },
-          result: offered,
+          result: { ...offered, ...offerPayload, fields: [], e2ee: true },
         },
         {
           name: 'secret-receiver',

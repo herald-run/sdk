@@ -152,9 +152,13 @@ const sealedCalls: Calls = {
   thread: (h, _, id) => h.thread(id, 0),
   'get-tampered': (h, _, id) => h.get(id),
   'get-locked': (h, _, id) => h.get(id),
+  'get-replayed': (h, _, id) => h.get(id),
+  'get-unsealed-answer': (h, _, id) => h.get(id),
+  'get-unsealed-from-keyed': (h, _, id) => h.get(id),
   'send-secret-form': (h, s, _, key) => h.send(s.input as never, key),
   'collect-secrets': (h, _, id) => h.revealSecrets(id),
   'claim-task': (h, s, id) => h.claimTask(id, s.request.body as never),
+  'claim-unsealed-task': (h, s, id) => h.claimTask(id, s.request.body as never),
   'task-logs': (h, s, id, key) => h.updateTask(id, s.input as never, { idempotencyKey: key }),
   'read-task-logs': async (h, _, id) => ({ logs: await h.taskLogs(id) }),
   'complete-task': (h, s, id) => h.updateTask(id, s.input as never),
@@ -212,7 +216,12 @@ it('replays the keyed scenario: seals requests, opens responses', async () => {
         expect: { t: theirs.ctx.t, account: keyring.account },
       });
       expect(opened, step.name).toEqual(payload);
-      expect({ ...mine.ctx, cid: 0 }, step.name).toEqual({ ...theirs.ctx, cid: 0 });
+      expect({ ...mine.ctx, id: 0 }, step.name).toEqual({ ...theirs.ctx, id: 0 });
+      // A sealed message's record ID is random per send and bound into its context.
+      if (mine.ctx.t === 'message') {
+        expect(body.id, step.name).toBe(mine.ctx.id);
+        body.id = want.id;
+      }
       expect(mine.to.map((r: { kid: string }) => r.kid)).toEqual(
         theirs.to.map((r: { kid: string }) => r.kid),
       );

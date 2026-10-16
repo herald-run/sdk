@@ -1019,31 +1019,33 @@
             "Idempotency-Key": "sealed-1"
           },
           "body": {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "kind": "message",
             "sealed": {
               "v": 1,
               "ctx": {
                 "t": "message",
-                "account": "acct-contracts",
-                "cid": "ShlQ1BREFKnYosQxepE-kw"
+                "id": "00000000-0000-4000-8000-000000000004",
+                "account": "acct-contracts"
               },
               "from": "UTC9R7VS01CHnRZxyd6YWw",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
-                  "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                  "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                  "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
-                  "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
                 }
               ],
-              "iv": "Ga-flkg8c8KL1tfC",
-              "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
-              "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+              "iv": "eqLyMOUkyNDeTUYA",
+              "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+              "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
             },
-            "digest": "pxYbTrziFn3GFAZAQP0XK_h7BhHK_NkmsJUMAUTJx4Q",
+            "digest": "H7CLrE3siP7VS4lnchvkigyz1aNxSadQZVj8AGYw3Gc",
             "asks": true,
             "attachments": [
               {
@@ -1105,25 +1107,25 @@
               "v": 1,
               "ctx": {
                 "t": "message",
-                "account": "acct-contracts",
-                "cid": "ShlQ1BREFKnYosQxepE-kw"
+                "id": "00000000-0000-4000-8000-000000000004",
+                "account": "acct-contracts"
               },
               "from": "UTC9R7VS01CHnRZxyd6YWw",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
-                  "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                  "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                  "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
-                  "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
                 }
               ],
-              "iv": "Ga-flkg8c8KL1tfC",
-              "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
-              "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+              "iv": "eqLyMOUkyNDeTUYA",
+              "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+              "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
             },
             "expiresAt": "2030-01-01T00:10:00.000Z",
             "threadId": "00000000-0000-4000-8000-000000000004",
@@ -1163,25 +1165,25 @@
             "v": 1,
             "ctx": {
               "t": "message",
-              "account": "acct-contracts",
-              "cid": "ShlQ1BREFKnYosQxepE-kw"
+              "id": "00000000-0000-4000-8000-000000000004",
+              "account": "acct-contracts"
             },
             "from": "UTC9R7VS01CHnRZxyd6YWw",
             "to": [
               {
                 "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
-                "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
               },
               {
                 "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
-                "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
               }
             ],
-            "iv": "Ga-flkg8c8KL1tfC",
-            "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
-            "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+            "iv": "eqLyMOUkyNDeTUYA",
+            "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+            "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
           },
           "expiresAt": "2030-01-01T00:10:00.000Z",
           "threadId": "00000000-0000-4000-8000-000000000004",
@@ -1222,25 +1224,25 @@
               "v": 1,
               "ctx": {
                 "t": "message",
-                "account": "acct-contracts",
-                "cid": "ShlQ1BREFKnYosQxepE-kw"
+                "id": "00000000-0000-4000-8000-000000000004",
+                "account": "acct-contracts"
               },
               "from": "UTC9R7VS01CHnRZxyd6YWw",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
-                  "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                  "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                  "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
-                  "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
                 }
               ],
-              "iv": "Ga-flkg8c8KL1tfC",
-              "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
-              "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+              "iv": "eqLyMOUkyNDeTUYA",
+              "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+              "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
             },
             "expiresAt": "2030-01-01T00:10:00.000Z",
             "threadId": "00000000-0000-4000-8000-000000000004",
@@ -1254,25 +1256,25 @@
                 "ctx": {
                   "t": "response",
                   "message": "00000000-0000-4000-8000-000000000004",
-                  "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                  "request": "_CwPN3byBP7CRgsjqtH1fK11o7XXoSaGwi1E_MLdHe8",
                   "account": "acct-contracts"
                 },
                 "from": "0LSgy8KOdQpuT0L1fgznKQ",
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
-                    "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                    "enc": "5RT4Wns8JoddDEcIbAq6DqM9cx_k5Eu9BJahTpNMDG0",
+                    "key": "_W-bMeut78mQfOzkzLkI-1XbKniQV1BRYNV_DiwsECS_Q0jes6rf7M_D9rE8slqm"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
-                    "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                    "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                    "key": "apEWB7Uj3BsLtxhZo_P8seBKAmdUTUmjOL2h2tWoOJRIQjYa44LnqelDf2UKpWF4"
                   }
                 ],
-                "iv": "xJLymqMVMPe1iqmR",
-                "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
-                "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+                "iv": "ybTEhOSVN-Tr0zw0",
+                "ct": "zaiMUthc3yDhOPTojj_LaFTfPszn1iyQM_o4AlVtVDjzh-foKGXzMd77alb1OCBsww",
+                "sig": "azdhVgf4-w11ILctLSws33VFWcghA1UesW0fyVd72VrClzGEJQZDzNVcgs5GDAiJukVW1zSugMSGTho96oFNDw"
               }
             }
           }
@@ -1310,25 +1312,25 @@
             "v": 1,
             "ctx": {
               "t": "message",
-              "account": "acct-contracts",
-              "cid": "ShlQ1BREFKnYosQxepE-kw"
+              "id": "00000000-0000-4000-8000-000000000004",
+              "account": "acct-contracts"
             },
             "from": "UTC9R7VS01CHnRZxyd6YWw",
             "to": [
               {
                 "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
-                "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
               },
               {
                 "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
-                "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
               }
             ],
-            "iv": "Ga-flkg8c8KL1tfC",
-            "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
-            "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+            "iv": "eqLyMOUkyNDeTUYA",
+            "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+            "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
           },
           "expiresAt": "2030-01-01T00:10:00.000Z",
           "threadId": "00000000-0000-4000-8000-000000000004",
@@ -1344,25 +1346,25 @@
               "ctx": {
                 "t": "response",
                 "message": "00000000-0000-4000-8000-000000000004",
-                "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                "request": "_CwPN3byBP7CRgsjqtH1fK11o7XXoSaGwi1E_MLdHe8",
                 "account": "acct-contracts"
               },
               "from": "0LSgy8KOdQpuT0L1fgznKQ",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
-                  "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                  "enc": "5RT4Wns8JoddDEcIbAq6DqM9cx_k5Eu9BJahTpNMDG0",
+                  "key": "_W-bMeut78mQfOzkzLkI-1XbKniQV1BRYNV_DiwsECS_Q0jes6rf7M_D9rE8slqm"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
-                  "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                  "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                  "key": "apEWB7Uj3BsLtxhZo_P8seBKAmdUTUmjOL2h2tWoOJRIQjYa44LnqelDf2UKpWF4"
                 }
               ],
-              "iv": "xJLymqMVMPe1iqmR",
-              "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
-              "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+              "iv": "ybTEhOSVN-Tr0zw0",
+              "ct": "zaiMUthc3yDhOPTojj_LaFTfPszn1iyQM_o4AlVtVDjzh-foKGXzMd77alb1OCBsww",
+              "sig": "azdhVgf4-w11ILctLSws33VFWcghA1UesW0fyVd72VrClzGEJQZDzNVcgs5GDAiJukVW1zSugMSGTho96oFNDw"
             }
           },
           "e2ee": true
@@ -1403,25 +1405,25 @@
                   "v": 1,
                   "ctx": {
                     "t": "message",
-                    "account": "acct-contracts",
-                    "cid": "ShlQ1BREFKnYosQxepE-kw"
+                    "id": "00000000-0000-4000-8000-000000000004",
+                    "account": "acct-contracts"
                   },
                   "from": "UTC9R7VS01CHnRZxyd6YWw",
                   "to": [
                     {
                       "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                      "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
-                      "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                      "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                      "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
                     },
                     {
                       "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                      "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
-                      "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                      "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                      "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
                     }
                   ],
-                  "iv": "Ga-flkg8c8KL1tfC",
-                  "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
-                  "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+                  "iv": "eqLyMOUkyNDeTUYA",
+                  "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+                  "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
                 },
                 "expiresAt": "2030-01-01T00:10:00.000Z",
                 "threadId": "00000000-0000-4000-8000-000000000004",
@@ -1435,25 +1437,25 @@
                     "ctx": {
                       "t": "response",
                       "message": "00000000-0000-4000-8000-000000000004",
-                      "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                      "request": "_CwPN3byBP7CRgsjqtH1fK11o7XXoSaGwi1E_MLdHe8",
                       "account": "acct-contracts"
                     },
                     "from": "0LSgy8KOdQpuT0L1fgznKQ",
                     "to": [
                       {
                         "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                        "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
-                        "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                        "enc": "5RT4Wns8JoddDEcIbAq6DqM9cx_k5Eu9BJahTpNMDG0",
+                        "key": "_W-bMeut78mQfOzkzLkI-1XbKniQV1BRYNV_DiwsECS_Q0jes6rf7M_D9rE8slqm"
                       },
                       {
                         "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                        "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
-                        "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                        "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                        "key": "apEWB7Uj3BsLtxhZo_P8seBKAmdUTUmjOL2h2tWoOJRIQjYa44LnqelDf2UKpWF4"
                       }
                     ],
-                    "iv": "xJLymqMVMPe1iqmR",
-                    "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
-                    "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+                    "iv": "ybTEhOSVN-Tr0zw0",
+                    "ct": "zaiMUthc3yDhOPTojj_LaFTfPszn1iyQM_o4AlVtVDjzh-foKGXzMd77alb1OCBsww",
+                    "sig": "azdhVgf4-w11ILctLSws33VFWcghA1UesW0fyVd72VrClzGEJQZDzNVcgs5GDAiJukVW1zSugMSGTho96oFNDw"
                   }
                 }
               }
@@ -1495,25 +1497,25 @@
                 "v": 1,
                 "ctx": {
                   "t": "message",
-                  "account": "acct-contracts",
-                  "cid": "ShlQ1BREFKnYosQxepE-kw"
+                  "id": "00000000-0000-4000-8000-000000000004",
+                  "account": "acct-contracts"
                 },
                 "from": "UTC9R7VS01CHnRZxyd6YWw",
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
-                    "key": "0c6GL6TCF8mu6QxDQbv7YSPDdLeOkV_ldUZRGQ9KQNr6oXrvqWjG3anm7fTtD5nq"
+                    "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                    "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "BB0Emazf_9lfVvUWUZk4W7dTp87ZYegAr6QUw6mP_gA",
-                    "key": "KJmUcC13wcbPov9DtHQrpiUYPQKV3mXZSEcyVYm-hcY85jHY8qupH8sA6uzM93f1"
+                    "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                    "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
                   }
                 ],
-                "iv": "Ga-flkg8c8KL1tfC",
-                "ct": "ED_m9ndfrrJQSreRgW1M68IWphFq2NDhPIepFKl4hf-4CW_HpuugELUFyWgmZ5w0g9s-ehS-1Z1jFLC397lvszhkZZKEKlPI0zQtHE2G3Y2tpQ2fq-FLVMt3ll4bfMhsYkn9c5Phlh1w39TysCBfspa9ScenHak8MiPemw5MwJlCS1BIltLcebFcCfnNDZ1F1L8Gvm7gtdc4e-51iANiEDcOCztDLFaHN-3bGbYm6oBPkm4xvZkaOzS3z6CCA_RX6dUqHhsV7txvIXOd1Jt6z8bazILan7nOj2PYphCYMZVt4V2yOiUBwhC2np8C9uMcrSix33F5zLqEPfnooOvKPm2aZJIBDUt-H8dt6q4IBUGvSqVoJYR46U5JGfSjgWXjsnTAIi03pH_QXw8MPAC-1r7NuayhaVVHrAeodn2am20b2Wy6j3yHYZeMRMuYcyE",
-                "sig": "NyZbGgw785O2QaCsp8vcUmz8b7wHoBeWAJd1u9oDa4rDqpbEF2g2YikvN2TtsOqWqTcKdxJnS-DzXDeR-MXPCg"
+                "iv": "eqLyMOUkyNDeTUYA",
+                "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+                "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
               },
               "expiresAt": "2030-01-01T00:10:00.000Z",
               "threadId": "00000000-0000-4000-8000-000000000004",
@@ -1529,25 +1531,25 @@
                   "ctx": {
                     "t": "response",
                     "message": "00000000-0000-4000-8000-000000000004",
-                    "request": "GlR61Lg5LkY4g1KGliahNJ_qiR4ckCPC4nE2IhoJOTM",
+                    "request": "_CwPN3byBP7CRgsjqtH1fK11o7XXoSaGwi1E_MLdHe8",
                     "account": "acct-contracts"
                   },
                   "from": "0LSgy8KOdQpuT0L1fgznKQ",
                   "to": [
                     {
                       "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                      "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
-                      "key": "Vqf9f6sb0QmdAdRLZNntUdZZeuPPWEmVNl8gMyNoCB7R6d9Px3fxvv8u-ugZb8Sq"
+                      "enc": "5RT4Wns8JoddDEcIbAq6DqM9cx_k5Eu9BJahTpNMDG0",
+                      "key": "_W-bMeut78mQfOzkzLkI-1XbKniQV1BRYNV_DiwsECS_Q0jes6rf7M_D9rE8slqm"
                     },
                     {
                       "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                      "enc": "kd0I7VBGCGGxHgOXbs3_a4NcgtF_950h5rcKzzupxzk",
-                      "key": "_pyHitLAMumKHqIeo8NkBDju6HYk8JGSkKnASDdG8MhDqKIp23I5I9vAS4iP9_jS"
+                      "enc": "b_vkeePqYM2zffIIImdnTphZB5J-OeNP5H4QsF--eDw",
+                      "key": "apEWB7Uj3BsLtxhZo_P8seBKAmdUTUmjOL2h2tWoOJRIQjYa44LnqelDf2UKpWF4"
                     }
                   ],
-                  "iv": "xJLymqMVMPe1iqmR",
-                  "ct": "O4rZEuGJl7gHpuWVY1r-wOQiY1x9X-091yThGuYk9B6y5VH6eELej3hKEdBDGfBudA",
-                  "sig": "9xUygGRGf6QAlzY0lFd549Burcf5Ny_HGB_j591W8m5Dgqeie1VKOpa-q79cktWfnkzfmCtonKtRjpXLBfpOBg"
+                  "iv": "ybTEhOSVN-Tr0zw0",
+                  "ct": "zaiMUthc3yDhOPTojj_LaFTfPszn1iyQM_o4AlVtVDjzh-foKGXzMd77alb1OCBsww",
+                  "sig": "azdhVgf4-w11ILctLSws33VFWcghA1UesW0fyVd72VrClzGEJQZDzNVcgs5GDAiJukVW1zSugMSGTho96oFNDw"
                 }
               },
               "e2ee": true
@@ -1581,25 +1583,25 @@
               "v": 1,
               "ctx": {
                 "t": "message",
-                "account": "acct-contracts",
-                "cid": "Qv1i-lQjp-uCf6wDqe4qzQ"
+                "id": "00000000-0000-4000-8000-000000000005",
+                "account": "acct-contracts"
               },
               "from": "UTC9R7VS01CHnRZxyd6YWw",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "OplVRggSHpWFFvf4vyyItsc7hz50IhjmpwRn_zayUzc",
-                  "key": "o9DFt4Shum1MZ0qYihWdnFwWt43n2TCJxt2NUOxC-kYvfv_RUS3W8AVKTbrqu7Fr"
+                  "enc": "0qPrZypTMP4Rh1TEZDT8U-W4V4n6OlCPnbgf38J4DCw",
+                  "key": "FT5JBiWyHIFEkz0xVzB3dao6tPl4TZmw8ro051u7pAJw030ohlzcj8nBSCCjpIy3"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "JQxCW_DUtKnNdb8E-KjKLYvHfpBk9zGn4SvVECxXUVc",
-                  "key": "1FqqIrWVH0JG0-65fbXClT7D35RGz-dxIbhMIpdQRP2qS7xpkVJQESIfhIxQdYa2"
+                  "enc": "9jl2WsSxQwMb4yd-TBMfhTkcaP7BS7_vn7_rErW04Qk",
+                  "key": "_S07dMlV-QCkJ_RJY9mSgFAflcSZVje-AGDUO33GWdyiEjWXwc6b0js4lKgkYHgS"
                 }
               ],
-              "iv": "DQre2PyqEAnOYpPl",
-              "ct": "S26_GO508_aJgkBA7ZVCYtI6s65c_2EUHLyq4LVzktbL9elpRTpemfIBRe9N5XOsCpYFOqU5QkiRGODKiUGFSbwEXvUWitoUm-rOQN-NDdhyG602Z3Dfr7uBNxEg1uHysZYxMqzLD_DkwjZNVxI-opMrsZgAEW4jisUh1YOxk9WOCzXY98aUSGLz5s22l1zWToQMKjeQOjv3mXq90s9h9TZYkDoStgIyua8bMcs",
-              "sig": "OZAM_f9rzkxdYUfM9CozCoPWlbtrgLFxPhH2iOlaFKXAKnhYp-LKtvAf2YRCpbgMLyb9f0gsxWD75Hb9ildvDg"
+              "iv": "Qv1i-lQjp-uCf6wD",
+              "ct": "yjHUMvOD1hQjoUpkk30-GRwA4uaP-fVHrsLbkWgJkpU2z0ocG8iHfKqFKSfS3oKQ4ADuyFcVU_9CKhgO8aaZMBhYG_BMH0N7PjxViNYIUHc6jlUC1yNzifHt0QG6Sv_FhMMui1LowQ2-o514ph4yavSMW3NjATh9tXXuUiwG0TyZGfGTdjJk8toHTaJhP12H9Hct3APWbdVpFO91s4zUXHbaQxcNOHZ_u8kJk14",
+              "sig": "w-RX7esPhj9O33C-hZ-1O8c-tiUo2BlFtABQ0Qh0XGzQcDPFgFUCSVXPmxqe46jLPzlEX9EZbIMULVMZAMxpAg"
             }
           }
         },
@@ -1621,25 +1623,25 @@
             "v": 1,
             "ctx": {
               "t": "message",
-              "account": "acct-contracts",
-              "cid": "Qv1i-lQjp-uCf6wDqe4qzQ"
+              "id": "00000000-0000-4000-8000-000000000005",
+              "account": "acct-contracts"
             },
             "from": "UTC9R7VS01CHnRZxyd6YWw",
             "to": [
               {
                 "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                "enc": "OplVRggSHpWFFvf4vyyItsc7hz50IhjmpwRn_zayUzc",
-                "key": "o9DFt4Shum1MZ0qYihWdnFwWt43n2TCJxt2NUOxC-kYvfv_RUS3W8AVKTbrqu7Fr"
+                "enc": "0qPrZypTMP4Rh1TEZDT8U-W4V4n6OlCPnbgf38J4DCw",
+                "key": "FT5JBiWyHIFEkz0xVzB3dao6tPl4TZmw8ro051u7pAJw030ohlzcj8nBSCCjpIy3"
               },
               {
                 "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                "enc": "JQxCW_DUtKnNdb8E-KjKLYvHfpBk9zGn4SvVECxXUVc",
-                "key": "1FqqIrWVH0JG0-65fbXClT7D35RGz-dxIbhMIpdQRP2qS7xpkVJQESIfhIxQdYa2"
+                "enc": "9jl2WsSxQwMb4yd-TBMfhTkcaP7BS7_vn7_rErW04Qk",
+                "key": "_S07dMlV-QCkJ_RJY9mSgFAflcSZVje-AGDUO33GWdyiEjWXwc6b0js4lKgkYHgS"
               }
             ],
-            "iv": "DQre2PyqEAnOYpPl",
-            "ct": "S26_GO508_aJgkBA7ZVCYtI6s65c_2EUHLyq4LVzktbL9elpRTpemfIBRe9N5XOsCpYFOqU5QkiRGODKiUGFSbwEXvUWitoUm-rOQN-NDdhyG602Z3Dfr7uBNxEg1uHysZYxMqzLD_DkwjZNVxI-opMrsZgAEW4jisUh1YOxk9WOCzXY98aUSGLz5s22l1zWToQMKjeQOjv3mXq90s9h9TZYkDoStgIyua8bMcs",
-            "sig": "OZAM_f9rzkxdYUfM9CozCoPWlbtrgLFxPhH2iOlaFKXAKnhYp-LKtvAf2YRCpbgMLyb9f0gsxWD75Hb9ildvDg"
+            "iv": "Qv1i-lQjp-uCf6wD",
+            "ct": "yjHUMvOD1hQjoUpkk30-GRwA4uaP-fVHrsLbkWgJkpU2z0ocG8iHfKqFKSfS3oKQ4ADuyFcVU_9CKhgO8aaZMBhYG_BMH0N7PjxViNYIUHc6jlUC1yNzifHt0QG6Sv_FhMMui1LowQ2-o514ph4yavSMW3NjATh9tXXuUiwG0TyZGfGTdjJk8toHTaJhP12H9Hct3APWbdVpFO91s4zUXHbaQxcNOHZ_u8kJk14",
+            "sig": "w-RX7esPhj9O33C-hZ-1O8c-tiUo2BlFtABQ0Qh0XGzQcDPFgFUCSVXPmxqe46jLPzlEX9EZbIMULVMZAMxpAg"
           },
           "e2ee": true,
           "unverified": true
@@ -1671,25 +1673,25 @@
               "v": 1,
               "ctx": {
                 "t": "message",
-                "account": "acct-contracts",
-                "cid": "wmSU_Pa0Qww35n4io_1giA"
+                "id": "00000000-0000-4000-8000-000000000006",
+                "account": "acct-contracts"
               },
               "from": "AsGD3qA34ObS8dKuSKNAZw",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "i6zgNJ1cGIVUTa-IYaPSZ_mbu4vjYKMzwpDp2kAWFgw",
-                  "key": "tILp-GyZMHrjcVhrwVhs1nDe2BXbHVQ_Rf8qjgT0SqqVqH_8GxWtoDHPPEsTApta"
+                  "enc": "DyIaMZz9Tqd6vpoeNRhChlFJTffnWKL4I5Y5BI4bLCk",
+                  "key": "U7VJixSVAEtEAHlAyY-q3FCk0pwmG20gGDdoZwLmnWmooE2Wy9x9OYpCKyPXF0PQ"
                 },
                 {
                   "kid": "AsGD3qA34ObS8dKuSKNAZw",
-                  "enc": "ljukFCaQwZEnHRuWmaE2PX30JZlMB6Nby3SZvtmv6SY",
-                  "key": "2fK0moyPrlzzzX5pSCwk3Q4fqAXYeEvW2WSyztbtbTbclXJTYXcMrIs4xuBPQKyR"
+                  "enc": "5vbHBlmOm-hkmFxNULx43OITrEVdwBFU0XS-vCCLVwQ",
+                  "key": "7WrkYyavQLaIjcLm3Rp_Q3WE9K5nEDLYOQ1VJjF2E_waU9nxf4LiQXKYPC-msjBq"
                 }
               ],
-              "iv": "12QyvewEBg_PCqPb",
-              "ct": "RlD_Sk4RSqMM_gGQ9PrfQLIENJvtwQumZ3JHYFGXrV_d7iTEByhLjls4wFDgtr9L7z6DNCECBrtkAiX_G9ws2xSWRaVV6YKurcq9EiuhZc-2dfz8knHjlokX5C1fA1nAIJxQL-lU7tW5acLUD7jkvt3McabHenZW4K3Rk7QnaXtoJ-_bznZcmCWeYzJepfrw90VZq0He9FsapRQ1i8DrDSmkb0CbLGHDkhtgkc0",
-              "sig": "K4wZQd5-wpURyfmj-bxEOYpK73fLNxkaAcGOE9vxVLenvtP2w4Rwz_CI1fRnV-yg3nagBzAtTBUZvb1r_xpqDg"
+              "iv": "01hgt2CgTsPzXHE9",
+              "ct": "EctJ1vAAOr_ZlYCTL3Jr_5FfJR0muKFs1RjUvAVAB_O0jUpnv5PfbBDqhwnAH2KLd7ojEBLfabyTUCCxGUNI66wpE3NZ4UhNyR72qgU0KbtsBQC8gQkR9EqWBnjSqJnEIi5WcLBqb2UkB8WOoOkbyvBCdae2xutus1_bHjGlXAf5SrCAFGUIMMGsxBe-Vi-HZrhbSs8dokRRPLiocSHFu0z5TxCfTY0ec5N-Tw0",
+              "sig": "MWk7p3rR1SbxLXvE87zE1d2bjfMWtVsZROp__OCDj50eA3-u4zUok9o6bLLxulCHeEkhMnvtAjMHpD_4MEpJBQ"
             }
           }
         },
@@ -1711,28 +1713,282 @@
             "v": 1,
             "ctx": {
               "t": "message",
-              "account": "acct-contracts",
-              "cid": "wmSU_Pa0Qww35n4io_1giA"
+              "id": "00000000-0000-4000-8000-000000000006",
+              "account": "acct-contracts"
             },
             "from": "AsGD3qA34ObS8dKuSKNAZw",
             "to": [
               {
                 "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                "enc": "i6zgNJ1cGIVUTa-IYaPSZ_mbu4vjYKMzwpDp2kAWFgw",
-                "key": "tILp-GyZMHrjcVhrwVhs1nDe2BXbHVQ_Rf8qjgT0SqqVqH_8GxWtoDHPPEsTApta"
+                "enc": "DyIaMZz9Tqd6vpoeNRhChlFJTffnWKL4I5Y5BI4bLCk",
+                "key": "U7VJixSVAEtEAHlAyY-q3FCk0pwmG20gGDdoZwLmnWmooE2Wy9x9OYpCKyPXF0PQ"
               },
               {
                 "kid": "AsGD3qA34ObS8dKuSKNAZw",
-                "enc": "ljukFCaQwZEnHRuWmaE2PX30JZlMB6Nby3SZvtmv6SY",
-                "key": "2fK0moyPrlzzzX5pSCwk3Q4fqAXYeEvW2WSyztbtbTbclXJTYXcMrIs4xuBPQKyR"
+                "enc": "5vbHBlmOm-hkmFxNULx43OITrEVdwBFU0XS-vCCLVwQ",
+                "key": "7WrkYyavQLaIjcLm3Rp_Q3WE9K5nEDLYOQ1VJjF2E_waU9nxf4LiQXKYPC-msjBq"
               }
             ],
-            "iv": "12QyvewEBg_PCqPb",
-            "ct": "RlD_Sk4RSqMM_gGQ9PrfQLIENJvtwQumZ3JHYFGXrV_d7iTEByhLjls4wFDgtr9L7z6DNCECBrtkAiX_G9ws2xSWRaVV6YKurcq9EiuhZc-2dfz8knHjlokX5C1fA1nAIJxQL-lU7tW5acLUD7jkvt3McabHenZW4K3Rk7QnaXtoJ-_bznZcmCWeYzJepfrw90VZq0He9FsapRQ1i8DrDSmkb0CbLGHDkhtgkc0",
-            "sig": "K4wZQd5-wpURyfmj-bxEOYpK73fLNxkaAcGOE9vxVLenvtP2w4Rwz_CI1fRnV-yg3nagBzAtTBUZvb1r_xpqDg"
+            "iv": "01hgt2CgTsPzXHE9",
+            "ct": "EctJ1vAAOr_ZlYCTL3Jr_5FfJR0muKFs1RjUvAVAB_O0jUpnv5PfbBDqhwnAH2KLd7ojEBLfabyTUCCxGUNI66wpE3NZ4UhNyR72qgU0KbtsBQC8gQkR9EqWBnjSqJnEIi5WcLBqb2UkB8WOoOkbyvBCdae2xutus1_bHjGlXAf5SrCAFGUIMMGsxBe-Vi-HZrhbSs8dokRRPLiocSHFu0z5TxCfTY0ec5N-Tw0",
+            "sig": "MWk7p3rR1SbxLXvE87zE1d2bjfMWtVsZROp__OCDj50eA3-u4zUok9o6bLLxulCHeEkhMnvtAjMHpD_4MEpJBQ"
           },
           "e2ee": true,
           "locked": true
+        }
+      },
+      {
+        "name": "get-replayed",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000012"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Encrypted message",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "pending",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000012",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "id": "00000000-0000-4000-8000-000000000004",
+                "account": "acct-contracts"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                  "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
+                }
+              ],
+              "iv": "eqLyMOUkyNDeTUYA",
+              "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+              "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
+            }
+          }
+        },
+        "result": {
+          "title": "Encrypted message",
+          "body": "",
+          "kind": "message",
+          "fields": [],
+          "attachments": [],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "pending",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000012",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "id": "00000000-0000-4000-8000-000000000004",
+              "account": "acct-contracts"
+            },
+            "from": "UTC9R7VS01CHnRZxyd6YWw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
+              },
+              {
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
+              }
+            ],
+            "iv": "eqLyMOUkyNDeTUYA",
+            "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+            "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
+          },
+          "e2ee": true,
+          "unverified": true
+        }
+      },
+      {
+        "name": "get-unsealed-answer",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000004"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Encrypted message",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003",
+                "name": "encrypted",
+                "type": "application/octet-stream",
+                "size": 28
+              }
+            ],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "answered",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000004",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "id": "00000000-0000-4000-8000-000000000004",
+                "account": "acct-contracts"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                  "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                  "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
+                }
+              ],
+              "iv": "eqLyMOUkyNDeTUYA",
+              "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+              "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
+            },
+            "expiresAt": "2030-01-01T00:10:00.000Z",
+            "threadId": "00000000-0000-4000-8000-000000000004",
+            "revision": 2,
+            "response": {
+              "values": {
+                "approve": false
+              },
+              "secretFields": [],
+              "createdAt": "2030-01-01T00:00:00.000Z"
+            }
+          }
+        },
+        "result": {
+          "title": "Encrypted message",
+          "body": "",
+          "kind": "message",
+          "fields": [],
+          "attachments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000003",
+              "name": "encrypted",
+              "type": "application/octet-stream",
+              "size": 28
+            }
+          ],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "answered",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000004",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "id": "00000000-0000-4000-8000-000000000004",
+              "account": "acct-contracts"
+            },
+            "from": "UTC9R7VS01CHnRZxyd6YWw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "FezBfSul5lkSN5HrCwO2kTkLtTRiR9SQeaiynVdJq0w",
+                "key": "fFXw-DdzUoBcztsbugC9_gb4WvWne4vH3kSbMsN9nK2I5tbmL2etPOnF1SeTW3lW"
+              },
+              {
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "enc": "WXS397Hzmx-aOCXrihG2DARKTr_HX2DZSBQpsXLtEHg",
+                "key": "6eYKqQq45Iei6FXPCPIAIoQLm60zplK3AS7zmiYY2W5UVBRRtyZEuxGZSZKWrx4T"
+              }
+            ],
+            "iv": "eqLyMOUkyNDeTUYA",
+            "ct": "00bdOphrzDe9WJMkLDHgRJToeKaXNlnT2fXePe3uMySPyJGXkX2yRxNlGRJ8Di8tdkSe4tXVeXM83ssC9NS6DY-XnRoADhqbAweDQQa78cSd27rZR8Vcw1CEkNqXEnzBKgXYivRdDURa8Qvnypw8aU0LsoyOIvRhRsesVy5mo57yxRzl_w8HzYDp2rgDvst9Mij-R6qQbmGfKt6DRtvp6xp1ppTUJJDuigPowvOiGisJAIWgAM__SBhANBAgDl_ZA1pH4i-3_QhD8Aewrsb40p95DeoGtj6tQoT54spBmLsUzhtyi399CyRqA5I-SSp8btyHMhxq1sxxczDV03AelTmdxXhTiIvNuAPfgEjAqXkY7GsYUL8Dr2GpeeLbhLy8Hmgyjc3DbJeNbMC16NRgXPa-URDW5ZZV-bfEQOCioadA87z1k4yORHrAcb-ORy0",
+            "sig": "wXYZWOaz3Qu8Fk4Eys5hrLyg93b0_24YJSMostp7NrhzbQg7KKaDMSzeuCUQi20s_yrF10-cxFy7QY4jG4gjDQ"
+          },
+          "expiresAt": "2030-01-01T00:10:00.000Z",
+          "threadId": "00000000-0000-4000-8000-000000000004",
+          "revision": 2,
+          "response": {
+            "values": {},
+            "secretFields": [],
+            "createdAt": "2030-01-01T00:00:00.000Z"
+          },
+          "e2ee": true,
+          "unverified": true
+        }
+      },
+      {
+        "name": "get-unsealed-from-keyed",
+        "request": {
+          "method": "GET",
+          "path": "/api/v1/messages/00000000-0000-4000-8000-000000000013"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "title": "Hi",
+            "body": "There",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "inbound",
+            "status": "delivered",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000013"
+          }
+        },
+        "result": {
+          "title": "Encrypted message",
+          "body": "",
+          "kind": "message",
+          "fields": [],
+          "attachments": [],
+          "sender": "Runner",
+          "senderId": "00000000-0000-4000-8000-000000000001",
+          "direction": "inbound",
+          "status": "delivered",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "read": false,
+          "archived": false,
+          "id": "00000000-0000-4000-8000-000000000013",
+          "e2ee": true,
+          "unverified": true
         }
       },
       {
@@ -1756,31 +2012,33 @@
             "Idempotency-Key": "sealed-2"
           },
           "body": {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "kind": "message",
             "sealed": {
               "v": 1,
               "ctx": {
                 "t": "message",
-                "account": "acct-contracts",
-                "cid": "WPo22pOR5fpPV10lYgydBg"
+                "id": "00000000-0000-4000-8000-000000000007",
+                "account": "acct-contracts"
               },
               "from": "UTC9R7VS01CHnRZxyd6YWw",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "dKwhTyFYCV5ZYXye1YABvcCTaj6U08MqNOVBPvCwqAA",
-                  "key": "ZyFCpKA8GD0APPZq_HybxkY54hJz6j2TOE6230djuBm84ctB1looYcLFaf4ygFJW"
+                  "enc": "ljukFCaQwZEnHRuWmaE2PX30JZlMB6Nby3SZvtmv6SY",
+                  "key": "DNHOz75Zp060ScuOOPqskNSgu_0DVr45kUMVvVlDw8XhisIgSYDWGx5N61Ba0IJG"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "uPhxIdFpoDdIZyiGTlkcjEe_DZgQiV65znA-GtMJmk0",
-                  "key": "6AZKjgubB9ZS2Wr0OD4NtB7p1ZqmWk9d_ratflb94xhPMqNMtptFuYLvD8w_NWDm"
+                  "enc": "ymWZCwG2AYwQa7Wu9FMyewyfXu47k5YIUfv95RJxm2A",
+                  "key": "IL-TWykJ3wwjOyjow8JRh9YB2bwPzwRhM1MlACgHcWIa0HxUprR5UhHGK4lWdTpp"
                 }
               ],
-              "iv": "uQzqFKm3yiWYIdkf",
-              "ct": "EO65GgLvbnT6tIspM0a4s1Fv1z-LnGW8_8DfTt5B30HTkR5k_q-C7hytVJ4D02hT4MHwuWtOOPjjP2QhOQLbYq8u1Jrs6LT1g1Q4TzMs-zPx7lVmEmez2Jc8wiVCWC7kMFz8wNnzy5Xv87sM0-dYazvO9r1ocbnOyS_bvaGa0rt3znEp-Y6NCc6jYSCmMLomiHZz5kyT_3_knQhS0OSddFGE",
-              "sig": "OdndxCGTTEyAC1yW7l3Qus6Ue8nLXsSsa7SXS0bo6Vtzxm99x-5GuRtm8SGib2feMk3uLxgc3ifjQLlHf1hdCw"
+              "iv": "_BNgrVG44y8kXciS",
+              "ct": "Dxd55729JzcjZnNbjDWUCjFXXuCoAFxG_xP7sBt77P8x_0qDD_b8rftGhqeepRUSfN_nhuxojofZGAwEu0y9aw55OsHwkr7hVHVjwRyNZ_nzb-1LpCNFcAaYtItm48HIZVWzdZQYAaaQoluhKHlpa6ZDo1GuH9zhikwKaFUr12qmrV-hDzpQWgUqWS0DhwAQqMXF2Epm8wNG3npcUAEy2z_b",
+              "sig": "m6R1Q2X9oduFJek_KZV-AXBt5qVIZLItr2eb4FSp37lg-QNWp8rlGv_IjjvgS6Jxy7Ip_v_B7xfiwlA3zxG_Bg"
             },
-            "digest": "qxSCqkCmXDvyxOJtbi1ZF-TDnEO5_SvSAl7zEXgoAQE",
+            "digest": "o4PsdMT0pU_AmqRTLs2rbHkTBkKceehBzBmTWOAPJeA",
             "asks": true,
             "attachments": []
           }
@@ -1822,25 +2080,25 @@
               "v": 1,
               "ctx": {
                 "t": "message",
-                "account": "acct-contracts",
-                "cid": "WPo22pOR5fpPV10lYgydBg"
+                "id": "00000000-0000-4000-8000-000000000007",
+                "account": "acct-contracts"
               },
               "from": "UTC9R7VS01CHnRZxyd6YWw",
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "dKwhTyFYCV5ZYXye1YABvcCTaj6U08MqNOVBPvCwqAA",
-                  "key": "ZyFCpKA8GD0APPZq_HybxkY54hJz6j2TOE6230djuBm84ctB1looYcLFaf4ygFJW"
+                  "enc": "ljukFCaQwZEnHRuWmaE2PX30JZlMB6Nby3SZvtmv6SY",
+                  "key": "DNHOz75Zp060ScuOOPqskNSgu_0DVr45kUMVvVlDw8XhisIgSYDWGx5N61Ba0IJG"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "uPhxIdFpoDdIZyiGTlkcjEe_DZgQiV65znA-GtMJmk0",
-                  "key": "6AZKjgubB9ZS2Wr0OD4NtB7p1ZqmWk9d_ratflb94xhPMqNMtptFuYLvD8w_NWDm"
+                  "enc": "ymWZCwG2AYwQa7Wu9FMyewyfXu47k5YIUfv95RJxm2A",
+                  "key": "IL-TWykJ3wwjOyjow8JRh9YB2bwPzwRhM1MlACgHcWIa0HxUprR5UhHGK4lWdTpp"
                 }
               ],
-              "iv": "uQzqFKm3yiWYIdkf",
-              "ct": "EO65GgLvbnT6tIspM0a4s1Fv1z-LnGW8_8DfTt5B30HTkR5k_q-C7hytVJ4D02hT4MHwuWtOOPjjP2QhOQLbYq8u1Jrs6LT1g1Q4TzMs-zPx7lVmEmez2Jc8wiVCWC7kMFz8wNnzy5Xv87sM0-dYazvO9r1ocbnOyS_bvaGa0rt3znEp-Y6NCc6jYSCmMLomiHZz5kyT_3_knQhS0OSddFGE",
-              "sig": "OdndxCGTTEyAC1yW7l3Qus6Ue8nLXsSsa7SXS0bo6Vtzxm99x-5GuRtm8SGib2feMk3uLxgc3ifjQLlHf1hdCw"
+              "iv": "_BNgrVG44y8kXciS",
+              "ct": "Dxd55729JzcjZnNbjDWUCjFXXuCoAFxG_xP7sBt77P8x_0qDD_b8rftGhqeepRUSfN_nhuxojofZGAwEu0y9aw55OsHwkr7hVHVjwRyNZ_nzb-1LpCNFcAaYtItm48HIZVWzdZQYAaaQoluhKHlpa6ZDo1GuH9zhikwKaFUr12qmrV-hDzpQWgUqWS0DhwAQqMXF2Epm8wNG3npcUAEy2z_b",
+              "sig": "m6R1Q2X9oduFJek_KZV-AXBt5qVIZLItr2eb4FSp37lg-QNWp8rlGv_IjjvgS6Jxy7Ip_v_B7xfiwlA3zxG_Bg"
             },
             "threadId": "00000000-0000-4000-8000-000000000007",
             "revision": 3
@@ -1871,25 +2129,25 @@
             "v": 1,
             "ctx": {
               "t": "message",
-              "account": "acct-contracts",
-              "cid": "WPo22pOR5fpPV10lYgydBg"
+              "id": "00000000-0000-4000-8000-000000000007",
+              "account": "acct-contracts"
             },
             "from": "UTC9R7VS01CHnRZxyd6YWw",
             "to": [
               {
                 "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                "enc": "dKwhTyFYCV5ZYXye1YABvcCTaj6U08MqNOVBPvCwqAA",
-                "key": "ZyFCpKA8GD0APPZq_HybxkY54hJz6j2TOE6230djuBm84ctB1looYcLFaf4ygFJW"
+                "enc": "ljukFCaQwZEnHRuWmaE2PX30JZlMB6Nby3SZvtmv6SY",
+                "key": "DNHOz75Zp060ScuOOPqskNSgu_0DVr45kUMVvVlDw8XhisIgSYDWGx5N61Ba0IJG"
               },
               {
                 "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                "enc": "uPhxIdFpoDdIZyiGTlkcjEe_DZgQiV65znA-GtMJmk0",
-                "key": "6AZKjgubB9ZS2Wr0OD4NtB7p1ZqmWk9d_ratflb94xhPMqNMtptFuYLvD8w_NWDm"
+                "enc": "ymWZCwG2AYwQa7Wu9FMyewyfXu47k5YIUfv95RJxm2A",
+                "key": "IL-TWykJ3wwjOyjow8JRh9YB2bwPzwRhM1MlACgHcWIa0HxUprR5UhHGK4lWdTpp"
               }
             ],
-            "iv": "uQzqFKm3yiWYIdkf",
-            "ct": "EO65GgLvbnT6tIspM0a4s1Fv1z-LnGW8_8DfTt5B30HTkR5k_q-C7hytVJ4D02hT4MHwuWtOOPjjP2QhOQLbYq8u1Jrs6LT1g1Q4TzMs-zPx7lVmEmez2Jc8wiVCWC7kMFz8wNnzy5Xv87sM0-dYazvO9r1ocbnOyS_bvaGa0rt3znEp-Y6NCc6jYSCmMLomiHZz5kyT_3_knQhS0OSddFGE",
-            "sig": "OdndxCGTTEyAC1yW7l3Qus6Ue8nLXsSsa7SXS0bo6Vtzxm99x-5GuRtm8SGib2feMk3uLxgc3ifjQLlHf1hdCw"
+            "iv": "_BNgrVG44y8kXciS",
+            "ct": "Dxd55729JzcjZnNbjDWUCjFXXuCoAFxG_xP7sBt77P8x_0qDD_b8rftGhqeepRUSfN_nhuxojofZGAwEu0y9aw55OsHwkr7hVHVjwRyNZ_nzb-1LpCNFcAaYtItm48HIZVWzdZQYAaaQoluhKHlpa6ZDo1GuH9zhikwKaFUr12qmrV-hDzpQWgUqWS0DhwAQqMXF2Epm8wNG3npcUAEy2z_b",
+            "sig": "m6R1Q2X9oduFJek_KZV-AXBt5qVIZLItr2eb4FSp37lg-QNWp8rlGv_IjjvgS6Jxy7Ip_v_B7xfiwlA3zxG_Bg"
           },
           "threadId": "00000000-0000-4000-8000-000000000007",
           "revision": 3,
@@ -1918,13 +2176,13 @@
               "to": [
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
-                  "key": "W5JfEvV21WmsaEyhNM1TYbP-aoHhpN7sWVYspbk5bLxZQMJvaPCoAKHTJpxPajZ2"
+                  "enc": "dKwhTyFYCV5ZYXye1YABvcCTaj6U08MqNOVBPvCwqAA",
+                  "key": "KjrUsMPA_dhHcbXq4hNKWJddu29zz3JowBceUMPf-96S5xsh30X0ge4xbfELtmRG"
                 }
               ],
-              "iv": "LGVfyGM5p2oa8vFG",
-              "ct": "0N0L6aOYBhOp-aSe9BMCDPjwJ9bxgwz7it0_q4LaxaV_i9vK7RPznlfr1TL1jStyoQ",
-              "sig": "4GzujB_7lN6V1BYnbgWXh2-kxujLWvH60Zt3qkcsmX1sEMAuCeJzud5KyvsAVRUtcRaOM7uVtLj-cEm_cRVjBw"
+              "iv": "uQzqFKm3yiWYIdkf",
+              "ct": "EO65GgLvbnT4vJMwM0a4s3Flzy7I02W144nORZcIkwjH62ZVvXwy-8DSkK51omnNzg",
+              "sig": "4oTAHQl_YOFR3RoanwY0cfbPKITjH1HqcyEKSStsYUsNKxYV-UKXkPVNReFSNc1cf2tP5akputM-5TITzPMUAw"
             }
           }
         },
@@ -1972,6 +2230,7 @@
                   "v": 1,
                   "ctx": {
                     "t": "task",
+                    "id": "00000000-0000-4000-8000-000000000008",
                     "destination": "00000000-0000-4000-8000-000000000009",
                     "type": "run",
                     "account": "acct-contracts"
@@ -1980,18 +2239,18 @@
                   "to": [
                     {
                       "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                      "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
-                      "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                      "enc": "Ws7k_FeUEsfKa8ChXUciyPam2EqCLdv7hdiGEyCS_T4",
+                      "key": "b1SLAiliyB3cgVrVhHOEwx08aF9lZhzDpcVJBktygLPwVa8LEwjGioRIPlmhsX6C"
                     },
                     {
                       "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                      "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
-                      "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                      "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
+                      "key": "m4zalTT7dCu9M03IuieFg7aintqhHYD5_EwSVEXsg3bWVykmmNiYXDTnGcpo1YHI"
                     }
                   ],
-                  "iv": "ZFN4kc5tRbBna2IV",
-                  "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
-                  "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+                  "iv": "HlnkdT5KprwkQSX2",
+                  "ct": "wkccMG1r-zVvPdpjosBlJvqKkeVpfj91G--ZK5gth-JgENFk_BfXD2OY184Gc_5JaGU_epEMVcaKkqukh1__9w3m",
+                  "sig": "bk23A-kDOj5fIsVbj8B89-E8Jr2o2rx28kHQZVxZ3p4FJ2a2WEYSdPD9saA28jucVnjmpShWbrfGf5Wr7uvhCw"
                 }
               },
               "response": {
@@ -2037,6 +2296,7 @@
                 "v": 1,
                 "ctx": {
                   "t": "task",
+                  "id": "00000000-0000-4000-8000-000000000008",
                   "destination": "00000000-0000-4000-8000-000000000009",
                   "type": "run",
                   "account": "acct-contracts"
@@ -2045,18 +2305,18 @@
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
-                    "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                    "enc": "Ws7k_FeUEsfKa8ChXUciyPam2EqCLdv7hdiGEyCS_T4",
+                    "key": "b1SLAiliyB3cgVrVhHOEwx08aF9lZhzDpcVJBktygLPwVa8LEwjGioRIPlmhsX6C"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
-                    "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                    "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
+                    "key": "m4zalTT7dCu9M03IuieFg7aintqhHYD5_EwSVEXsg3bWVykmmNiYXDTnGcpo1YHI"
                   }
                 ],
-                "iv": "ZFN4kc5tRbBna2IV",
-                "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
-                "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+                "iv": "HlnkdT5KprwkQSX2",
+                "ct": "wkccMG1r-zVvPdpjosBlJvqKkeVpfj91G--ZK5gth-JgENFk_BfXD2OY184Gc_5JaGU_epEMVcaKkqukh1__9w3m",
+                "sig": "bk23A-kDOj5fIsVbj8B89-E8Jr2o2rx28kHQZVxZ3p4FJ2a2WEYSdPD9saA28jucVnjmpShWbrfGf5Wr7uvhCw"
               }
             },
             "response": {
@@ -2073,6 +2333,96 @@
           },
           "lease": "lease-1",
           "leaseExpiresAt": "2030-01-01T00:00:00.000Z"
+        }
+      },
+      {
+        "name": "claim-unsealed-task",
+        "request": {
+          "method": "POST",
+          "path": "/api/v1/tasks/00000000-0000-4000-8000-000000000014/claim",
+          "body": {
+            "runnerId": "runner-1",
+            "heartbeat": true
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "task": {
+              "title": "Run",
+              "body": "",
+              "kind": "message",
+              "fields": [],
+              "attachments": [],
+              "sender": "Runner",
+              "senderId": "00000000-0000-4000-8000-000000000001",
+              "direction": "outbound",
+              "status": "running",
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "read": false,
+              "archived": false,
+              "id": "00000000-0000-4000-8000-000000000014",
+              "recipientId": "00000000-0000-4000-8000-000000000001",
+              "destinationId": "00000000-0000-4000-8000-000000000009",
+              "typeId": "run",
+              "runId": "00000000-0000-4000-8000-000000000008",
+              "threadId": "00000000-0000-4000-8000-000000000008",
+              "input": {
+                "destinationId": "00000000-0000-4000-8000-000000000009",
+                "typeId": "run",
+                "values": {
+                  "prompt": "x"
+                }
+              },
+              "response": {
+                "values": {},
+                "secretFields": [],
+                "createdAt": "2030-01-01T00:00:00.000Z"
+              },
+              "execution": {
+                "attempt": 1
+              }
+            },
+            "lease": "lease-2"
+          }
+        },
+        "result": {
+          "task": {
+            "title": "Run",
+            "body": "",
+            "kind": "message",
+            "fields": [],
+            "attachments": [],
+            "sender": "Runner",
+            "senderId": "00000000-0000-4000-8000-000000000001",
+            "direction": "outbound",
+            "status": "running",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "read": false,
+            "archived": false,
+            "id": "00000000-0000-4000-8000-000000000014",
+            "recipientId": "00000000-0000-4000-8000-000000000001",
+            "destinationId": "00000000-0000-4000-8000-000000000009",
+            "typeId": "run",
+            "runId": "00000000-0000-4000-8000-000000000008",
+            "threadId": "00000000-0000-4000-8000-000000000008",
+            "input": {
+              "destinationId": "00000000-0000-4000-8000-000000000009",
+              "typeId": "run",
+              "values": {}
+            },
+            "response": {
+              "values": {},
+              "secretFields": [],
+              "createdAt": "2030-01-01T00:00:00.000Z"
+            },
+            "execution": {
+              "attempt": 1
+            },
+            "e2ee": true,
+            "unverified": true
+          },
+          "lease": "lease-2"
         }
       },
       {
@@ -2112,18 +2462,18 @@
                   "to": [
                     {
                       "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                      "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
-                      "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4caB4UrsDoH0rn-lBbdQGEu7"
+                      "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                      "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80KC3SJVUvf73jWJOjcJA4-Y"
                     },
                     {
                       "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                      "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
-                      "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVjyHe99LTANQBkrQ1dttYZr"
+                      "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                      "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4S69XD7epKJomDSpTBwA1bD"
                     }
                   ],
-                  "iv": "Hy0BPl02hE88QAUB",
-                  "ct": "pWE0VNl_PaUTFI_EXGmesaekpNguoyuirvZ83H5S3xsNfph51KsBYA",
-                  "sig": "Jwtv_rrowCsvO2TbhCvGDGQP5ArUaECso97HRfPWKjlqcuQ3yn-y6w_TfJcamrr7dwWiK7ULPU-_FJt2nslxCg"
+                  "iv": "ZFN4kc5tRbBna2IV",
+                  "ct": "F5MHDHmwr_S6lF5vtNDzC4zBPhmN2a0KvrZiR1wFGksakd670Esk1Q",
+                  "sig": "uLWGhOildp-v6yuu_TRtX1uXQcexmYSykaczUWPj9iaujWLGu3yf3rt_4fHiwq2pDhWzUEbKeaYp3Tsf3k5LBg"
                 }
               }
             ]
@@ -2164,6 +2514,7 @@
                 "v": 1,
                 "ctx": {
                   "t": "task",
+                  "id": "00000000-0000-4000-8000-000000000008",
                   "destination": "00000000-0000-4000-8000-000000000009",
                   "type": "run",
                   "account": "acct-contracts"
@@ -2172,18 +2523,18 @@
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
-                    "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                    "enc": "Ws7k_FeUEsfKa8ChXUciyPam2EqCLdv7hdiGEyCS_T4",
+                    "key": "b1SLAiliyB3cgVrVhHOEwx08aF9lZhzDpcVJBktygLPwVa8LEwjGioRIPlmhsX6C"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
-                    "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                    "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
+                    "key": "m4zalTT7dCu9M03IuieFg7aintqhHYD5_EwSVEXsg3bWVykmmNiYXDTnGcpo1YHI"
                   }
                 ],
-                "iv": "ZFN4kc5tRbBna2IV",
-                "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
-                "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+                "iv": "HlnkdT5KprwkQSX2",
+                "ct": "wkccMG1r-zVvPdpjosBlJvqKkeVpfj91G--ZK5gth-JgENFk_BfXD2OY184Gc_5JaGU_epEMVcaKkqukh1__9w3m",
+                "sig": "bk23A-kDOj5fIsVbj8B89-E8Jr2o2rx28kHQZVxZ3p4FJ2a2WEYSdPD9saA28jucVnjmpShWbrfGf5Wr7uvhCw"
               }
             },
             "response": {
@@ -2225,6 +2576,7 @@
               "v": 1,
               "ctx": {
                 "t": "task",
+                "id": "00000000-0000-4000-8000-000000000008",
                 "destination": "00000000-0000-4000-8000-000000000009",
                 "type": "run",
                 "account": "acct-contracts"
@@ -2233,18 +2585,18 @@
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
-                  "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                  "enc": "Ws7k_FeUEsfKa8ChXUciyPam2EqCLdv7hdiGEyCS_T4",
+                  "key": "b1SLAiliyB3cgVrVhHOEwx08aF9lZhzDpcVJBktygLPwVa8LEwjGioRIPlmhsX6C"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
-                  "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                  "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
+                  "key": "m4zalTT7dCu9M03IuieFg7aintqhHYD5_EwSVEXsg3bWVykmmNiYXDTnGcpo1YHI"
                 }
               ],
-              "iv": "ZFN4kc5tRbBna2IV",
-              "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
-              "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+              "iv": "HlnkdT5KprwkQSX2",
+              "ct": "wkccMG1r-zVvPdpjosBlJvqKkeVpfj91G--ZK5gth-JgENFk_BfXD2OY184Gc_5JaGU_epEMVcaKkqukh1__9w3m",
+              "sig": "bk23A-kDOj5fIsVbj8B89-E8Jr2o2rx28kHQZVxZ3p4FJ2a2WEYSdPD9saA28jucVnjmpShWbrfGf5Wr7uvhCw"
             }
           },
           "response": {
@@ -2286,18 +2638,18 @@
                   "to": [
                     {
                       "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                      "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
-                      "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4caB4UrsDoH0rn-lBbdQGEu7"
+                      "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                      "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80KC3SJVUvf73jWJOjcJA4-Y"
                     },
                     {
                       "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                      "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
-                      "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVjyHe99LTANQBkrQ1dttYZr"
+                      "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                      "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4S69XD7epKJomDSpTBwA1bD"
                     }
                   ],
-                  "iv": "Hy0BPl02hE88QAUB",
-                  "ct": "pWE0VNl_PaUTFI_EXGmesaekpNguoyuirvZ83H5S3xsNfph51KsBYA",
-                  "sig": "Jwtv_rrowCsvO2TbhCvGDGQP5ArUaECso97HRfPWKjlqcuQ3yn-y6w_TfJcamrr7dwWiK7ULPU-_FJt2nslxCg"
+                  "iv": "ZFN4kc5tRbBna2IV",
+                  "ct": "F5MHDHmwr_S6lF5vtNDzC4zBPhmN2a0KvrZiR1wFGksakd670Esk1Q",
+                  "sig": "uLWGhOildp-v6yuu_TRtX1uXQcexmYSykaczUWPj9iaujWLGu3yf3rt_4fHiwq2pDhWzUEbKeaYp3Tsf3k5LBg"
                 }
               }
             ]
@@ -2321,18 +2673,18 @@
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
-                    "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4caB4UrsDoH0rn-lBbdQGEu7"
+                    "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
+                    "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80KC3SJVUvf73jWJOjcJA4-Y"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
-                    "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVjyHe99LTANQBkrQ1dttYZr"
+                    "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
+                    "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4S69XD7epKJomDSpTBwA1bD"
                   }
                 ],
-                "iv": "Hy0BPl02hE88QAUB",
-                "ct": "pWE0VNl_PaUTFI_EXGmesaekpNguoyuirvZ83H5S3xsNfph51KsBYA",
-                "sig": "Jwtv_rrowCsvO2TbhCvGDGQP5ArUaECso97HRfPWKjlqcuQ3yn-y6w_TfJcamrr7dwWiK7ULPU-_FJt2nslxCg"
+                "iv": "ZFN4kc5tRbBna2IV",
+                "ct": "F5MHDHmwr_S6lF5vtNDzC4zBPhmN2a0KvrZiR1wFGksakd670Esk1Q",
+                "sig": "uLWGhOildp-v6yuu_TRtX1uXQcexmYSykaczUWPj9iaujWLGu3yf3rt_4fHiwq2pDhWzUEbKeaYp3Tsf3k5LBg"
               },
               "e2ee": true
             }
@@ -2363,18 +2715,18 @@
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
-                  "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                  "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                  "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4cYNwXySFq0ClgtBnfdtrUkd"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
-                  "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                  "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                  "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVhHc_Zak1zsdG1BvvT0C0ln"
                 }
               ],
-              "iv": "BMF_MW72XNse-L80",
-              "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
-              "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+              "iv": "Hy0BPl02hE88QAUB",
+              "ct": "pWE0VNl_PaUCA4XfDHGG-6Cnp9pQsNMYP5oxQu1djKp9rYMmeRo",
+              "sig": "LJ-WtB58Mlgjcn77nReY7CE2A4_z661vPQyYJDDH4g4K4RavRBuRJTvQKL5ANUEOcySN0UtUijBAeAZvMd64CQ"
             }
           }
         },
@@ -2413,6 +2765,7 @@
                 "v": 1,
                 "ctx": {
                   "t": "task",
+                  "id": "00000000-0000-4000-8000-000000000008",
                   "destination": "00000000-0000-4000-8000-000000000009",
                   "type": "run",
                   "account": "acct-contracts"
@@ -2421,18 +2774,18 @@
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
-                    "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                    "enc": "Ws7k_FeUEsfKa8ChXUciyPam2EqCLdv7hdiGEyCS_T4",
+                    "key": "b1SLAiliyB3cgVrVhHOEwx08aF9lZhzDpcVJBktygLPwVa8LEwjGioRIPlmhsX6C"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
-                    "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                    "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
+                    "key": "m4zalTT7dCu9M03IuieFg7aintqhHYD5_EwSVEXsg3bWVykmmNiYXDTnGcpo1YHI"
                   }
                 ],
-                "iv": "ZFN4kc5tRbBna2IV",
-                "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
-                "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+                "iv": "HlnkdT5KprwkQSX2",
+                "ct": "wkccMG1r-zVvPdpjosBlJvqKkeVpfj91G--ZK5gth-JgENFk_BfXD2OY184Gc_5JaGU_epEMVcaKkqukh1__9w3m",
+                "sig": "bk23A-kDOj5fIsVbj8B89-E8Jr2o2rx28kHQZVxZ3p4FJ2a2WEYSdPD9saA28jucVnjmpShWbrfGf5Wr7uvhCw"
               }
             },
             "response": {
@@ -2454,18 +2807,18 @@
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
-                    "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                    "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                    "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4cYNwXySFq0ClgtBnfdtrUkd"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
-                    "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                    "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                    "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVhHc_Zak1zsdG1BvvT0C0ln"
                   }
                 ],
-                "iv": "BMF_MW72XNse-L80",
-                "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
-                "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+                "iv": "Hy0BPl02hE88QAUB",
+                "ct": "pWE0VNl_PaUCA4XfDHGG-6Cnp9pQsNMYP5oxQu1djKp9rYMmeRo",
+                "sig": "LJ-WtB58Mlgjcn77nReY7CE2A4_z661vPQyYJDDH4g4K4RavRBuRJTvQKL5ANUEOcySN0UtUijBAeAZvMd64CQ"
               }
             },
             "result": {
@@ -2482,18 +2835,18 @@
                 "to": [
                   {
                     "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                    "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
-                    "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                    "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                    "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4cYNwXySFq0ClgtBnfdtrUkd"
                   },
                   {
                     "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                    "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
-                    "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                    "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                    "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVhHc_Zak1zsdG1BvvT0C0ln"
                   }
                 ],
-                "iv": "BMF_MW72XNse-L80",
-                "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
-                "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+                "iv": "Hy0BPl02hE88QAUB",
+                "ct": "pWE0VNl_PaUCA4XfDHGG-6Cnp9pQsNMYP5oxQu1djKp9rYMmeRo",
+                "sig": "LJ-WtB58Mlgjcn77nReY7CE2A4_z661vPQyYJDDH4g4K4RavRBuRJTvQKL5ANUEOcySN0UtUijBAeAZvMd64CQ"
               }
             }
           }
@@ -2527,6 +2880,7 @@
               "v": 1,
               "ctx": {
                 "t": "task",
+                "id": "00000000-0000-4000-8000-000000000008",
                 "destination": "00000000-0000-4000-8000-000000000009",
                 "type": "run",
                 "account": "acct-contracts"
@@ -2535,18 +2889,18 @@
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "M7Juto-p_otAnOcTY6cCfu9ZuGSfI1ZaXe2mS27WhS8",
-                  "key": "xsJgp7x8NoaKbSW5PZw9f6wa4O1h8k52O6KzqNcN80JH4FvdkZa768TFrGZd4hIy"
+                  "enc": "Ws7k_FeUEsfKa8ChXUciyPam2EqCLdv7hdiGEyCS_T4",
+                  "key": "b1SLAiliyB3cgVrVhHOEwx08aF9lZhzDpcVJBktygLPwVa8LEwjGioRIPlmhsX6C"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "D9dCKUqi5Vfy5OdGHhVHrRDjY-e1c1GuYxfetNp5f2I",
-                  "key": "FKx9pTvTDpKbsLBmNDzIvijRfGvj8dazSNgcNQK0f4QdvDzb4UZ0Ik764bDoOUMu"
+                  "enc": "rnRJyiJBWJj5HVZHxQUB9pm490s3gR2maGoCpqAdXlA",
+                  "key": "m4zalTT7dCu9M03IuieFg7aintqhHYD5_EwSVEXsg3bWVykmmNiYXDTnGcpo1YHI"
                 }
               ],
-              "iv": "ZFN4kc5tRbBna2IV",
-              "ct": "F5MHDHmwr_S4kEpu85nzWZKPIgS-2v8DnATixuUWgJurkt2dKT3nUOEBn_d8M_F1l9URaeP5on0hy7Mj0a-nlOcl",
-              "sig": "yCiEnhuobTiAwMICn7apWVn1sD5ntqwvbxzcTSHiHsxZhzLnAqcvq_ZierZJAesG32J5yagzlsD2tTYiodbRAQ"
+              "iv": "HlnkdT5KprwkQSX2",
+              "ct": "wkccMG1r-zVvPdpjosBlJvqKkeVpfj91G--ZK5gth-JgENFk_BfXD2OY184Gc_5JaGU_epEMVcaKkqukh1__9w3m",
+              "sig": "bk23A-kDOj5fIsVbj8B89-E8Jr2o2rx28kHQZVxZ3p4FJ2a2WEYSdPD9saA28jucVnjmpShWbrfGf5Wr7uvhCw"
             }
           },
           "response": {
@@ -2570,18 +2924,18 @@
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
-                  "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                  "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                  "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4cYNwXySFq0ClgtBnfdtrUkd"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
-                  "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                  "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                  "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVhHc_Zak1zsdG1BvvT0C0ln"
                 }
               ],
-              "iv": "BMF_MW72XNse-L80",
-              "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
-              "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+              "iv": "Hy0BPl02hE88QAUB",
+              "ct": "pWE0VNl_PaUCA4XfDHGG-6Cnp9pQsNMYP5oxQu1djKp9rYMmeRo",
+              "sig": "LJ-WtB58Mlgjcn77nReY7CE2A4_z661vPQyYJDDH4g4K4RavRBuRJTvQKL5ANUEOcySN0UtUijBAeAZvMd64CQ"
             },
             "error": "boom"
           },
@@ -2599,18 +2953,18 @@
               "to": [
                 {
                   "kid": "b0WZUizlkAQ5rXAcb4lXdA",
-                  "enc": "Lr_T3ODz6JtYJ0LXZAeh1KZKNyyzs1-0EvzNzOTVJ2g",
-                  "key": "sxxxnRe06QzeIDyRckn9HfamV_XuBu2l3yxKEm9HTbwelVvjgC01AzENiZ4fbptM"
+                  "enc": "G9Nw7Exa3AZ6_ffM0wQNS3LBM8lt7CvKo7ISmeUvcxA",
+                  "key": "AlEGRSDUyorTU8-FDqXa67lAOWV0aD5AvoXjUfEI4cYNwXySFq0ClgtBnfdtrUkd"
                 },
                 {
                   "kid": "UTC9R7VS01CHnRZxyd6YWw",
-                  "enc": "zNM7RfyhLEYnbs34c_fPwpKwZDj1qE0fkxNF4NHivnE",
-                  "key": "PNW25m-npt7HRdgZdjVC2ZoVCzjtZLXG1T1qw5MWszgNXuACTITLNs1iAYqUe1dt"
+                  "enc": "PLLbybNKKLY09fR21_OEgX9C5DWktxCJ-rFJJOfdrnQ",
+                  "key": "aJmUPndTTPYJTszewFPWgc16iKIHabs6BpJG9bejOVhHc_Zak1zsdG1BvvT0C0ln"
                 }
               ],
-              "iv": "BMF_MW72XNse-L80",
-              "ct": "F5QaN-Ucj2y69oPbZTTefZs05tak8KbUeKIqHD-DdPTe6jWODbA",
-              "sig": "gUnUaEHeCiq5R20jsVcuMzzI0Du_XdR-roUwcQPSYxWawO-0FKQtANSLLYGOrqlkRs8JTh7uWhJR4KCEdJWWCQ"
+              "iv": "Hy0BPl02hE88QAUB",
+              "ct": "pWE0VNl_PaUCA4XfDHGG-6Cnp9pQsNMYP5oxQu1djKp9rYMmeRo",
+              "sig": "LJ-WtB58Mlgjcn77nReY7CE2A4_z661vPQyYJDDH4g4K4RavRBuRJTvQKL5ANUEOcySN0UtUijBAeAZvMd64CQ"
             },
             "error": "boom"
           },
@@ -2632,7 +2986,7 @@
         },
         "response": {
           "status": 200,
-          "body": "_b__N0nwUdeIyz1Ipf5X4UtnWnvP5bSwSxZ20g"
+          "body": "806pZI3VYnTxk5ku5W4Xzgo0HbyWPOwMKkgDaA"
         },
         "bytes": true,
         "result": "hello"
@@ -2650,14 +3004,49 @@
             "Idempotency-Key": "sealed-3"
           },
           "body": {
+            "id": "00000000-0000-4000-8000-000000000010",
+            "kind": "secret",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "id": "00000000-0000-4000-8000-000000000010",
+                "account": "acct-contracts"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "PxZOIR_uzV4CmvTAdmB3AlBKq-CYD7QMaj0YFl7s62c",
+                  "key": "9X7gWcwpEv9tm_bIV9l3bStARiDxtdTY5zc0Kw_LP7xozc9pvQ-ML0K8iFWYCwQT"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "vOffqOYlBiRcNdCoi43F8wXhcwg5QW8Fh6JT_lrD20Q",
+                  "key": "Wsr_vTcOXat2YJsLjGuHwmyojkIfcA5fMN3_ZvA2JJ94YcP3_NslyyQOaieNbKvX"
+                }
+              ],
+              "iv": "_b__N0nwUaOdiAgm",
+              "ct": "GDz8F6jFHu8rzvesJGnBsQwLlKwACQL1SzYDpT51nn0DwSvQ3dy3IslWwEsyyBupIQQAXCajpyWLlpurpzGfmkd7nDvhfGs",
+              "sig": "OkPz18ezgrHNZ4LtpTe07JJlcQebwmQYtnAxZWh58e-LjHzwSPTYXQPRE6x3CS8B4hCbHw9xERmGD2zD6i9nCg"
+            },
+            "digest": "njG3YpZoFH3MItQU375x96eTwBDJPFlESwV7WyF17yw",
+            "asks": false,
+            "attachments": []
+          }
+        },
+        "sealed": {
+          "sealed": {
+            "v": 1,
+            "kind": "secret",
             "title": "Staging key",
-            "kind": "secret"
+            "body": ""
           }
         },
         "response": {
           "status": 201,
           "body": {
-            "title": "Staging key",
+            "title": "Encrypted secret",
             "body": "",
             "kind": "secret",
             "fields": [],
@@ -2670,6 +3059,30 @@
             "read": false,
             "archived": false,
             "id": "00000000-0000-4000-8000-000000000010",
+            "sealed": {
+              "v": 1,
+              "ctx": {
+                "t": "message",
+                "id": "00000000-0000-4000-8000-000000000010",
+                "account": "acct-contracts"
+              },
+              "from": "UTC9R7VS01CHnRZxyd6YWw",
+              "to": [
+                {
+                  "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                  "enc": "PxZOIR_uzV4CmvTAdmB3AlBKq-CYD7QMaj0YFl7s62c",
+                  "key": "9X7gWcwpEv9tm_bIV9l3bStARiDxtdTY5zc0Kw_LP7xozc9pvQ-ML0K8iFWYCwQT"
+                },
+                {
+                  "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                  "enc": "vOffqOYlBiRcNdCoi43F8wXhcwg5QW8Fh6JT_lrD20Q",
+                  "key": "Wsr_vTcOXat2YJsLjGuHwmyojkIfcA5fMN3_ZvA2JJ94YcP3_NslyyQOaieNbKvX"
+                }
+              ],
+              "iv": "_b__N0nwUaOdiAgm",
+              "ct": "GDz8F6jFHu8rzvesJGnBsQwLlKwACQL1SzYDpT51nn0DwSvQ3dy3IslWwEsyyBupIQQAXCajpyWLlpurpzGfmkd7nDvhfGs",
+              "sig": "OkPz18ezgrHNZ4LtpTe07JJlcQebwmQYtnAxZWh58e-LjHzwSPTYXQPRE6x3CS8B4hCbHw9xERmGD2zD6i9nCg"
+            },
             "secretDelivery": "offered",
             "threadId": "00000000-0000-4000-8000-000000000010"
           }
@@ -2688,8 +3101,33 @@
           "read": false,
           "archived": false,
           "id": "00000000-0000-4000-8000-000000000010",
+          "sealed": {
+            "v": 1,
+            "ctx": {
+              "t": "message",
+              "id": "00000000-0000-4000-8000-000000000010",
+              "account": "acct-contracts"
+            },
+            "from": "UTC9R7VS01CHnRZxyd6YWw",
+            "to": [
+              {
+                "kid": "b0WZUizlkAQ5rXAcb4lXdA",
+                "enc": "PxZOIR_uzV4CmvTAdmB3AlBKq-CYD7QMaj0YFl7s62c",
+                "key": "9X7gWcwpEv9tm_bIV9l3bStARiDxtdTY5zc0Kw_LP7xozc9pvQ-ML0K8iFWYCwQT"
+              },
+              {
+                "kid": "UTC9R7VS01CHnRZxyd6YWw",
+                "enc": "vOffqOYlBiRcNdCoi43F8wXhcwg5QW8Fh6JT_lrD20Q",
+                "key": "Wsr_vTcOXat2YJsLjGuHwmyojkIfcA5fMN3_ZvA2JJ94YcP3_NslyyQOaieNbKvX"
+              }
+            ],
+            "iv": "_b__N0nwUaOdiAgm",
+            "ct": "GDz8F6jFHu8rzvesJGnBsQwLlKwACQL1SzYDpT51nn0DwSvQ3dy3IslWwEsyyBupIQQAXCajpyWLlpurpzGfmkd7nDvhfGs",
+            "sig": "OkPz18ezgrHNZ4LtpTe07JJlcQebwmQYtnAxZWh58e-LjHzwSPTYXQPRE6x3CS8B4hCbHw9xERmGD2zD6i9nCg"
+          },
           "secretDelivery": "offered",
-          "threadId": "00000000-0000-4000-8000-000000000010"
+          "threadId": "00000000-0000-4000-8000-000000000010",
+          "e2ee": true
         }
       },
       {
@@ -2744,7 +3182,7 @@
               "ext": true,
               "key_ops": ["encrypt"]
             },
-            "sig": "_jlesXVDzLJt3Kj_B7EZXl6sJ9PJ-DgDpNKDiKu3kUmRLtIGMTaFZobcc_4ukz2wAiKGB65rccD-B5q-NTKrCg"
+            "sig": "rQPbxsDdbBmRqlcyVWuDzRhKgwhAroxA-ZO0hAREhZM5Jeqw0ps2JrokjcTgk5tPCfSQrzOL8o4d4qgy94XQBA"
           }
         },
         "error": "Bad receiver signature."

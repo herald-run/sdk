@@ -182,9 +182,13 @@ SEALED = {
     "thread": lambda h, s, i: h.thread(i),
     "get-tampered": lambda h, s, i: h.get(i),
     "get-locked": lambda h, s, i: h.get(i),
+    "get-replayed": lambda h, s, i: h.get(i),
+    "get-unsealed-answer": lambda h, s, i: h.get(i),
+    "get-unsealed-from-keyed": lambda h, s, i: h.get(i),
     "send-secret-form": lambda h, s, i: h.send(idempotency_key=s["request"]["headers"]["Idempotency-Key"], **s["input"]),
     "collect-secrets": lambda h, s, i: h.reveal_secrets(i),
     "claim-task": lambda h, s, i: h.claim_task(i, runner_id=s["request"]["body"]["runnerId"], heartbeat=s["request"]["body"]["heartbeat"]),
+    "claim-unsealed-task": lambda h, s, i: h.claim_task(i, runner_id=s["request"]["body"]["runnerId"], heartbeat=s["request"]["body"]["heartbeat"]),
     "task-logs": lambda h, s, i: h.update_task(i, idempotency_key=s["request"]["headers"]["Idempotency-Key"], **s["input"]),
     "read-task-logs": lambda h, s, i: logs_of(h.task_logs(i)),
     "complete-task": lambda h, s, i: h.update_task(i, **s["input"]),
@@ -239,7 +243,11 @@ class SealedContractTests(unittest.IsolatedAsyncioTestCase):
                         mine, theirs = at(body, dotted), at(want, dotted)
                         opened = e2ee.open(mine, recipients=[owner.inbox[0]], signers=lambda kid: cert["sign"] if kid == cert["kid"] else None, expect={"t": theirs["ctx"]["t"], "account": scenario["keyring"]["account"]})
                         self.assertEqual(opened, payload)
-                        self.assertEqual({**mine["ctx"], "cid": 0}, {**theirs["ctx"], "cid": 0})
+                        self.assertEqual({**mine["ctx"], "id": 0}, {**theirs["ctx"], "id": 0})
+                        # A sealed message's record ID is random per send and bound into its context.
+                        if mine["ctx"]["t"] == "message":
+                            self.assertEqual(body["id"], mine["ctx"]["id"])
+                            body["id"] = want["id"]
                         self.assertEqual([r["kid"] for r in mine["to"]], [r["kid"] for r in theirs["to"]])
                         *parent, leaf = dotted.split(".")
                         leaf = int(leaf) if leaf.isdigit() else leaf

@@ -60,9 +60,11 @@ class Herald:
             raise ValueError("Use HTTPS for Herald.")
         if origin.username or origin.password or origin.query or origin.fragment or origin.path not in ("", "/"):
             raise ValueError("Use a server URL without credentials, path, query or fragment.")
-        token = api_key or os.getenv("HERALD_API_KEY") or os.getenv("HERALD_TOKEN", "")
+        token = (api_key or os.getenv("HERALD_API_KEY") or os.getenv("HERALD_TOKEN", "")).strip()
         # A keyed token (`hdr_<auth>.<seed>.<fingerprint>`) seals content; only `hdr_<auth>` is sent.
-        parsed = e2ee.parse_token(token) if token.startswith("hdr_") and "." in token else {"auth": token}
+        # Anything shaped like one is parsed, so a malformed keyed token fails instead of leaking.
+        keyed = token.startswith("hdr_") or re.search(r"\.[\w-]{43}\.[\w-]{22}$", token, re.ASCII)
+        parsed = e2ee.parse_token(token) if keyed and "." in token else {"auth": token}
         self.key = parsed["auth"]
         self.keyed = KeyedSession(parsed["seed"], parsed["fingerprint"], lambda: self.request("/keys")) if "seed" in parsed else None
         # Longest server Retry-After, in seconds, that a request waits out before failing.
@@ -137,17 +139,18 @@ class Herald:
         """The account safety code a keyed token is pinned to; None for legacy tokens."""
         return self.keyed and self.keyed.fingerprint
 
-    async def _open(self, record):
-        return await self.keyed.open_record(record) if self.keyed else record
+    async def _open(self, record, task=False):
+        return await self.keyed.open_record(record, task) if self.keyed else record
 
     async def open_task(self, task):
-        """Opens a task record received elsewhere, such as in a webhook delivery."""
-        return Message.model_validate(await self._open(wire(task)))
+        """Opens a task record received elsewhere, such as in a webhook delivery. Keyed clients flag a task without sealed input as `unverified`."""
+        return Message.model_validate(await self._open(wire(task), True))
 
     async def send(self, *, idempotency_key=None, **message):
-        """Keyed clients validate and seal the content; secret offers stay metadata only."""
-        body = await self.keyed.seal_message(wire(message)) if self.keyed else message
-        return Message.model_validate(await self._open(await self.request("/messages", body, idempotency_key=idempotency_key or str(uuid.uuid4()))))
+        """Keyed clients validate and seal the content, secret offers included."""
+        idempotency_key = idempotency_key or str(uuid.uuid4())
+        body = await self.keyed.seal_message(wire(message), idempotency_key) if self.keyed else message
+        return Message.model_validate(await self._open(await self.request("/messages", body, idempotency_key=idempotency_key)))
 
     async def get(self, message_id):
         return Message.model_validate(await self._open(await self.request("/messages/" + path(message_id))))
@@ -181,7 +184,7 @@ class Herald:
         """A task's retained log lines after `after` (a sequence number)."""
         query = "" if after is None else "?after=" + str(int(after))
         page = await self.request(f"/messages/{path(message_id)}/logs{query}")
-        logs = await self.keyed.open_logs(message_id, page["logs"]) if self.keyed else page["logs"]
+        logs = await self.keyed.open_logs(message_id, page["logs"], lambda: self.request("/messages/" + path(message_id))) if self.keyed else page["logs"]
         return [TaskLog.model_validate(log) for log in logs]
 
     async def download(self, file):
@@ -227,7 +230,7 @@ class Herald:
     async def claim_task(self, task_id, *, runner_id, heartbeat=False):
         """`heartbeat=True` asks for a lease that lapses unless renewed with `heartbeat_task`."""
         claim = await self.request(f"/tasks/{path(task_id)}/claim", {"runnerId": runner_id, "heartbeat": heartbeat})
-        return TaskClaim.model_validate({**claim, "task": await self._open(claim["task"])})
+        return TaskClaim.model_validate({**claim, "task": await self._open(claim["task"], True)})
 
     async def heartbeat_task(self, task_id, lease):
         return Lease.model_validate(await self.request(f"/tasks/{path(task_id)}/heartbeat", {"lease": lease}))
@@ -238,7 +241,7 @@ class Herald:
         body = wire({key: value for key, value in update.items() if value is not None})
         if self.keyed:
             body = await self.keyed.seal_update(task_id, body)
-        return Message.model_validate(await self._open(await self.request(f"/tasks/{path(task_id)}/update", body, idempotency_key=idempotency_key, retry=retry)))
+        return Message.model_validate(await self._open(await self.request(f"/tasks/{path(task_id)}/update", body, idempotency_key=idempotency_key, retry=retry), True))
 
     async def collect_secrets(self, message_id):
         """Consumes the encrypted envelopes of an answered request's secret fields."""
