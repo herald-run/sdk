@@ -4,7 +4,7 @@ import unittest
 
 import httpx
 from pydantic import BaseModel
-from herald import Herald, HeraldError, SyncHerald, e2ee
+from herald import Herald, HeraldError, SyncHerald, e2ee, keyed
 from fixtures import DIRECTORY, SCENARIO, STEP, TOKEN
 
 SENT = STEP["send"]["response"]["body"]
@@ -87,6 +87,28 @@ class KeyedTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(task.wire(), claim["result"]["task"])
             with self.assertRaisesRegex(e2ee.E2eeError, "attachment of an opened message"):
                 await herald.download("00000000-0000-4000-8000-0000000000ff")
+
+    async def test_reveals_secret_file_fields_as_downloadable_attachments(self):
+        owner = e2ee.keyring_keys(SCENARIO["keyring"])
+        runner = DIRECTORY["certificates"][0]["certificate"]
+        key, file_id = e2ee.file_key(), "00000000-0000-4000-8000-0000000000fe"
+        file = {"id": file_id, "name": "id_ed25519", "type": "text/plain", "size": 4, "key": key}
+
+        def secret(field, payload):
+            ctx = {"t": "secret", "account": SCENARIO["keyring"]["account"], "message": SENT["id"], "field": field}
+            return e2ee.seal(payload={"v": 1, **payload}, ctx=ctx, signer=owner.identity, to=[{"kid": runner["kid"], "box": runner["box"]}])
+        routes = {
+            "GET /api/v1/keys": DIRECTORY,
+            f"POST /api/v1/messages/{SENT['id']}/secrets": {"token": secret("token", {"value": "test-only"}), "cert": secret("cert", {"files": [file]})},
+            f"GET /api/v1/files/{file_id}": httpx.Response(200, content=b"".join(e2ee.seal_file(key, b"pem!"))),
+        }
+        async with client(routes, []) as herald:
+            self.assertEqual(await herald.reveal_secrets(SENT["id"]), {"token": "test-only", "cert": [file]})
+            self.assertEqual((await herald.download(file_id)).data, b"pem!")
+        fields = [{"id": "cert", "label": "Cert", "type": "file", "secret": True, "required": True}]
+        self.assertEqual(keyed.validate_answers(keyed.check_fields(fields), {}, ["cert"]), {})
+        with self.assertRaises(HeraldError):
+            keyed.check_fields([{**fields[0], "type": "text"}])
 
     async def test_binds_logs_and_results_to_the_runner_and_refuses_unsealed_tasks(self):
         raw = STEP["claim-task"]["response"]["body"]["task"]

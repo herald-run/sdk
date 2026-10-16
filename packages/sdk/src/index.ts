@@ -410,11 +410,14 @@ export class Herald {
   collectSecrets(id: string): Promise<Record<string, Envelope | SealedEnvelope>> {
     return this.request(`/messages/${path(id)}/secrets`, {});
   }
-  /** `collectSecrets`, decrypted with this client's key. */
-  async revealSecrets(id: string): Promise<Record<string, string>> {
+  /**
+   * `collectSecrets`, decrypted with this client's key: text for secret fields, attachments for
+   * secret file fields. `download` those within 15 minutes of the answer; then they are deleted.
+   */
+  async revealSecrets(id: string): Promise<Record<string, string | FileAttachment[]>> {
     const keys = this.#keys;
     const envelopes = await this.collectSecrets(id);
-    const values: Record<string, string> = {};
+    const values: Record<string, string | FileAttachment[]> = {};
     for (const [field, envelope] of Object.entries(envelopes)) {
       if (!('ct' in envelope)) throw new E2eeError('This secret is not end-to-end encrypted.');
       values[field] = await keys.openSecret(id, field, envelope);

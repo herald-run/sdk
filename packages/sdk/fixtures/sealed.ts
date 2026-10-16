@@ -75,10 +75,20 @@ export async function sealedMessage(content: Payload, record: Partial<Message> =
 export async function sealedAnswer(
   m: Message,
   values: Payload,
-  { actionId, secretFields = [] }: { actionId?: string; secretFields?: string[] } = {},
+  {
+    actionId,
+    secretFields = [],
+    attachments,
+  }: { actionId?: string; secretFields?: string[]; attachments?: Payload[] } = {},
 ) {
   const ctx = { t: 'response', message: m.id, request: await e2ee.envelopeDigest(m.sealed!) };
-  const sealed = await seal({ v: 1, values, ...(actionId ? { actionId } : {}) }, ctx, 'owner');
+  const payload = {
+    v: 1,
+    values,
+    ...(actionId ? { actionId } : {}),
+    ...(attachments && { attachments }),
+  };
+  const sealed = await seal(payload, ctx, 'owner');
   return {
     ...m,
     status: 'answered',
@@ -115,11 +125,12 @@ export async function sealedTask(input: Payload, record: Partial<Message> = {}) 
     response: { values: {}, secretFields: [], createdAt: new Date().toISOString() },
   } as Message;
 }
-/** A secret answer the owner sealed to this connection only. */
-export async function sealedSecret(message: string, field: string, value: string) {
+/** A secret answer the owner sealed to this connection only: text, or a secret file field's files. */
+export async function sealedSecret(message: string, field: string, value: string | Payload[]) {
   const k = await keys();
   const ctx = { t: 'secret', account: keyring.account, message, field };
-  return e2ee.seal({ payload: { v: 1, value }, ctx, signer: k.identity, to: [k.to[1]] });
+  const payload = { v: 1, ...(typeof value === 'string' ? { value } : { files: value }) };
+  return e2ee.seal({ payload, ctx, signer: k.identity, to: [k.to[1]] });
 }
 /** A secret receiver claimed by an owner device, signed by the account. */
 export const signedReceiver = async (message: string, publicKey: JsonWebKey) => {

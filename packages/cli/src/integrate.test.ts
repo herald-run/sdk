@@ -85,6 +85,7 @@ it('installs Claude Code skills and registers the MCP server idempotently', asyn
   const skills = await readdir(join(home, '.claude', 'skills'));
   expect(skills).toEqual([
     'herald-ask',
+    'herald-get-file',
     'herald-get-secret',
     'herald-send-file',
     'herald-share-secret',
@@ -157,7 +158,7 @@ it('writes project config files for both targets', async () => {
     other: { command: 'x' },
     herald: { command: 'npx', args: ['-y', spec] },
   });
-  expect(await readdir(join(cwd, '.claude', 'skills'))).toHaveLength(4);
+  expect(await readdir(join(cwd, '.claude', 'skills'))).toHaveLength(5);
 
   await mkdir(join(cwd, '.codex'));
   await writeFile(
@@ -169,7 +170,7 @@ it('writes project config files for both targets', async () => {
   expect(await readFile(join(cwd, '.codex', 'config.toml'), 'utf8')).toBe(
     `model = "x"\n\n[mcp_servers.herald]\ncommand = "npx"\nargs = ["-y", "${spec}"]\n\n[other]\na = 1\n`,
   );
-  expect(await readdir(join(cwd, '.agents', 'skills'))).toHaveLength(4);
+  expect(await readdir(join(cwd, '.agents', 'skills'))).toHaveLength(5);
   expect((await integrate(['codex', '--scope', 'project'], none.run)).out).not.toMatch(
     /updated|registered/,
   );

@@ -248,7 +248,8 @@ class Herald:
         return {field: envelope if "ct" in envelope else Envelope.model_validate(envelope) for field, envelope in envelopes.items()}
 
     async def reveal_secrets(self, message_id):
-        """`collect_secrets`, decrypted with this client's key."""
+        """`collect_secrets`, decrypted with this client's key: text for secret fields, attachments for
+        secret file fields. `download` those within 15 minutes of the answer; then they are deleted."""
         keys, values = self._keys, {}
         for field, envelope in (await self.collect_secrets(message_id)).items():
             if not isinstance(envelope, dict):

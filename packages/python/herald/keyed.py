@@ -13,7 +13,7 @@ NO_ENTRY = "No recipient entry for these keys."
 CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group")
 ENVELOPE_LIMIT = 20000
 FIELD_TYPES = ("text", "textarea", "number", "select", "multiselect", "boolean", "date", "secret", "file")
-FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "help", "placeholder", "options")
+FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "secret", "help", "placeholder", "options")
 FIELD_ID = re.compile(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}")
 FILE_KEY = re.compile(r"[A-Za-z0-9_-]{43}")
 
@@ -45,6 +45,8 @@ def check_fields(fields):
             _invalid("Field labels hold 1 to 120 characters.")
         if field["type"] in ("select", "multiselect") and not field.get("options"):
             _invalid(f"{field['label']} needs choices.")
+        if field.get("secret") and (field["type"] != "file" or "default" in field):
+            _invalid("Only file fields without defaults can be secret.")
         out.append({"required": False, **{k: v for k, v in field.items() if k in FIELD_KEYS and v is not None}})
     if len({f["id"] for f in out}) != len(out):
         _invalid("Field IDs must be unique.")
@@ -89,7 +91,7 @@ def json_schema_fields(schema):
             field_type = {None: "text", "date": "date"}.get(s.get("format")) or _invalid("Unsupported string format.")
         elif kind in ("boolean", "number", "integer"):
             field_type = "boolean" if kind == "boolean" else "number"
-        elif kind == "array" and s.get("x-herald-type") == "file" and items.get("format") == "uuid":
+        elif kind == "array" and s.get("x-herald-type") in ("file", "secret-file") and items.get("format") == "uuid":
             field_type = "file"
         elif kind == "array" and items.get("type") == "string" and isinstance(items.get("enum"), list):
             field_type, options = "multiselect", items["enum"]
@@ -98,10 +100,12 @@ def json_schema_fields(schema):
         custom = s.get("x-herald-type")
         if custom in ("textarea", "secret") and field_type == "text":
             field_type = custom
-        elif custom is not None and not (custom == "file" and field_type == "file"):
+        elif custom is not None and not (custom in ("file", "secret-file") and field_type == "file"):
             _invalid("Invalid x-herald-type.")
         names = {"title": "label", "description": "help"}
         extra = {names.get(k, k): s[k] for k in ("title", "description", "default", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "uniqueItems") if k in s}
+        if custom == "secret-file":
+            extra["secret"] = True
         fields.append({"id": key, "label": key, **extra, "type": field_type, "required": key in required, "nullable": nullable, "integer": kind == "integer", **({"options": [{"value": v, "label": v} for v in options]} if options else {})})
     return check_fields(fields)
 
@@ -162,7 +166,7 @@ def validate_answers(fields, values, secret_ids=()):
             errors[key] = "Unknown field."
     for f in fields:
         v, kind, options = values.get(f["id"]), f["type"], [o["value"] for o in f.get("options") or []]
-        if kind == "secret" and f["id"] in secret_ids:
+        if (kind == "secret" or f.get("secret")) and f["id"] in secret_ids:
             continue
         if f["id"] not in values or v is None:
             if (v is None and f["id"] in values and not f.get("nullable")) or (f["id"] not in values and f.get("required")):
@@ -442,8 +446,13 @@ class KeyedSession:
         return out
 
     async def open_secret(self, message, field, env):
-        value = (await self._open(env, {"t": "secret", "message": message, "field": field}, self._identity)).get("value")
-        return value if isinstance(value, str) else e2ee._fail("Malformed secret.")
+        """A secret field's text, or a secret file field's attachments (their keys are learned)."""
+        payload = await self._open(env, {"t": "secret", "message": message, "field": field}, self._identity)
+        if isinstance(payload.get("value"), str):
+            return payload["value"]
+        files = check_files(payload.get("files")) if payload.get("files") else e2ee._fail("Malformed secret.")
+        self._learn(files)
+        return files
 
     async def check_receiver(self, message, receiver):
         """Accepts a claimed receiver's one-time key only when the account identity signed it."""

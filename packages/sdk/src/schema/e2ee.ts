@@ -96,12 +96,16 @@ export const sealedMessageInputSchema = z
     'A sealed secret offer cannot ask or carry attachments.',
   );
 export type SealedMessageInput = z.infer<typeof sealedMessageInputSchema>;
-/** `POST /messages/:id/response` to a sealed request. Secrets go to the asker only, once. */
+/**
+ * `POST /messages/:id/response` to a sealed request. Secrets go to the asker only, once;
+ * `secretFiles` are the uploads whose keys only those secrets carry.
+ */
 export const sealedResponseSchema = z
   .object({
     sealed: sealedEnvelopeSchema,
     secrets: z.record(z.string().max(64), sealedEnvelopeSchema).default({}),
     files: z.array(z.string().uuid()).max(30).default([]),
+    secretFiles: z.array(z.string().uuid()).max(10).default([]),
   })
   .strict();
 /** `POST /outbox` to a keyed destination. `id` is the task's UUID, bound into the envelope. */

@@ -57,6 +57,12 @@ export const commands: Record<string, Spec> = {
     summary: 'Request a secret into a new private file',
     options: ['out', 'label', 'title', 'reply-to', 'deadline', 'timeout'],
   },
+  'request-file': {
+    summary: 'Request a file into a new private file',
+    options: ['out', 'label', 'title', 'body', 'reply-to', 'deadline', 'timeout'],
+    detail:
+      'Only this connection can decrypt the file; Herald deletes it 15 minutes after the answer.',
+  },
   'send-secret': {
     summary: 'Offer a secret from a private file',
     options: ['input', 'title', 'reply-to', 'deadline', 'timeout'],

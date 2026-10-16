@@ -32,5 +32,6 @@ args = ["-y", "@herald-run/mcp"]
 | `upload_file`    | Upload a file; `download_file` saves an attachment to a new file.                |
 | `request_secret` | Encrypted form; writes the value to a new 0600 file and returns only the status. |
 | `send_secret`    | Offers a secret from a file through encrypted delivery; returns only the status. |
+| `request_file`   | Requests a file into a new 0600 file; returns only the status.                   |
 
-`ask` and `wait` block for `wait` (default 10m), then return `status: "pending"` with the message ID; the request stays open until its `deadline` (default 1h). Secret values never appear in tool results. Docs: https://herald.run/docs/agents/. MIT licensed.
+`ask` and `wait` block for `wait` (default 10m), then return `status: "pending"` with the message ID; the request stays open until its `deadline` (default 1h). Secret values and requested files never appear in tool results. Docs: https://herald.run/docs/agents/. MIT licensed.

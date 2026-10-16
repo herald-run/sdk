@@ -195,3 +195,35 @@ it('trusts no unsealed record, from any connection', async () => {
   const opened = await new Herald({ apiKey: token, url }).get(sent.id);
   expect(opened).toMatchObject({ unverified: true, title: 'Encrypted message' });
 });
+it('reveals secret file fields as downloadable attachments, refusing malformed ones', async () => {
+  const { signer, to } = await owner();
+  const key = e2ee.fileKey();
+  const file = { id: crypto.randomUUID(), name: 'id_ed25519', type: 'text/plain', size: 4, key };
+  const ctx = (field: string) => ({
+    t: 'secret',
+    account: keyring.account,
+    message: sent.id,
+    field,
+  });
+  const secret = (field: string, payload: object) =>
+    e2ee.seal({ payload: { v: 1, ...payload }, ctx: ctx(field), signer, to: [to[1]] });
+  const bytes = new Uint8Array(
+    await new Response(e2ee.sealFile(key, new Uint8Array(4))).arrayBuffer(),
+  );
+  serve({
+    'GET /api/v1/keys': directory,
+    [`POST /api/v1/messages/${sent.id}/secrets`]: {
+      token: await secret('token', { value: 'test-only' }),
+      cert: await secret('cert', { files: [file] }),
+    },
+    [`GET /api/v1/files/${file.id}`]: new Response(bytes),
+  });
+  const herald = new Herald({ apiKey: token, url });
+  expect(await herald.revealSecrets(sent.id)).toEqual({ token: 'test-only', cert: [file] });
+  expect((await (await herald.download(file.id)).bytes()).length).toBe(4);
+  serve({
+    'GET /api/v1/keys': directory,
+    [`POST /api/v1/messages/${sent.id}/secrets`]: { cert: await secret('cert', { files: [] }) },
+  });
+  await expect(herald.revealSecrets(sent.id)).rejects.toThrow('Malformed secret');
+});

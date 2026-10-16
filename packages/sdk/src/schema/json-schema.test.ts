@@ -168,3 +168,17 @@ it('rejects exclusive bounds that leave no value', () => {
     }),
   ).toThrow('Minimum constraints');
 });
+it('marks secret file fields, answered through secrets only', () => {
+  const file = { type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: 1 };
+  const [field] = jsonSchemaFields({
+    type: 'object',
+    properties: { cert: { ...file, 'x-herald-type': 'secret-file' } },
+    required: ['cert'],
+  });
+  expect(field).toMatchObject({ type: 'file', secret: true, required: true, maxItems: 1 });
+  expect(validateAnswers([field], {}, ['cert'])).toEqual({});
+  expect(validateAnswers([field], {})).toHaveProperty('cert');
+  const secretText = { id: 'key', label: 'Key', type: 'text', secret: true };
+  expect(fieldsSchema.safeParse([secretText]).success).toBe(false);
+  expect(fieldsSchema.safeParse([{ ...field, default: [] }]).success).toBe(false);
+});

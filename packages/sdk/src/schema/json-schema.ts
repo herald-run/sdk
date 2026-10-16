@@ -116,7 +116,11 @@ export function jsonSchemaFields(input: Schema): Field[] {
       else if (s.type === 'array') {
         const items = resolve(s.items);
         allowed(items, ['type', 'enum', 'format']);
-        if (s['x-herald-type'] === 'file' && items.type === 'string' && items.format === 'uuid')
+        if (
+          ['file', 'secret-file'].includes(s['x-herald-type'] as string) &&
+          items.type === 'string' &&
+          items.format === 'uuid'
+        )
           type = 'file';
         else {
           if (
@@ -133,7 +137,8 @@ export function jsonSchemaFields(input: Schema): Field[] {
       if (s['x-herald-type'] !== undefined) {
         const custom = s['x-herald-type'];
         if (type === 'text' && (custom === 'textarea' || custom === 'secret')) type = custom;
-        else if (!(type === 'file' && custom === 'file')) throw new Error('Invalid x-herald-type.');
+        else if (!(type === 'file' && ['file', 'secret-file'].includes(custom as string)))
+          throw new Error('Invalid x-herald-type.');
       }
       if (s.enum !== undefined && type !== 'select')
         throw new Error('Enums are supported only on strings.');
@@ -169,6 +174,7 @@ export function jsonSchemaFields(input: Schema): Field[] {
         minItems: s.minItems,
         maxItems: s.maxItems,
         uniqueItems: s.uniqueItems,
+        ...(s['x-herald-type'] === 'secret-file' ? { secret: true } : {}),
       };
     }),
   );
