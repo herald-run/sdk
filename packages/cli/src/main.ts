@@ -13,13 +13,14 @@ import {
   type MessageRequest,
 } from '@herald-run/sdk';
 import { configDirectory, defaultUrl, profileName, readProfiles, readSaved } from './config';
+import { savedToken } from './config';
 import { removeLogin, saveLogin, tokenPath } from './config';
 import { uploadPath } from './files';
 import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
 import { integrate, type Run } from './integrate';
 import { listen } from './listen';
-import { encryptionLine, login, savedToken, userAgent } from './login';
+import { encryptionLine, login, userAgent } from './login';
 import { requestSecret, sendSecret, secretFailure } from './secrets';
 
 /** A keyed client's verified account safety code; undefined for legacy tokens. */

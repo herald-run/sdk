@@ -41,7 +41,14 @@ function summary(m: Message) {
     threadId: m.threadId,
     replyTo: m.replyTo,
     ...(m.response ? { actionId: m.response.actionId, values: m.response.values } : {}),
-    ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+    ...(m.attachments?.length
+      ? { attachments: m.attachments.map(({ id, name, size, type }) => ({ id, name, size, type })) }
+      : {}),
+    ...(m.e2ee ? { encrypted: true } : {}),
+    ...(m.locked
+      ? { note: 'End-to-end encrypted for other keys; this connection cannot read it.' }
+      : {}),
+    ...(m.unverified ? { note: 'Failed end-to-end verification; its content was withheld.' } : {}),
   };
 }
 const pendingNote = 'Still pending. Call wait with this id to keep waiting.';
@@ -248,8 +255,15 @@ export function createServer(client: () => Promise<Herald>) {
   tool(
     'download_file',
     'Download a Herald attachment to a new local file (the path must not exist yet).',
-    { id, path: z.string().min(1) },
+    {
+      id,
+      path: z.string().min(1),
+      messageId: id
+        .optional()
+        .describe('Message carrying the attachment; needed when end-to-end encrypted'),
+    },
     async (input, herald) => {
+      if (input.messageId) await herald.get(input.messageId);
       const file = await herald.download(input.id);
       const body = Readable.fromWeb(file.body as import('node:stream/web').ReadableStream);
       try {

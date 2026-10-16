@@ -13,11 +13,6 @@ export type Saved = {
   seed?: string;
   fingerprint?: string;
 };
-/** The token a client uses: keyed (`hdr_<auth>.<seed>.<fingerprint>`) when the login stored keys. */
-export const savedToken = (saved: Saved) =>
-  saved.token && saved.seed && saved.fingerprint
-    ? e2ee.formatToken(saved.token, saved.seed, saved.fingerprint)
-    : saved.token;
 export const encryptionLine = (fingerprint?: string) =>
   `End-to-end encryption: ${fingerprint ? `on (safety code ${fingerprint})` : 'off'}`;
 export const userAgent = `herald-cli/${version}`;
