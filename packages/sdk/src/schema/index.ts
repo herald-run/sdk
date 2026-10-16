@@ -8,6 +8,7 @@ export * from './message';
 export * from './actions';
 export * from './review';
 export * from './forms';
+export * from './e2ee';
 export { jsonSchemaFields } from './json-schema';
 export const limits = { fileBytes: 100_000_000, secretTTL: 15 * 60_000 };
 export const envelopeSchema = z
@@ -105,4 +106,6 @@ export interface Integration {
   name: string;
   scopes: Scope[];
   createdAt: string;
+  /** Holds a certified end-to-end key. */
+  e2ee?: boolean;
 }

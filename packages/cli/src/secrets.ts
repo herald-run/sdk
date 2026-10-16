@@ -27,7 +27,8 @@ export async function requestSecret(client: Herald, path: string, options: Optio
   let messageId: string | undefined;
   try {
     await output.chmod(0o600);
-    const keys = await createKeys();
+    // Keyed clients get the value sealed to their own key; others bring a one-time RSA key.
+    const keys = client.keyed ? undefined : await createKeys();
     const message = await client.send({
       title: options.title || 'Secret Requested',
       replyTo: options.replyTo,
@@ -41,14 +42,19 @@ export async function requestSecret(client: Herald, path: string, options: Optio
           maxLength: 16000,
         },
       ],
-      publicKey: publicKeySchema.parse(keys.publicKey),
+      ...(keys ? { publicKey: publicKeySchema.parse(keys.publicKey) } : {}),
       expiresIn: Math.min(options.deadline, options.timeout),
     });
     messageId = message.id;
     const answer = await client.wait(message.id, { waitTimeout: options.timeout });
     if (answer.status !== 'answered') throw new Error(secretFailure);
-    const encrypted = await client.collectSecrets(message.id);
-    const value = await unseal(envelopeSchema.parse(encrypted.secret), keys.privateKey);
+    const value = keys
+      ? await unseal(
+          envelopeSchema.parse((await client.collectSecrets(message.id)).secret),
+          keys.privateKey,
+        )
+      : (await client.revealSecrets(message.id)).secret;
+    if (typeof value !== 'string') throw new Error(secretFailure);
     await output.writeFile(value, 'utf8');
     await output.sync();
     complete = true;

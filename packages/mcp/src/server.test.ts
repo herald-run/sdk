@@ -6,10 +6,13 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { seal } from '@herald-run/sdk/crypto';
+import contracts from '@herald-run/sdk/fixtures/contracts.json';
 import { connect } from './auth';
 import { createServer } from './server';
 
 const canary = 'test-only-secret-value';
+const sealed = (name: string) => contracts.e2ee.steps.find((s) => s.name === name)!.response.body;
+const [locked, opened] = [sealed('get-locked'), sealed('get')] as { id: string }[];
 type Seen = { method: string; url: string; auth?: string; body: string };
 let seen: Seen[] = [];
 let answer: Record<string, unknown> = { status: 'answered', response: { values: { reply: 'ok' } } };
@@ -29,6 +32,9 @@ const server = http(async (req, res) => {
   } else if (req.url === '/api/v1/messages/m1') result = { id: 'm1', title: 'Q', ...answer };
   else if (req.url?.startsWith('/api/v1/messages?'))
     result = [{ id: 'm1', title: 'Q', status: 'pending', direction: 'inbound', kind: 'form' }];
+  else if (req.url === '/api/v1/keys') result = sealed('keys');
+  else if (req.url === `/api/v1/messages/${locked.id}`) result = locked;
+  else if (req.url === `/api/v1/messages/${opened.id}`) result = opened;
   else if (req.url === '/api/v1/messages/m1/secrets') result = { secret: await seal(canary, key) };
   res.end(JSON.stringify(result));
 });
@@ -151,5 +157,28 @@ it('uses the CLI login when no token is set, and explains when there is none', a
   await writeFile(join(home, '.config', 'herald', '127.0.0.1.json'), '{"token":"hdr_saved"}');
   await other.callTool({ name: 'get_message', arguments: { id: 'm1' } });
   expect(seen.at(-1)!.auth).toBe('Bearer hdr_saved');
+  await other.close();
+});
+
+it('uses a keyed CLI login and reports locked records plainly', async () => {
+  const home = join(folder, 'keyed');
+  const [auth, seed, fingerprint] = contracts.e2ee.token.split('.');
+  await mkdir(join(home, '.config', 'herald'), { recursive: true });
+  const saved = JSON.stringify({ token: auth, seed, fingerprint });
+  await writeFile(join(home, '.config', 'herald', '127.0.0.1.json'), saved);
+  const keyed = createServer(() => connect({ HERALD_URL: base }, home));
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await keyed.connect(a);
+  const other = new Client({ name: 'test', version: '1' });
+  await other.connect(b);
+  const get = async (id: string) => {
+    const result = (await other.callTool({ name: 'get_message', arguments: { id } })) as {
+      content: { text: string }[];
+    };
+    return JSON.parse(result.content[0].text);
+  };
+  expect(await get(opened.id)).toMatchObject({ title: 'Deploy v2?', e2ee: true });
+  expect(await get(locked.id)).toMatchObject({ title: 'Encrypted message', locked: true });
+  expect(seen.every((s) => s.auth === `Bearer ${auth}`)).toBe(true);
   await other.close();
 });

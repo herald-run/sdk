@@ -10,6 +10,8 @@ npm install @herald-run/sdk
 
 Create a token in Herald under Settings → Connections, or run `npx @herald-run/cli login`. Pass it as `apiKey`, or set `HERALD_API_KEY` (or `HERALD_TOKEN`). `HERALD_URL` selects another server. Never commit tokens.
 
+On accounts with end-to-end encryption, use a keyed token (`hdr_<auth>.<seed>.<fingerprint>`, from `herald login` or Settings). The client then encrypts and decrypts content itself and sends only `hdr_<auth>`; records it cannot decrypt or verify, including unsealed tasks and answers from keyed connections, come back with `locked` or `unverified` set and no content. Download encrypted files by passing the attachment (it carries the file key) to `download()`.
+
 ## One-minute example
 
 ```ts

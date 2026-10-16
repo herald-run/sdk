@@ -1,10 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { scopes } from '@herald-run/sdk/schema';
+import * as e2ee from '@herald-run/sdk/e2ee';
 import { defaultScopes, login, parseScopes } from './login';
 afterEach(() => vi.restoreAllMocks());
 type Server = {
   integrations: Array<{ id: string; name: string; scopes: string[] }>;
   destinations?: Array<{ id: string; integrationId: string }>;
+  keys?: unknown;
+  certificate?: () => Promise<unknown>;
 };
 function server(state: Server) {
   const calls: string[] = [];
@@ -37,6 +40,8 @@ function server(state: Server) {
       );
     }
     if (path === '/api/v1/destinations') return Response.json(state.destinations || []);
+    if (path === '/api/v1/keys') return Response.json(state.keys || { account: null });
+    if (path === '/api/v1/keys/device-code/U') return Response.json(await state.certificate!());
     return Response.json({ ok: true });
   });
   return { calls, created };
@@ -98,7 +103,9 @@ it('requests the default scopes without asking and rejects unknown scopes before
   const log = io();
   await login('https://herald.test', {}, {}, { ...log, ask, open });
   expect(ask).not.toHaveBeenCalled();
-  expect(open).toHaveBeenCalledWith('https://herald.test/device');
+  expect(open).toHaveBeenCalledWith(
+    expect.stringMatching(/^https:\/\/herald\.test\/device#k=[\w-]+\.[\w-]+$/),
+  );
   expect(log.log).toHaveBeenCalledWith(
     expect.stringContaining('Opened https://herald.test/device'),
   );
@@ -128,7 +135,9 @@ it('prefers the complete verification link and never opens other schemes', async
   );
   const open = vi.fn(() => true);
   await login('https://herald.test', {}, {}, { ...io(), open });
-  expect(open).toHaveBeenCalledWith('https://herald.test/device?user_code=U');
+  expect(open).toHaveBeenCalledWith(
+    expect.stringMatching(/^https:\/\/herald\.test\/device\?user_code=U#k=[\w-]+\.[\w-]+$/),
+  );
   vi.mocked(globalThis.fetch).mockImplementationOnce(async () =>
     Response.json({
       device_code: 'd',
@@ -140,4 +149,75 @@ it('prefers the complete verification link and never opens other schemes', async
   open.mockClear();
   await login('https://herald.test', {}, {}, { ...io(), open });
   expect(open).not.toHaveBeenCalled();
+});
+it('certifies the key from the approval link on enrolled accounts', async () => {
+  const keyring = e2ee.createKeyring('acct');
+  const account = await e2ee.accountStatement(keyring);
+  let link = '';
+  const key = () => link.split('#k=')[1].split('.');
+  const open = vi.fn((url: string) => !!(link = url));
+  const certify = (sign: string, box: string) => e2ee.certify(keyring, { sign, box });
+  const { created } = server({
+    integrations: [],
+    keys: { account, certificates: [] },
+    certificate: () => certify(key()[0], key()[1]),
+  });
+  const fingerprint = await e2ee.fingerprint(account.statement.identity);
+  const safetyCode = e2ee.safetyCode(fingerprint).replace(/ /g, '  ');
+  const { saved } = await login('https://herald.test', { safetyCode }, {}, { ...io(), open });
+  expect(saved).toMatchObject({ token: 'hdr_new', fingerprint });
+  expect((await e2ee.keySet(saved.seed)).signPub).toBe(key()[0]);
+  const [sign, box] = key();
+  const certificate = expect.objectContaining({
+    certificate: expect.objectContaining({ sign, box }),
+  });
+  expect(created).toEqual([expect.objectContaining({ certificate })]);
+  server({
+    integrations: [],
+    keys: { account, certificates: [] },
+    certificate: async () => certify(key()[1], key()[0]),
+  });
+  await expect(login('https://herald.test', { safetyCode }, {}, { ...io(), open })).rejects.toThrow(
+    'different key',
+  );
+});
+it('stores a key only after the person confirms the safety code', async () => {
+  const keyring = e2ee.createKeyring('acct');
+  const account = await e2ee.accountStatement(keyring);
+  const fingerprint = await e2ee.fingerprint(account.statement.identity);
+  let link = '';
+  const open = (url: string) => !!(link = url);
+  const enrolled = () => {
+    const key = () => link.split('#k=')[1].split('.');
+    return server({
+      integrations: [],
+      keys: { account, certificates: [] },
+      certificate: () => e2ee.certify(keyring, { sign: key()[0], box: key()[1] }),
+    });
+  };
+  const fails = async (options: object, extra: object, error: string) => {
+    const { created } = enrolled();
+    await expect(
+      login('https://herald.test', options, {}, { ...io(), open, ...extra }),
+    ).rejects.toThrow(error);
+    expect(created).toEqual([]);
+  };
+  await fails({}, {}, '--safety-code');
+  await fails({ safetyCode: 'AAAA' }, {}, 'does not match');
+  // The digits are compared; the fingerprint itself is not accepted.
+  await fails({ safetyCode: fingerprint }, {}, 'does not match');
+  await fails({}, { ask: async () => 'n' }, 'not confirmed');
+  const log = vi.fn();
+  const ask = vi.fn(async () => 'y');
+  enrolled();
+  const { saved } = await login('https://herald.test', {}, {}, { ...io(), log, open, ask });
+  expect(saved.fingerprint).toBe(fingerprint);
+  expect(log).toHaveBeenCalledWith(`Account safety code: ${e2ee.safetyCode(fingerprint)}`);
+  expect(ask).toHaveBeenCalledWith('Does this match the safety code on the approval page? [y/N] ');
+  // An expected code with no account keys is a downgrade, never a plaintext login.
+  const { created } = server({ integrations: [] });
+  await expect(
+    login('https://herald.test', { safetyCode: fingerprint }, {}, { ...io(), open }),
+  ).rejects.toThrow('no end-to-end encryption keys');
+  expect(created).toEqual([]);
 });

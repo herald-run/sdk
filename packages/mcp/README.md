@@ -17,7 +17,7 @@ args = ["-y", "@herald-run/mcp"]
 
 ## Authentication
 
-`HERALD_API_KEY` (or `HERALD_TOKEN`) wins; otherwise the server reads the CLI's stored login for `HERALD_PROFILE` (default profile if unset). `HERALD_URL` selects another server.
+`HERALD_API_KEY` (or `HERALD_TOKEN`) wins; otherwise the server reads the CLI's stored login for `HERALD_PROFILE` (default profile if unset). `HERALD_URL` selects another server. Keyed logins and tokens encrypt content end to end; records the connection cannot decrypt are reported as `locked`.
 
 ## Tools
 

@@ -1,5 +1,6 @@
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { formatToken } from '@herald-run/sdk/e2ee';
 import type { Saved } from './login';
 export const defaultUrl = 'https://app.herald.run';
 /**
@@ -29,6 +30,11 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
 export const readProfiles = (directory: string) =>
   readJson<Profiles>(join(directory, 'profiles.json'), {});
 export const readSaved = (path: string) => readJson<Saved>(path, {});
+/** The token a client uses: keyed (`hdr_<auth>.<seed>.<fingerprint>`) when the login stored keys. */
+export const savedToken = (saved: Saved) =>
+  saved.token && saved.seed && saved.fingerprint
+    ? formatToken(saved.token, saved.seed, saved.fingerprint)
+    : saved.token;
 async function writePrivate(directory: string, path: string, value: unknown) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await mkdir(join(path, '..'), { recursive: true, mode: 0o700 });

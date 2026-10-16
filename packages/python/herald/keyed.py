@@ -1,0 +1,467 @@
+"""End-to-end encryption for keyed tokens: seals what the client sends and opens what it reads."""
+import json
+import re
+import time
+import uuid
+from datetime import date
+
+from . import e2ee
+from .e2ee import E2eeError
+from .http import HeraldError
+
+NO_ENTRY = "No recipient entry for these keys."
+CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group")
+ENVELOPE_LIMIT = 20000
+FIELD_TYPES = ("text", "textarea", "number", "select", "multiselect", "boolean", "date", "secret", "file")
+FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "help", "placeholder", "options")
+FIELD_ID = re.compile(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}")
+FILE_KEY = re.compile(r"[A-Za-z0-9_-]{43}")
+
+
+def _invalid(message):
+    raise HeraldError(message, 400)
+
+
+def _uuid(value):
+    try:
+        return isinstance(value, str) and str(uuid.UUID(value)) == value.lower()
+    except ValueError:
+        return False
+
+
+def _number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def check_fields(fields):
+    """Form fields with defaults filled, as the TypeScript SDK's `fieldsSchema` reads them."""
+    if not isinstance(fields, list) or len(fields) > 30:
+        _invalid("Use at most 30 fields.")
+    out = []
+    for field in fields:
+        if not isinstance(field, dict) or not FIELD_ID.fullmatch(str(field.get("id"))) or field.get("type") not in FIELD_TYPES:
+            _invalid("Fields need an id and a known type.")
+        if not isinstance(field.get("label"), str) or not 0 < len(field["label"]) <= 120:
+            _invalid("Field labels hold 1 to 120 characters.")
+        if field["type"] in ("select", "multiselect") and not field.get("options"):
+            _invalid(f"{field['label']} needs choices.")
+        out.append({"required": False, **{k: v for k, v in field.items() if k in FIELD_KEYS and v is not None}})
+    if len({f["id"] for f in out}) != len(out):
+        _invalid("Field IDs must be unique.")
+    return out
+
+
+def json_schema_fields(schema):
+    """Form fields for a flat JSON Schema object (such as a Pydantic model's), like the TypeScript SDK."""
+    if not isinstance(schema, dict) or schema.get("type") != "object" or schema.get("additionalProperties", False) is not False:
+        _invalid("The form schema must be an object without additional properties.")
+    props, required, defs = schema.get("properties") or {}, schema.get("required") or [], schema.get("$defs") or {}
+    if any(k not in props for k in required):
+        _invalid("Required fields must exist in properties.")
+
+    def resolve(s):
+        ref = s.get("$ref") if isinstance(s, dict) else None
+        if ref is None:
+            return s
+        name = ref.removeprefix("#/$defs/")
+        if name not in defs:
+            _invalid("Only local $defs references are supported.")
+        base = {k: v for k, v in defs[name].items() if k not in ("title", "description")}
+        return {**base, **{k: v for k, v in s.items() if k != "$ref"}}
+
+    fields = []
+    for key, value in props.items():
+        s, nullable = resolve(value), False
+        if "anyOf" in s:
+            variants = [resolve(v) for v in s["anyOf"]]
+            scalar = [v for v in variants if v.get("type") != "null"]
+            if len(variants) != 2 or len(scalar) != 1:
+                _invalid("Only nullable scalar anyOf is supported.")
+            s, nullable = {**{k: v for k, v in s.items() if k != "anyOf"}, **scalar[0]}, True
+        kind, items, options = s.get("type"), resolve(s.get("items") or {}), None
+        if isinstance(kind, list):
+            if len(kind) != 2 or "null" not in kind:
+                _invalid("Only nullable type unions are supported.")
+            kind, nullable = next(t for t in kind if t != "null"), True
+        if kind == "string" and "enum" in s:
+            field_type, options = "select", s["enum"]
+        elif kind == "string":
+            field_type = {None: "text", "date": "date"}.get(s.get("format")) or _invalid("Unsupported string format.")
+        elif kind in ("boolean", "number", "integer"):
+            field_type = "boolean" if kind == "boolean" else "number"
+        elif kind == "array" and s.get("x-herald-type") == "file" and items.get("format") == "uuid":
+            field_type = "file"
+        elif kind == "array" and items.get("type") == "string" and isinstance(items.get("enum"), list):
+            field_type, options = "multiselect", items["enum"]
+        else:
+            _invalid("Nested objects and this property type are not supported.")
+        custom = s.get("x-herald-type")
+        if custom in ("textarea", "secret") and field_type == "text":
+            field_type = custom
+        elif custom is not None and not (custom == "file" and field_type == "file"):
+            _invalid("Invalid x-herald-type.")
+        names = {"title": "label", "description": "help"}
+        extra = {names.get(k, k): s[k] for k in ("title", "description", "default", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "uniqueItems") if k in s}
+        fields.append({"id": key, "label": key, **extra, "type": field_type, "required": key in required, "nullable": nullable, "integer": kind == "integer", **({"options": [{"value": v, "label": v} for v in options]} if options else {})})
+    return check_fields(fields)
+
+
+def check_input(message):
+    """A content message as the server would store it; keyed clients validate before sealing."""
+    m = {k: v for k, v in message.items() if v is not None}
+    if not isinstance(m.get("title"), str) or not 0 < len(m["title"]) <= 180:
+        _invalid("Titles hold 1 to 180 characters.")
+    if not isinstance(m.setdefault("body", ""), str) or len(m["body"]) > 50000:
+        _invalid("Bodies hold at most 50,000 characters.")
+    if m.setdefault("kind", "message") not in ("message", "form", "report", "files"):
+        _invalid("Unknown message kind.")
+    if "schema" in m:
+        if m.get("fields"):
+            _invalid("Use schema or fields, not both.")
+        m["fields"] = json_schema_fields(m.pop("schema"))
+    m["fields"] = check_fields(m.get("fields", []))
+    if "expiresAt" in m and "expiresIn" in m:
+        _invalid("Use expiresAt or expiresIn, not both.")
+    actions = m.get("actions")
+    if actions is not None:
+        if not isinstance(actions, list) or not 0 < len(actions) <= 8 or len({a.get("id") for a in actions}) != len(actions):
+            _invalid("Use 1 to 8 actions with unique IDs.")
+        for action in actions:
+            if any(f["type"] in ("secret", "file") for f in m["fields"]) or validate_answers(m["fields"], action.get("values") or {}):
+                _invalid("Actions must completely answer a form without secrets or files.")
+    return m
+
+
+def check_secret_offer(message):
+    """A secret offer: a title and body only; the value goes to the receiver the account signs."""
+    m = {k: v for k, v in message.items() if v is not None}
+    if not isinstance(m.get("title"), str) or not 0 < len(m["title"]) <= 180:
+        _invalid("Titles hold 1 to 180 characters.")
+    if not isinstance(m.setdefault("body", ""), str) or len(m["body"]) > 50000:
+        _invalid("Bodies hold at most 50,000 characters.")
+    if any(m.get(k) for k in ("fields", "attachments", "blocks", "actions", "schema", "publicKey")):
+        _invalid("Secret deliveries contain metadata only; use the encrypted delivery endpoint.")
+    if "expiresAt" in m and "expiresIn" in m:
+        _invalid("Use expiresAt or expiresIn, not both.")
+    return m
+
+
+def check_answers(values):
+    ok = isinstance(values, dict) and all(
+        isinstance(k, str) and len(k) <= 64 and (v is None or isinstance(v, bool) or _number(v) or (isinstance(v, str) and len(v) <= 16000) or (isinstance(v, list) and len(v) <= 50 and all(isinstance(x, str) and len(x) <= 100 for x in v)))
+        for k, v in values.items()
+    )
+    return values if ok else e2ee._fail("Malformed answer.")
+
+
+def validate_answers(fields, values, secret_ids=()):
+    """Field errors for `values`, like the TypeScript SDK's `validateAnswers`."""
+    errors, ids = {}, {f["id"] for f in fields}
+    for key in [*values, *secret_ids]:
+        if key not in ids:
+            errors[key] = "Unknown field."
+    for f in fields:
+        v, kind, options = values.get(f["id"]), f["type"], [o["value"] for o in f.get("options") or []]
+        if kind == "secret" and f["id"] in secret_ids:
+            continue
+        if f["id"] not in values or v is None:
+            if (v is None and f["id"] in values and not f.get("nullable")) or (f["id"] not in values and f.get("required")):
+                errors[f["id"]] = "Invalid value."
+            continue
+        bad = f.get("required") and v in ("", [])
+        if _number(v):
+            bad |= (f.get("integer") and v != int(v)) or v < f.get("minimum", v) or v > f.get("maximum", v)
+            bad |= ("exclusiveMinimum" in f and v <= f["exclusiveMinimum"]) or ("exclusiveMaximum" in f and v >= f["exclusiveMaximum"])
+        if isinstance(v, str):
+            bad |= not f.get("minLength", 0) <= len(v) <= f.get("maxLength", len(v))
+        if isinstance(v, list):
+            bad |= not f.get("minItems", 0) <= len(v) <= f.get("maxItems", len(v)) or (f.get("uniqueItems") and len(set(v)) != len(v))
+        if kind == "file":
+            bad |= not isinstance(v, list) or len(v) > 10 or not all(_uuid(x) for x in v)
+        elif kind == "number":
+            bad |= not _number(v)
+        elif kind == "boolean":
+            bad |= not isinstance(v, bool)
+        elif kind == "multiselect":
+            bad |= not isinstance(v, list) or any(x not in options for x in v)
+        elif kind == "select":
+            bad |= v not in options
+        elif kind in ("text", "textarea", "date", "secret"):
+            bad |= not isinstance(v, str)
+            if kind == "date" and not bad:
+                try:
+                    bad |= date.fromisoformat(v).isoformat() != v
+                except ValueError:
+                    bad = True
+        if bad:
+            errors[f["id"]] = "Invalid value."
+    return errors
+
+
+def session_values(session):
+    out = {"prompt": session["prompt"], **({"attachments": session["attachments"]} if "attachments" in session else {})}
+    out.update({"mode_" + k: v for k, v in (session.get("modes") or {}).items()})
+    out.update({k: session[k] for k in ("model", "effort") if k in session})
+    if session.get("command"):
+        out["command"] = session["command"]["id"]
+        out.update({"argument_" + k: v for k, v in (session["command"].get("arguments") or {}).items()})
+    return out
+
+
+def check_files(files):
+    if files is None:
+        return []
+    ok = isinstance(files, list) and len(files) <= 30 and all(
+        isinstance(f, dict) and _uuid(f.get("id")) and isinstance(f.get("name"), str) and isinstance(f.get("type"), str) and isinstance(f.get("size"), int) and FILE_KEY.fullmatch(str(f.get("key")))
+        for f in files
+    )
+    return [{k: f[k] for k in ("id", "name", "type", "size", "key")} for f in files] if ok else e2ee._fail("Malformed attachments.")
+
+
+def _omit(value, *keys):
+    return {k: v for k, v in value.items() if v is not None and k not in keys}
+
+
+def strip(m, flag):
+    """Placeholder content for a record that could not be opened or verified."""
+    out = {**_omit(m, "blocks", "actions", "session"), "e2ee": True, flag: True}
+    if m.get("direction") != "outbound":
+        out.update(title="Encrypted secret" if m.get("kind") == "secret" else "Encrypted message", body="", fields=[])
+    if m.get("response"):
+        out["response"] = {**_omit(m["response"], "actionId"), "values": {}}
+    if m.get("input"):
+        out["input"] = {**_omit(m["input"], "session"), "values": {}}
+    for key in ("result", "execution"):
+        if m.get(key):
+            out[key] = _omit(m[key], "error")
+    return out
+
+
+class KeyedSession:
+    def __init__(self, seed, fingerprint, directory):
+        self.seed, self.fingerprint, self._directory = seed, fingerprint, directory
+        # File keys learned from uploads and opened records, by file ID.
+        self.files = {}
+        # Task IDs -> the integration that runs them, so logs open only under its key.
+        self._runners = {}
+        self._state, self._loaded = None, 0.0
+
+    async def state(self, refresh=False):
+        """The verified key directory, fetched once; `refresh` refetches at most every 10 s."""
+        if self._state is None or (refresh and time.monotonic() - self._loaded > 10):
+            self._loaded = time.monotonic()
+            self._state = await self._load()
+        return self._state
+
+    async def _load(self):
+        directory = await self._directory()
+        me = e2ee.key_set(self.seed)
+        if not directory.get("account"):
+            e2ee._fail("End-to-end encryption is not set up for this account; a keyed token never uses plaintext.")
+        info = e2ee.verify_account(directory["account"], self.fingerprint)
+        account = directory["account"]["statement"]["account"]
+        signers, kids = {}, {}
+        for cert in directory.get("certificates") or []:
+            try:
+                checked = e2ee.verify_certificate(cert, info.identity, account)
+            except (E2eeError, KeyError, TypeError):
+                continue
+            signers[checked["kid"]] = checked["sign"]
+            kids[cert.get("integrationId")] = checked["kid"]
+        if signers.get(me.kid) != me.sign_pub:
+            e2ee._fail("This token's key is not certified for the account.")
+        return {"directory": directory, "account": account, "me": me, "identity": info.identity, "identity_kid": info.signer_kid, "inbox": {"kid": info.inbox_kid, "box": info.inbox}, "signers": signers, "kids": kids}
+
+    def _to(self, s):
+        return [s["inbox"], {"kid": s["me"].kid, "box": s["me"].box_pub}]
+
+    async def _open(self, env, expect, signer):
+        """Opens `env` if exactly the kid `signer(state)` picks signed it; a new certificate triggers a refetch."""
+        s = await self.state()
+        if signer(s) != env.get("from"):
+            s = await self.state(True)
+        kid = signer(s)
+        key = s["identity"] if kid == s["identity_kid"] else s["signers"].get(kid)
+        return e2ee.open(env, recipients=[s["me"]], signers=lambda k: key if k == kid else None, expect={**expect, "account": s["account"]})
+
+    @staticmethod
+    def _identity(s):
+        return s["identity_kid"]
+
+    @staticmethod
+    def _integration(integration_id):
+        return lambda s: s["kids"].get(integration_id) if integration_id else None
+
+    def _learn(self, files):
+        for f in files:
+            self.files[f["id"]] = f
+
+    async def _seal(self, payload, ctx):
+        s = await self.state()
+        return e2ee.seal(payload=payload, ctx={**ctx, "account": s["account"]}, signer=s["me"], to=self._to(s))
+
+    async def seal_message(self, message, idempotency_key):
+        """A sealed request body under a new record ID; secret offers seal their title and body."""
+        record_id = str(uuid.uuid4())
+        if message.get("kind") == "secret":
+            m = check_secret_offer(message)
+            payload = {"kind": "secret", "title": m["title"], "body": m["body"]}
+            body = {"id": record_id, "kind": "secret", "sealed": await self._seal(payload, {"t": "message", "id": record_id}), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": False, "attachments": []}
+            return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}
+        m = check_input(message)
+        files = []
+        for file in m.get("attachments") or []:
+            known = {**self.files.get(file["id"], {}), **file}
+            if not known.get("key"):
+                e2ee._fail(f"Attachment {file['id']} was not uploaded by this keyed client.")
+            files.append({k: known[k] for k in ("id", "name", "type", "size", "key")})
+        payload = {"attachments": files, **{k: m[k] for k in CONTENT if k in m}}
+        body = {"id": record_id, "kind": "message", "sealed": await self._seal(payload, {"t": "message", "id": record_id}), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": m["kind"] == "form" or bool(m["fields"]) or bool(m.get("actions")), "attachments": [{"id": f["id"]} for f in files]}
+        return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}
+
+    async def open_record(self, m, task=False):
+        """A record's sealed parts opened, with `e2ee: True`; failures are flagged `locked` or `unverified`.
+
+        Content comes only from verified envelopes: a task (or `task=True`) without sealed input, an
+        unsealed record from a keyed connection and a sealed request with an unsealed answer are all
+        `unverified`. Plaintext from connections without keys is returned as is, without `e2ee`."""
+        if not isinstance(m, dict):
+            return m
+        s = await self.state()
+        task = task or m.get("direction") == "outbound"
+        response = m.get("response") or {}
+        try:
+            if task:
+                if not (m.get("input") or {}).get("sealed"):
+                    e2ee._fail("This task is not end-to-end encrypted.")
+                if m.get("recipientId"):
+                    self._runners[m["id"]] = m["recipientId"]
+            elif not m.get("sealed"):
+                if response.get("sealed"):
+                    e2ee._fail("A sealed answer needs a sealed request.")
+                if m.get("senderId") in s["kids"]:
+                    e2ee._fail("A keyed connection sent this record unsealed.")
+                return m
+            out = {**m, "e2ee": True}
+            out = await (self._task(out, m["input"]["sealed"]) if task else self._content(out, m["sealed"]))
+            if not task and response.get("sealed"):
+                out = await self._response(out, m["sealed"], response["sealed"])
+            elif not task and out.get("kind") != "secret" and (m.get("response") or m.get("status") == "answered"):
+                e2ee._fail("A sealed request needs a sealed answer.")
+            for key in ("result", "execution"):
+                if not m.get(key):
+                    continue
+                env, error = m[key].get("sealed"), None
+                if env:
+                    error = (await self._open(env, {"t": "result", "task": m["id"]}, self._integration(m.get("recipientId")))).get("error")
+                    if error is not None and not isinstance(error, str):
+                        e2ee._fail("Malformed task result.")
+                out[key] = _omit({**_omit(m[key], "error"), "error": error})
+            return out
+        except E2eeError as error:
+            return strip(m, "locked" if str(error) == NO_ENTRY else "unverified")
+
+    async def _content(self, out, env):
+        payload = await self._open(env, {"t": "message", "id": out.get("id")}, self._integration(out.get("senderId")))
+        files = check_files(payload.pop("attachments", None))
+        fields = {k: v for k, v in payload.items() if k != "v"}
+        try:
+            content = check_secret_offer(fields) if fields.get("kind") == "secret" else check_input(fields)
+        except HeraldError:
+            e2ee._fail("Malformed message content.")
+        if (content.get("kind") == "secret") != (out.get("kind") == "secret"):
+            e2ee._fail("The message kind does not match its record.")
+        if content.get("kind") == "secret":
+            content["fields"] = []
+        self._learn(files)
+        # Server copies of content fields are dropped; only the envelope's count.
+        return {**_omit(out, *CONTENT), **{k: content[k] for k in CONTENT if k in content}, "attachments": files}
+
+    async def _task(self, out, env):
+        payload = await self._open(env, {"t": "task", "id": out.get("id"), "destination": out.get("destinationId"), "type": out.get("typeId")}, self._identity)
+        values, session = check_answers(payload.get("values", {})), payload.get("session")
+        if session is not None and not (isinstance(session, dict) and isinstance(session.get("prompt"), str)):
+            e2ee._fail("Malformed task input.")
+        files = check_files(payload.get("attachments"))
+        self._learn(files)
+        # Server copies of the input, session and answer are dropped; only the envelope's count.
+        out = {**_omit(out, "session", "blocks", "actions"), "input": {**_omit(out["input"], "session"), "values": values, **({"session": session} if session else {})}, "attachments": files}
+        if out.get("response"):
+            out["response"] = {**_omit(out["response"], "actionId"), "values": {**values, **session_values(session)} if session else values}
+        if session:
+            out["session"] = _omit(session, "attachments")
+        return out
+
+    async def _response(self, out, request, env):
+        expect = {"t": "response", "message": out["id"], "request": e2ee.envelope_digest(request)}
+        payload = await self._open(env, expect, self._identity)
+        values, action, files = check_answers(payload.get("values")), payload.get("actionId"), check_files(payload.get("attachments"))
+        actions, fields = out.get("actions") or [], out.get("fields") or []
+        if action is not None:
+            match = next((a for a in actions if a.get("id") == action), None)
+            valid = isinstance(action, str) and match is not None and match.get("values") == values
+        else:
+            valid = not (actions and not fields) and not validate_answers(fields, values, out["response"].get("secretFields") or [])
+        if not valid:
+            e2ee._fail("The answer does not match the request.")
+        self._learn(files)
+        known = {f["id"] for f in out.get("attachments") or []}
+        return {**out, "response": _omit({**out["response"], "values": values, "actionId": action}), "attachments": (out.get("attachments") or []) + [f for f in files if f["id"] not in known]}
+
+    async def open_logs(self, task, logs, fetch):
+        """A task's log lines opened; only the integration running the task may sign them. `fetch` loads the task record when this session has not opened it."""
+        if not logs:
+            return logs
+        s = await self.state()
+        if task not in self._runners:
+            await self.open_record(await fetch(), task=True)
+        runner = self._runners.get(task)
+        # Plaintext lines from a keyed runner are not trusted.
+        keyed = runner in s["kids"]
+        opened = []
+        for log in logs:
+            if not log.get("sealed") and not keyed:
+                opened.append(log)
+                continue
+            try:
+                if not log.get("sealed"):
+                    e2ee._fail("A keyed runner sent this log line unsealed.")
+                text = (await self._open(log["sealed"], {"t": "log", "task": task, "seq": log["sequence"]}, self._integration(runner))).get("text")
+                opened.append({**log, "text": text, "e2ee": True} if isinstance(text, str) else e2ee._fail("Malformed log."))
+            except E2eeError as error:
+                opened.append({**log, "text": "", "e2ee": True, ("locked" if str(error) == NO_ENTRY else "unverified"): True})
+        return opened
+
+    async def seal_update(self, task, update):
+        """Seals log text (at most 4,096 characters per line) and the error of a task update."""
+        out = {k: v for k, v in update.items() if k not in ("logs", "error")}
+
+        async def seal(payload, ctx):
+            env = await self._seal(payload, ctx)
+            return env if len(json.dumps(env, separators=(",", ":"))) <= ENVELOPE_LIMIT else e2ee._fail("A sealed log line is too large.")
+        if update.get("logs") is not None:
+            out["logs"] = []
+            for log in update["logs"]:
+                if log.get("sealed"):
+                    out["logs"].append({"sequence": log["sequence"], "stream": log["stream"], "text": "", "sealed": log["sealed"]})
+                    continue
+                if len(log["text"]) > 4096:
+                    e2ee._fail("Log lines hold at most 4,096 characters.")
+                out["logs"].append({"sequence": log["sequence"], "stream": log["stream"], "text": "", "sealed": await seal({"text": log["text"]}, {"t": "log", "task": task, "seq": log["sequence"]})})
+        if update.get("error") is not None:
+            out["errorSealed"] = await seal({"error": update["error"]}, {"t": "result", "task": task})
+        return out
+
+    async def open_secret(self, message, field, env):
+        value = (await self._open(env, {"t": "secret", "message": message, "field": field}, self._identity)).get("value")
+        return value if isinstance(value, str) else e2ee._fail("Malformed secret.")
+
+    async def check_receiver(self, message, receiver):
+        """Accepts a claimed receiver's one-time key only when the account identity signed it."""
+        if not receiver.get("claimId") or not receiver.get("publicKey"):
+            return receiver
+        if not receiver.get("sig"):
+            e2ee._fail("The secret receiver is not signed by the account.")
+        s = await self.state()
+        e2ee.verify_receiver(receiver["sig"], s["identity"], message=message, claim_id=receiver["claimId"], public_key=receiver["publicKey"])
+        return receiver

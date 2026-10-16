@@ -5,6 +5,7 @@ import {
   profileName,
   readProfiles,
   readSaved,
+  savedToken,
   tokenPath,
 } from '@herald-run/cli/config';
 export const userAgent = `herald-mcp/${version}`;
@@ -21,7 +22,7 @@ export async function connect(env: Record<string, string | undefined>, home: str
   const apiKey =
     env.HERALD_API_KEY ||
     env.HERALD_TOKEN ||
-    (await readSaved(tokenPath(directory, profile, host))).token;
+    savedToken(await readSaved(tokenPath(directory, profile, host)));
   if (!apiKey)
     throw new Error(
       'Not signed in to Herald. Run `npx @herald-run/cli login` or set HERALD_API_KEY.',

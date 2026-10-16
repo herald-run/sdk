@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Herald, version } from '@herald-run/sdk';
+import { Herald, version, type Message } from '@herald-run/sdk';
+import * as e2ee from '@herald-run/sdk/e2ee';
+import contracts from '@herald-run/sdk/fixtures/contracts.json';
 import { main, type Io } from './main';
 let home = '';
 beforeEach(async () => {
@@ -160,7 +162,12 @@ it('shows token, account and server status', async () => {
   const whoami = await run(['whoami']);
   expect(whoami.out).toContain('Laptop (t1)');
   expect(whoami.out).toContain('Me <me@example.com>');
-  expect(JSON.parse((await run(['whoami', '--json'])).out)).toEqual({ token, account });
+  expect(whoami.out).toContain('End-to-end encryption: off');
+  expect(JSON.parse((await run(['whoami', '--json'])).out)).toEqual({
+    token,
+    account,
+    e2ee: { enabled: false },
+  });
   const status = await run(['status']);
   expect(status).toMatchObject({ code: 0, out: expect.stringContaining('1.2.3 (staging)') });
   expect(seen.some((s) => s.url.pathname === '/api/ping')).toBe(true);
@@ -263,4 +270,38 @@ it('keeps secret command failures to the fixed message', async () => {
   const result = await run(['send-secret', '--input', '/nonexistent', '--body', 'leak']);
   expect(result).toMatchObject({ code: 2, err: expect.stringContaining('Secret transfer failed') });
   expect(result.err).not.toContain('leak');
+});
+it('uses a stored keyed login: safety code, local search and encrypted secrets', async () => {
+  const { token, steps } = contracts.e2ee;
+  const body = (name: string) => steps.find((s) => s.name === name)!.response.body as Message;
+  const [auth, seed, fingerprint] = token.split('.');
+  const directory = join(home, '.config', 'herald');
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    join(directory, 'herald.test.json'),
+    JSON.stringify({ token: auth, seed, fingerprint }),
+  );
+  const form = body('send-secret-form');
+  const seen = server({
+    'GET /api/v1/keys': () => Response.json(body('keys')),
+    'GET /api/v1/token': () => Response.json({ name: 'Laptop', scopes: [], account: {} }),
+    'GET /api/v1/account': () => Response.json({ name: 'Me', email: 'me@example.com' }),
+    'GET /api/v1/messages': (s: Seen) =>
+      Response.json(s.url.searchParams.has('before') ? [] : [body('get'), body('get-locked')]),
+    'POST /api/v1/messages': () => Response.json(form),
+    [`POST /api/v1/messages/${form.id}/secrets`]: () => Response.json(body('collect-secrets')),
+  });
+  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue({ ...form, status: 'answered' } as never);
+  expect((await run(['whoami'], {})).out).toContain(
+    `End-to-end encryption: on (safety code ${e2ee.safetyCode(fingerprint)})`,
+  );
+  const found = JSON.parse((await run(['search', 'deploy v2', '--json'], {})).out);
+  expect(found.map((m: { title: string }) => m.title)).toEqual(['Deploy v2?']);
+  const out = join(home, 'secret.txt');
+  expect((await run(['request-secret', '--out', out], {})).code).toBe(0);
+  expect(await readFile(out, 'utf8')).toBe('test-only-token');
+  const sent = seen.find((s) => s.method === 'POST' && s.url.pathname === '/api/v1/messages');
+  expect(sent?.body).not.toHaveProperty('publicKey');
+  expect(seen.every((s) => s.headers.get('Authorization') === `Bearer ${auth}`)).toBe(true);
+  expect(seen.some((s) => s.url.search.includes('search'))).toBe(false);
 });

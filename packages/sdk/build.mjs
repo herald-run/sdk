@@ -1,11 +1,12 @@
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { stage } from './stage.mjs';
-// `schema` and `crypto` are browser-safe subpaths; shared code lands in chunk files.
+// `schema`, `crypto` and `e2ee` are browser-safe subpaths; shared code lands in chunk files.
 const entries = {
   index: 'src/index.ts',
   schema: 'src/schema/index.ts',
   crypto: 'src/schema/crypto.ts',
+  e2ee: 'src/e2ee/index.ts',
 };
 await build({
   entryPoints: entries,
