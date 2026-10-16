@@ -24,11 +24,10 @@ import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
 import { requestSecret, sendSecret, secretFailure } from './secrets';
 
-/** A keyed client's verified account safety code; undefined for legacy tokens. */
+/** The token's verified account safety code. */
 async function safetyCode(client: Herald) {
-  if (!client.keyed) return undefined;
   await client.keys();
-  return client.fingerprint;
+  return client.fingerprint!;
 }
 /** The server cannot search sealed content: filter up to five opened pages locally. */
 async function searchOpened(client: Herald, query: Parameters<Herald['messages']>[0] & object) {
@@ -170,7 +169,10 @@ export async function main(argv: string[], io: Io): Promise<number> {
     }
     const savedPath = tokenPath(directory, profile, host);
     const saved = await readSaved(savedPath);
-    const token = io.env.HERALD_API_KEY || io.env.HERALD_TOKEN || savedToken(saved) || '';
+    // Login and logout work from an outdated login; everything else needs a keyed token.
+    const keyless = ['login', 'logout'].includes(command);
+    const env = io.env.HERALD_API_KEY || io.env.HERALD_TOKEN;
+    const token = (keyless ? '' : env || savedToken(saved)) || '';
     const client = new Herald({ url: base, apiKey: token, userAgent });
     const arg = (index: number, name: string) => {
       const value = positionals[index];
@@ -226,7 +228,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             ? `Connected. Reusing the stored token for ${result.saved.name}.`
             : `Connected to ${host}${profile === 'default' ? '' : ` as profile ${profile}`}. The token is stored locally.`,
         );
-        if (result.saved.fingerprint) io.err(encryptionLine(result.saved.fingerprint));
+        io.err(encryptionLine(result.saved.fingerprint!));
         return 0;
       }
       case 'logout': {
@@ -235,7 +237,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
           return 0;
         }
         try {
-          await new Herald({ url: base, apiKey: saved.token, userAgent }).revokeToken();
+          if (!saved.seed) throw new Error('it has no end-to-end key');
+          await new Herald({ url: base, apiKey: savedToken(saved), userAgent }).revokeToken();
           io.err('Token revoked.');
         } catch (error) {
           if (!(error instanceof HeraldError && error.status === 401))
@@ -257,7 +260,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
         print([...lines, encryptionLine(fingerprint)].join('\n'), {
           token: info,
           account,
-          e2ee: { enabled: !!fingerprint, safetyCode: fingerprint && e2ee.safetyCode(fingerprint) },
+          e2ee: { enabled: true, safetyCode: e2ee.safetyCode(fingerprint) },
         });
         return 0;
       }
@@ -276,7 +279,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             info = await client.token();
             lines.push(`token    ${info.name} for ${info.account.email}`);
             const code = await safetyCode(client);
-            lines.push(`e2ee     ${code ? `on (safety code ${e2ee.safetyCode(code)})` : 'off'}`);
+            lines.push(`e2ee     on (safety code ${e2ee.safetyCode(code)})`);
           } catch (error) {
             problem = `token rejected: ${(error as Error).message}`;
           }
@@ -339,10 +342,9 @@ export async function main(argv: string[], io: Io): Promise<number> {
           before: values.before,
           after: integer(values.after, '--after'),
         };
-        const list =
-          client.keyed && query.search
-            ? await searchOpened(client, query)
-            : await client.messages(query);
+        const list = query.search
+          ? await searchOpened(client, query)
+          : await client.messages(query);
         print(list.map(format.messageLine).join('\n') || 'No messages.', list);
         return 0;
       }
@@ -376,8 +378,10 @@ export async function main(argv: string[], io: Io): Promise<number> {
       }
       case 'download': {
         const id = arg(1, '<file-id>');
-        // Opening the message teaches a keyed client its attachments' keys.
-        if (values.message) await client.get(values.message);
+        if (!values.message)
+          throw new UsageError('Usage: herald download <file-id> --message <id>');
+        // Opening the message teaches the client its attachments' keys.
+        await client.get(values.message);
         const file = await client.download(id);
         const name = [...file.name]
           .filter((c) => c >= ' ' && c !== '\x7f')

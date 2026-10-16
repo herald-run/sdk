@@ -6,8 +6,9 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 import { build } from 'esbuild';
-import { createKeys, seal, unseal } from '@herald-run/sdk/crypto';
-import type { Envelope } from '@herald-run/sdk/schema';
+import { createKeys, unseal } from '@herald-run/sdk/crypto';
+import type { Envelope, Message } from '@herald-run/sdk/schema';
+import * as sealed from '../../sdk/fixtures/sealed';
 const execute = promisify(execFile);
 const canary = 'test-only-secret-with-exact-spacing\n  second line\n';
 let folder: string, base: string, bundle: string;
@@ -15,7 +16,7 @@ let incoming: string[] = [],
   delivered: Envelope | undefined,
   failure = false;
 let receiver: Awaited<ReturnType<typeof createKeys>>;
-let requestKey: JsonWebKey;
+let request: Message;
 const server = createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
@@ -28,13 +29,15 @@ const server = createServer(async (req, res) => {
     return;
   }
   let result: unknown = {};
-  if (req.url === '/api/v1/messages' && req.method === 'POST') {
-    requestKey = input.publicKey;
-    result = { ...input, id: 'test-id', status: 'pending' };
-  } else if (req.url === '/api/v1/messages/test-id') result = { id: 'test-id', status: 'answered' };
-  else if (req.url?.endsWith('/secrets')) result = { secret: await seal(canary, requestKey) };
+  if (req.url === '/api/v1/keys') result = sealed.directory;
+  else if (req.url === '/api/v1/messages' && req.method === 'POST')
+    result = request = sealed.stored(input);
+  else if (req.url === `/api/v1/messages/${request?.id}`)
+    result = await sealed.sealedAnswer(request, {}, { secretFields: ['secret'] });
+  else if (req.url?.endsWith('/secrets'))
+    result = { secret: await sealed.sealedSecret(request.id, 'secret', canary) };
   else if (req.url?.endsWith('/secret-receiver'))
-    result = { claimId: crypto.randomUUID(), publicKey: receiver.publicKey };
+    result = await sealed.signedReceiver(request.id, receiver.publicKey);
   else if (req.url?.endsWith('/secret-delivery')) delivered = input.envelope;
   res.end(JSON.stringify(result));
 });
@@ -62,14 +65,14 @@ afterAll(async () => {
 });
 const cli = (...args: string[]) =>
   execute(process.execPath, [bundle, ...args], {
-    env: { ...process.env, HERALD_URL: base, HERALD_API_KEY: 'test-only-key' },
+    env: { ...process.env, HERALD_URL: base, HERALD_API_KEY: sealed.token },
   });
 it('requests directly into a new owner-only file without stdout/stderr/history plaintext', async () => {
   incoming = [];
   const path = join(folder, 'received');
   const parent = crypto.randomUUID();
   const result = await cli('request-secret', '--json', '--out', path, '--reply-to', parent);
-  expect(JSON.parse(incoming[0]).replyTo).toBe(parent);
+  expect(JSON.parse(incoming.find(Boolean)!).replyTo).toBe(parent);
   expect(await readFile(path, 'utf8')).toBe(canary);
   expect((await stat(path)).mode & 0o777).toBe(0o600);
   expect(JSON.parse(result.stdout).status).toBe('stored');
@@ -81,7 +84,7 @@ it('sends a file exactly as encrypted ciphertext without printing its value', as
   await writeFile(path, canary, { mode: 0o600 });
   const parent = crypto.randomUUID();
   const result = await cli('send-secret', '--json', '--input', path, '--reply-to', parent);
-  expect(JSON.parse(incoming[0]).replyTo).toBe(parent);
+  expect(JSON.parse(incoming.find(Boolean)!).replyTo).toBe(parent);
   expect(await unseal(delivered!, receiver.privateKey)).toBe(canary);
   expect(JSON.parse(result.stdout).status).toBe('delivered');
   expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
