@@ -1,0 +1,1013 @@
+{
+  "_comment": "Test-only keys and deterministic randomness. Each case lists its random draws in order.",
+  "now": "2026-01-01T00:00:00.000Z",
+  "canon": [
+    {
+      "value": {
+        "a": 1,
+        "Z": [true, false, null],
+        "é": "é",
+        "😀": 2,
+        "": 3,
+        "nested": {
+          "b": 0,
+          "a": 9007199254740991
+        }
+      },
+      "canon": "{\"Z\":[true,false,null],\"a\":1,\"nested\":{\"a\":9007199254740991,\"b\":0},\"é\":\"é\",\"😀\":2,\"\":3}"
+    },
+    {
+      "value": ["\u0000\u001f\b\t\n\f\r\"\\/", " ", "\ud800", "x\udc00y"],
+      "canon": "[\"\\u0000\\u001f\\b\\t\\n\\f\\r\\\"\\\\/\",\" \",\"\\ud800\",\"x\\udc00y\"]"
+    },
+    {
+      "value": [0.5, 1e-7, -1.25e-10, 123456.789, 0.000001, 0.000001234, 0, 100],
+      "canon": "[0.5,1e-7,-1.25e-10,123456.789,0.000001,0.000001234,0,100]"
+    },
+    {
+      "value": {},
+      "canon": "{}"
+    },
+    {
+      "value": [],
+      "canon": "[]"
+    }
+  ],
+  "hash": [
+    {
+      "label": "file",
+      "parts": [],
+      "digest": "X0mLZJjX4RHE8QJBH47h-sp3Mt5PULYVjVzHJu19YC4"
+    },
+    {
+      "label": "wrap",
+      "parts": ["cHJm", "AQID"],
+      "digest": "ZfNpIG52XxKrbMMOUXNsyE9FHaMXWPdQ7Dsl4WeI8NE"
+    }
+  ],
+  "hpke": [
+    {
+      "aead": 1,
+      "info": "4f6465206f6e2061204772656369616e2055726e",
+      "ikmE": "7268600d403fce431561aef583ee1613527cff655c1343f29812e66706df3234",
+      "ikmR": "6db9df30aa07dd42ee5e8181afdb977e538f5e1fec8a06223f33f7013e525037",
+      "pkR": "3948cfe0ad1ddb695d780e59077195da6c56506b027329794ab02bca80815c4d",
+      "aad": "436f756e742d30",
+      "pt": "4265617574792069732074727574682c20747275746820626561757479",
+      "enc": "37fda3567bdbd628e88668c3c8d7e97d1d1253b6d4ea6d44c150f741f1bf4431",
+      "ct": "f938558b5d72f1a23810b4be2ab4f84331acc02fc97babc53a52ae8218a355a96d8770ac83d07bea87e13c512a"
+    },
+    {
+      "aead": 2,
+      "info": "4f6465206f6e2061204772656369616e2055726e",
+      "ikmE": "7268600d403fce431561aef583ee1613527cff655c1343f29812e66706df3234",
+      "ikmR": "6db9df30aa07dd42ee5e8181afdb977e538f5e1fec8a06223f33f7013e525037",
+      "pkR": "3948cfe0ad1ddb695d780e59077195da6c56506b027329794ab02bca80815c4d",
+      "aad": "436f756e742d30",
+      "pt": "4265617574792069732074727574682c20747275746820626561757479",
+      "enc": "37fda3567bdbd628e88668c3c8d7e97d1d1253b6d4ea6d44c150f741f1bf4431",
+      "ct": "090b7dc225419f7da9e8b460becfbb96a26c7964d79b8010d397fa838530a32a397b14f5776db19ff5e57734e0"
+    }
+  ],
+  "keyring": {
+    "random": [
+      "4yPSRqUvbRwE3vh318jp0SQqAyXKyUIHzXAyPdXx2QM",
+      "9dlILehqEvqAtAbNNSxJ50yuMTFb1KCVxaiBT0P9rKg"
+    ],
+    "value": {
+      "v": 1,
+      "account": "acct-vectors",
+      "identity": "4yPSRqUvbRwE3vh318jp0SQqAyXKyUIHzXAyPdXx2QM",
+      "inbox": [
+        {
+          "seed": "9dlILehqEvqAtAbNNSxJ50yuMTFb1KCVxaiBT0P9rKg",
+          "created": "2026-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "signerKid": "B6kwnCOiRfHcwTyVM48W2Q",
+    "inboxKid": "jB8ewtaFv1sVOQSpn2Oaeg",
+    "fingerprint": "3yXUBxkvHdUxSfHWV3z6pw"
+  },
+  "keySets": [
+    {
+      "name": "integration",
+      "seed": "bPhr6TJTcdvT7UXH06WNkpgX_bNzlWJgNrIkPU1e_Dk",
+      "kid": "zvBQxct5ooE560WWTP5tBA",
+      "signPub": "HBpFs0EGLhEMU_6bqHi_5bIevIErkGoPaeQLHUMo62s",
+      "boxPub": "xqxzOfUq74UMWaLUMFQ8Q_QZgUzmsMxbz9o1z5X0Jio"
+    },
+    {
+      "name": "destination",
+      "seed": "rHTTxhBuLal79l1CxNLIfz5ptIvaFBSIJuvXkQ2zTFM",
+      "kid": "0v2usO2qinyR9omUpHrNLg",
+      "signPub": "45wFMOCHkWZ3ytLzEcZ5hpoD4dLgJmpVQUegaR3Tjco",
+      "boxPub": "qkpxmW94Cjw3bgY_EU-Ua0nbCmVoqwJjBEt8DiMGbVU"
+    },
+    {
+      "name": "outsider",
+      "seed": "yNKG42sV7OQ5232S1xTISC_49fFutOxGOEr9we3i6uU",
+      "kid": "9UVnXrksPxQ5FU1HOBYAPA",
+      "signPub": "sAm1F2U_lfVaUjfmbxEKTBBwNc-JE_uI3HXNSHlfK7k",
+      "boxPub": "VvaVQYxIBJzUICUiIk88Gjh70Cn1OtXF6V1NPjRpdyQ"
+    }
+  ],
+  "statement": {
+    "statement": {
+      "v": 1,
+      "account": "acct-vectors",
+      "identity": "Cm2g_sfnHyIlV30k1-q440Q0pcRHueE3ZJa3V9bOdB8",
+      "inbox": "fTYXpRefOFIKLhcAaQ8rJo-rdRPnF7YjigCKwFutrFQ",
+      "created": "2026-01-01T00:00:00.000Z"
+    },
+    "sig": "onNdydIljb0jKuboZWFbna6CRN4WJrYjU57Iga_zyG04HfRdzZvP3e7B7ENGPVp4WJNCvkVWlYDtrxtZiz5lBw"
+  },
+  "certificates": [
+    {
+      "name": "integration",
+      "certificate": {
+        "certificate": {
+          "v": 1,
+          "account": "acct-vectors",
+          "kid": "zvBQxct5ooE560WWTP5tBA",
+          "sign": "HBpFs0EGLhEMU_6bqHi_5bIevIErkGoPaeQLHUMo62s",
+          "box": "xqxzOfUq74UMWaLUMFQ8Q_QZgUzmsMxbz9o1z5X0Jio",
+          "created": "2026-01-01T00:00:00.000Z"
+        },
+        "sig": "CHF--cGPqw_ao8iTDXL1rmpXyyyHIefMbDZb2xi-upFsMTKqzwu19MPNYVxa8q8P55f2kVj8vbcf1l3ydVM3CA"
+      }
+    },
+    {
+      "name": "destination",
+      "certificate": {
+        "certificate": {
+          "v": 1,
+          "account": "acct-vectors",
+          "kid": "0v2usO2qinyR9omUpHrNLg",
+          "sign": "45wFMOCHkWZ3ytLzEcZ5hpoD4dLgJmpVQUegaR3Tjco",
+          "box": "qkpxmW94Cjw3bgY_EU-Ua0nbCmVoqwJjBEt8DiMGbVU",
+          "created": "2026-01-01T00:00:00.000Z"
+        },
+        "sig": "E1B2KSeJrqWcR8W--dsV6N7_E17AXTjdrf_48TxUKtR1KZjO_7TJBowp9kelsYPRozmYl5Ea8ijMsEFYRUczDA"
+      }
+    }
+  ],
+  "envelopes": [
+    {
+      "name": "message",
+      "signer": "integration",
+      "to": ["inbox", "integration"],
+      "ctx": {
+        "t": "message",
+        "account": "acct-vectors"
+      },
+      "payload": {
+        "title": "Deploy to production? ✓",
+        "body": "Ünïcode, emoji 🚀, numbers",
+        "kind": "message",
+        "fields": [
+          {
+            "id": "ratio",
+            "value": 0.25
+          },
+          {
+            "id": "tiny",
+            "value": 1e-7
+          }
+        ],
+        "blocks": [],
+        "actions": [
+          {
+            "id": "yes",
+            "label": "Yes"
+          }
+        ]
+      },
+      "random": [
+        "ILBLKg5qnvj8LPEObP2C1g",
+        "uEZb45279UZ-xHn5lox1LCYx07u_4FLJ1ecWqWmdDLI",
+        "VP0_eP669QU6eLId",
+        "FhkWRarvHJ5qX2-iB9M4nn9as_H_p_tOd_u4bHoK-os",
+        "9z0A_UiHeYLDWR0nz1mx02zReKzl7TFxAVM5fmlRXlc"
+      ],
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      }
+    },
+    {
+      "name": "response",
+      "signer": "account",
+      "to": ["inbox", "integration"],
+      "ctx": {
+        "t": "response",
+        "account": "acct-vectors",
+        "message": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+        "request": "95atFZ3YSdtmW6WT_RVq8SX1rzS8hYztWc4rtJww_NE"
+      },
+      "payload": {
+        "values": {
+          "ok": true
+        },
+        "actionId": "yes"
+      },
+      "random": [
+        "6GfRDo9sV16Hhgt2Me7-Vz2AsiEUI9YMngSYithytmI",
+        "frpOeeN8DO8xpK_7",
+        "SArWzTTubgrlFwpY_CrbM2xT3uk-g12HRtOJvP5yj9c",
+        "HWu45HzhYoqy8TvUHA8PIGVYQgJg4uF_Q1xQbbWa74A"
+      ],
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "response",
+          "account": "acct-vectors",
+          "message": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+          "request": "95atFZ3YSdtmW6WT_RVq8SX1rzS8hYztWc4rtJww_NE"
+        },
+        "from": "B6kwnCOiRfHcwTyVM48W2Q",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "8MWTLgXYcewEBCp1gQYqYTVMQKwgUN_wqbbVMt4xDX8",
+            "key": "fCvJO_Pa0RiJlcjp6MDENhSGPLtnKM8gmGdS6FmPO02Za7AX2XHmS-d-jhIrVjnP"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "amDzpBoLYcrtmnbZwdLmT-ml4CnhBi5Bk20dRswyDG4",
+            "key": "Wz0atgMvsGspvNTxDrZdd2J7XFRv3vFmWru3FTdyhBTt_WU3P5LKIn8ZBiPDKkIq"
+          }
+        ],
+        "iv": "frpOeeN8DO8xpK_7",
+        "ct": "gOgwMUT7qQKZ6yzjlIHx-Xf4e0hATJPNdtoOW0NE75ao1dppz1I5HsZAr23_9UCp4-2XB_rI0piLotb2Zg",
+        "sig": "ci4cXtcN6vv7LOF1F2xY-ug0iXo6ctjcbRKpEeMTuJGmaneIvxrNkum4CcikNURgOkwcbH5Frt1A-KKm0H7rBw"
+      }
+    },
+    {
+      "name": "task",
+      "signer": "account",
+      "to": ["inbox", "destination"],
+      "ctx": {
+        "t": "task",
+        "account": "acct-vectors",
+        "destination": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+        "type": "deploy"
+      },
+      "payload": {
+        "values": {
+          "branch": "main"
+        },
+        "session": null
+      },
+      "random": [
+        "YYYdFx4JDtFdpTHupTT0pmUG8l6ge2A4ccijAmwS5LQ",
+        "Q6xv9QTnNsJKFut0",
+        "3GM_D3VR29A18_SmlVsXHFKwo3Tb73WF4y4RB5eGCIw",
+        "QCrf4xq0nlZPMMPCvxKoI7G29dytuqitiumBHsd6f8I"
+      ],
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "task",
+          "account": "acct-vectors",
+          "destination": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+          "type": "deploy"
+        },
+        "from": "B6kwnCOiRfHcwTyVM48W2Q",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2gWsL8ncFKkPkMdHKIQlDf3NwxhvdFWekDMKipI07xA",
+            "key": "zfODQ3IGKD2krD5yd982-siZDOgE4HtuZ7ahSaAhCK9yhK4lRNC1rZlhezrD5nJS"
+          },
+          {
+            "kid": "0v2usO2qinyR9omUpHrNLg",
+            "enc": "MywHbEb3V0nUd9cI0tyTm5hYxi7Cbaagf8RVeeuMu1I",
+            "key": "3rzU7dG-7mqFNOnaob4PIClnElnBIuNzMxosNTjKovyaDNxhlN92lEO_piaMxCk_"
+          }
+        ],
+        "iv": "Q6xv9QTnNsJKFut0",
+        "ct": "smEO7lLUJjfHHmoBmobElx7q9jPbIiDEMiL4jTUzUy5vkvcysUmf4TOqiedLSaAk88EWvrBk_zUXnFTA5dtZnZQ",
+        "sig": "lprm3y6LskR-l_NiFO83jdQmRXT5MzdYBluFYACzbiQhxJ8SQ7KlvfbbHaFAGa90mdiFUci_tB32lpu0TM_eDg"
+      }
+    },
+    {
+      "name": "log",
+      "signer": "integration",
+      "to": ["inbox", "integration"],
+      "ctx": {
+        "t": "log",
+        "account": "acct-vectors",
+        "task": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+        "seq": 7
+      },
+      "payload": {
+        "text": "line one\nline two"
+      },
+      "random": [
+        "xWBQIl0WA50R_wcVUP3Mx4byAZKTA8UjF3rbQoo5MFQ",
+        "FT8FnsJaGRmQ9n3g",
+        "Wr68JvjNEoNGCcFNX2pnrzD3uDi5QX5yPzgRwuhg4d8",
+        "8pmLzL2GYwA1pn9iEztwiymazo1CyYFraCjfzuzsgf8"
+      ],
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "log",
+          "account": "acct-vectors",
+          "task": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+          "seq": 7
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "O3GRkP3V4-R-1MCE0QybE8AXBovyhbagAnoiiXsVNDg",
+            "key": "1xppVWbzZrO3tY_Cs9BYcojVOFfaJockCdnQNNxf_iQimGFx_3T3eOoi6jr7q65B"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "M4hWiK3t_ca200C67dlQmcGu2wAkxTh9iDgaQ4F5vEE",
+            "key": "hrE4ZOWpd4HAvxSqDkfpqBSwoZ1n5gwjyDJnOpTvk1KdcLwc-YeLI10u9Sn2iOEk"
+          }
+        ],
+        "iv": "FT8FnsJaGRmQ9n3g",
+        "ct": "CFWc8bnWQaIbFHzN0WPXf5YVKFvN70x37Oeq1YcIfg4BFoLfnZ0C5leYqf_zvWuc412g",
+        "sig": "kRyj4BMjCg2BhRjNtcG_caCf8xdWy-ItzhrolXNKGNVet1WUqM3zgXKwfUa0ifWr6dOIeuMqlb9zpcsNb78bCg"
+      }
+    },
+    {
+      "name": "result",
+      "signer": "integration",
+      "to": ["inbox", "integration"],
+      "ctx": {
+        "t": "result",
+        "account": "acct-vectors",
+        "task": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b"
+      },
+      "payload": {
+        "error": null
+      },
+      "random": [
+        "I4kJ61lspQYcBbefHPnlWnbCX2WuZxved01XdMFMR1c",
+        "4gsqjgERgQpV2M-D",
+        "ZBTKyDT0NyyKYas6MvduriFjss1y9yAHrj9qme513WI",
+        "gSfsv7kQvfi81-2vi4QhT5E-cBixyKxtYuCfkVMkxCI"
+      ],
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "result",
+          "account": "acct-vectors",
+          "task": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "PDXfwAaXto3HOs6bxKmIw5M2NDm4g-sW4IGmiK7VNlE",
+            "key": "IF8VKp101yosZSUPOItFHmxTbY1AzRQzej0fvinZupyQuUdA6DYFOXN_H2iLn6Y1"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "mTL7Cwxl6ke7pG5FIyHUB4bTPJLWdlh3dUtKjYeWeEg",
+            "key": "Y-BRKOMcknHEsct6nRdAthBfMLTNcTRoMKTN9YGRAqBKe2KAF_Mqji4KWnrYubrh"
+          }
+        ],
+        "iv": "4gsqjgERgQpV2M-D",
+        "ct": "PPjV2q85fJ5cpn_rwfi8wYRLM1ukn_tOBJBL5LWO1bIrx7U7",
+        "sig": "V0gI5NxnS-N8tTHy6HM9_YDKb9c2a4pw8tSsV4nBmZ986nErS9CmsoPMBgwM8fL8WpxCtY4iE7DKT35hYVyFCQ"
+      }
+    },
+    {
+      "name": "secret",
+      "signer": "account",
+      "to": ["integration"],
+      "ctx": {
+        "t": "secret",
+        "account": "acct-vectors",
+        "message": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+        "field": "password"
+      },
+      "payload": {
+        "value": "hunter2"
+      },
+      "random": [
+        "sL4-57746jmx96i3AhkNZHwSYsyOqW0bvdatkVH4K3Y",
+        "glFJYIxP2BQA33rT",
+        "Ti0b8Dhd_Ni-0K5yc8MLHFkDyOUuP0aiDtyDu7fBMHU"
+      ],
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "secret",
+          "account": "acct-vectors",
+          "message": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+          "field": "password"
+        },
+        "from": "B6kwnCOiRfHcwTyVM48W2Q",
+        "to": [
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "dIcDm4hxM6bC7l_jQmlmij9lwwEqJk9uorGlDZal4Gg",
+            "key": "Hp2ad3GsQE11xWRicdxkLaDF09yNojqTApzsGt1zKGQAnPnBza75UibP9vKxHrIn"
+          }
+        ],
+        "iv": "glFJYIxP2BQA33rT",
+        "ct": "CMI91-XuYtfKnYnUKeMqFf3xeGS5ZPsEM8_5QnOLjfUOVZNzZDsrw1Y",
+        "sig": "UZYyV_96IFx8FHtN9hZO41_3Wg35lHmeIOY70DDP9u2PInj-iHJmPt5NZFzS0D4nqb41DQL1NTZYSJxCG_PIAQ"
+      }
+    }
+  ],
+  "negative": [
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "tampered ct",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KWJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Bad signature"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "tampered iv",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "Vf0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Bad signature"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors"
+      },
+      "name": "tampered head",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "IbBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Bad signature"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "tampered sig",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmMqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Bad signature"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "swapped signer",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "B6kwnCOiRfHcwTyVM48W2Q",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Bad signature"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "tampered to entry",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fYdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Decryption failed"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "relabelled to entry",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Decryption failed"
+    },
+    {
+      "recipients": ["outsider"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "wrong recipient",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "No recipient entry"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-other",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "wrong account expected",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Context mismatch: account"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "log",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "wrong type expected",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Context mismatch: t"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account", "integration", "destination"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "unknown version",
+      "envelope": {
+        "v": 2,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Unsupported envelope version"
+    },
+    {
+      "recipients": ["inbox"],
+      "trusted": ["account"],
+      "expect": {
+        "t": "message",
+        "account": "acct-vectors",
+        "cid": "ILBLKg5qnvj8LPEObP2C1g"
+      },
+      "name": "untrusted signer",
+      "envelope": {
+        "v": 1,
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "cid": "ILBLKg5qnvj8LPEObP2C1g"
+        },
+        "from": "zvBQxct5ooE560WWTP5tBA",
+        "to": [
+          {
+            "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+            "enc": "2spbk0AzQ_24o_H8NvGGY7JKgruwlhzH9mcCoaIj3y8",
+            "key": "fIdRS5reS706ZaOj1fVcgDFF6h6spypr7YDPi4ZzDshPu1RMEAaxkVBeEP4Xvc7A"
+          },
+          {
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "enc": "EKWUWAvYL6W_lz6clOc39aHP2_NmCQ2pHR-ZmWffSVA",
+            "key": "DHaUBPZvoTNTc6gePfQI3mPaDGMSqj0YcxtxkgkPSf5Zw-fFu1AXmIyLcKkSIFgx"
+          }
+        ],
+        "iv": "VP0_eP669QU6eLId",
+        "ct": "KGJbHDOERCUVj4xWa_W32f5a5U0vRYaubdnXevapUTl37cvmpygq5SRZcNzpxzB-yhOvpO_Cys7Hx1gJCAQ89fyp7Un03X0cKtuTuyYOkcfapgdctP7R3ZJENVUqMkv27TBXaICn90i0e_YCGQYN1KQpG5y3q3Cv4q5fDrrUdq9763Pbuun9vy8SXJFwIDLobGPymmi7fs-uoLjWubZWtiGF44tydJhh_UGZar65SrFDB3mtL27l7I3z9itwccimEn7nW7EE2bNwiqoXVJ9jwWnemCwhaXFtkIi90YriqXsiszdFIvHx6QI",
+        "sig": "mbUaDpmNqmjRsntoWCN5PIlqvFG8OZarJ6K5zeiir2047SR3S29VjGxXVXNvE4PCvThF3vo2prwB6HfUhHctBg"
+      },
+      "error": "Untrusted signer"
+    }
+  ],
+  "grant": {
+    "envelope": "message",
+    "to": "destination",
+    "random": ["r6jLCsMS1JHnNjUos-9QL9R2SeZgGCiRMyvw9o0qoBQ"],
+    "recipient": {
+      "kid": "0v2usO2qinyR9omUpHrNLg",
+      "enc": "hjy7mTZaz-Nq5qLZ1-2AC8Kt9qozCRh_3LlkgF5TEwo",
+      "key": "DbFDruQzXXcKmp3ixqwt_eFJ_abVofjClFiGyKNy5AWi7EZZ8_vLAPWYFHuowjOK"
+    }
+  },
+  "idempotency": [
+    {
+      "name": "integration",
+      "payload": {
+        "title": "Deploy to production? ✓",
+        "body": "Ünïcode, emoji 🚀, numbers",
+        "kind": "message",
+        "fields": [
+          {
+            "id": "ratio",
+            "value": 0.25
+          },
+          {
+            "id": "tiny",
+            "value": 1e-7
+          }
+        ],
+        "blocks": [],
+        "actions": [
+          {
+            "id": "yes",
+            "label": "Yes"
+          }
+        ]
+      },
+      "digest": "EmlG-1ITslYDNpr-6WSdikBT8XHbjHbANE2jtEvyN_g"
+    }
+  ],
+  "files": [
+    {
+      "key": "5yQYxR0UU5oeIIZp_P8im5N37VnQ29Gd9FWBG5uEsgM",
+      "size": 0,
+      "random": ["7g7oz97hCg"],
+      "sha256": "7d3e2a3106d4ba06b43c80bef3bdd2d13daab60cc35f825b22500190df46d279",
+      "sealed": "7g7oz97hCkz1Iqu_dOtmZ3bCW_IWhEg"
+    },
+    {
+      "key": "dJkz2CtRDoQdji0YXZ422q_ODa9wF7eubgoIdxCFxcU",
+      "size": 100,
+      "random": ["1eQ8fJwDHA"],
+      "sha256": "4a2f3a894e45367e7df21fdfc532859fc48120c2d500f3d59dff21a4ba8e4e48",
+      "sealed": "1eQ8fJwDHJsYIdAlukk0uyG8QmyIVqmcHXC5bxBZYoaJtpfORtEO0vu4FoGwJbiqFRK54ZSbZwDJxF2p4ejV7Og5THbQIOC5vlkEbVSGsip_SxOzH5LXuAm_Mb-PhfqUB3c1bH-feLqMyLjw1L5IemXboVjwoZG-l-Eq"
+    },
+    {
+      "key": "yK_IGDnUMUwtOXkm7xqgLYxUdAjAsBTRaQOpwOe2_Ok",
+      "size": 65537,
+      "random": ["PZ7St1N_TQ"],
+      "sha256": "963dce1d05d2e449c34ed706d1f5dc00aecdab0c86999a847b2d2570fb4c7ffa"
+    }
+  ],
+  "recovery": {
+    "random": ["pwbB8Y8HaqMIK0BrNJXs99ciBwq5ilLWNGo5ZR7wFJE"],
+    "text": "MW3C-3WCF-0XNA-621B-81NK-95FC-YZBJ-41RA-Q655-5NHM-D8WP-A7QG-2J8G"
+  },
+  "backups": [
+    {
+      "kind": "prf",
+      "secret": "v2W7spmvWPtsl3_CZU0YSZeHKOfZkSjnVJ-m-RFCWa8",
+      "wrapped": {
+        "v": 1,
+        "kind": "prf",
+        "credentialId": "Y3JlZGVudGlhbC1pZA",
+        "iv": "tv8PNyXA-EIvvHUj",
+        "ct": "zqM5wShI0lE_o7Foq9KdNjggkS97coh42zkHBF8ifTHtUqC21EvTQR7VLktmpx48JeebbXe5PdPiv7iweJGnkONpOMHEiOY3xfxOn71Y4F9WUY-UN07VX7XZAZxhR2ua4h3HAAHyscYd22u6yuQbrt-Ij2V8SXgo0Fg92Qb4k6-gJo2bzzdScmDvv4kZdxDIX2WPHr7KFIG2-vMKU4f88OrUnIDTrv45VELVg167QN4XJf10rnal037OMUtkNer1KkCjohm95ytxoVANBCx5"
+      },
+      "random": ["tv8PNyXA-EIvvHUj"]
+    },
+    {
+      "kind": "recovery",
+      "secret": "pwbB8Y8HaqMIK0BrNJXs99ciBwq5ilLWNGo5ZR7wFJE",
+      "wrapped": {
+        "v": 1,
+        "kind": "recovery",
+        "iv": "GH38dbL_YMqK6T2I",
+        "ct": "CzFDFNmAUJEjiVi6gbML87WYdymsplHt9KcRPtUuFsrtxiu6g12dxPLS6ZKP570CP5J_xYJKT7O4eGlzDR3Xuy5Rr-YHW6kkzquUwWSGFKHQOyxY82uOfHXHuA2CKjdwogeOYph6M71WrmADBlkIi7U13eTvb73z5g1zwmpRET4BRTXw7RGQkPs9b0-YHkwNnB5B14P4aVnLzArq-txAwKv6Bop_BdfLqzo1KOAuqxCeYf3MDdpIfzj6Xv-ga7vUrYkInb9V6NxkKzv__h6r"
+      },
+      "random": ["GH38dbL_YMqK6T2I"]
+    }
+  ],
+  "approval": {
+    "transfer": {
+      "seed": "WxnOqJ-3fqvlyS7-YkYt4WHdIb5_4sKcLvZ2x_601jA",
+      "kid": "t3dHO3sNXMgGj4EmjSKJxw",
+      "boxPub": "AKTwMs2oEV6VTWJMJqkxhGTqp6X-oEEBOko3tE6Dk1g"
+    },
+    "deviceNonce": "Q94-wpgJSZADVGtu3c6IbBXCO92DHAeTZX2Yqq7HxsU",
+    "approverNonce": "SV8plzB_9r_uGN_ppXs2g7vRXc9CWJAxcSCbp8JncCY",
+    "commit": "m0PCOlxMnCVmy5-hW7yN0HUMlK7gvjOfHyVZ9Xe5XhE",
+    "code": "0482",
+    "device": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+    "random": [
+      "lmEE9_DarL9mOrOulyXqQggGvF0N0PBICmrNAjknYwg",
+      "79ADB189J3JdDBmk",
+      "TaCpdvEQpDq39M6oiOSGZWMIR2XyV7l1ELrnyuuXGgg"
+    ],
+    "envelope": {
+      "v": 1,
+      "ctx": {
+        "t": "keyring",
+        "account": "acct-vectors",
+        "device": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b"
+      },
+      "from": "B6kwnCOiRfHcwTyVM48W2Q",
+      "to": [
+        {
+          "kid": "t3dHO3sNXMgGj4EmjSKJxw",
+          "enc": "_gbjdTJR1lJpKMb818K6Q1OM0a9N4KncLfGH9jr86WI",
+          "key": "0EKKLSDWhaVy8rEHM2cyQlgnFNdKmyvKuAT5iD-ERgN26F8zAQakZGqUYe-6hkiX"
+        }
+      ],
+      "iv": "79ADB189J3JdDBmk",
+      "ct": "vXKpZo13h_dOtzR_ku76W8ioi57omawtVG2kS0GVXKPLi1vrTcJVDNlLpAX7yV-zpZqqKZ4El3SLWs7AWbOl1Uo-bUx_-zSgwEaxwiOy0fFntodZ_5CaaGsazkCTkCqBoaf1S4s8YCcgFtTi8MiHZsUJhJrGKtgEa9goB6XqIRyxhfGsdkkMAIvgqlIWnZzxVK9Fo2f7HRazFESpX9jbz-9DrouevBSmzXFCxjbQO1KLEht4Q2ijxljY6BWKC5sND-0ESi3zRraE0Nxu4evB",
+      "sig": "izPR721De5nauDPYXu3Q_MojQBzwqFYz5HhT5qDHnodWEQHybt97PP-m4QcbEev-ewNEym2NeFVDbAFsw4KXDw"
+    }
+  },
+  "receiver": {
+    "claim": {
+      "message": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+      "claimId": "claim-1",
+      "publicKey": {
+        "kty": "RSA",
+        "e": "AQAB",
+        "n": "sGVy",
+        "ext": true,
+        "key_ops": ["encrypt"]
+      }
+    },
+    "sig": "2Fj8M7ax-g4FOcvoRxEEBK3PFpy-R-39rn37ZBiz9Sr5vvJ0OQKTLpD4y3bRNezafVEE-zuVj3T32DqXDkDyDA"
+  },
+  "tokens": [
+    {
+      "token": "hdr_test-only.bPhr6TJTcdvT7UXH06WNkpgX_bNzlWJgNrIkPU1e_Dk.3yXUBxkvHdUxSfHWV3z6pw",
+      "parsed": {
+        "auth": "hdr_test-only",
+        "seed": "bPhr6TJTcdvT7UXH06WNkpgX_bNzlWJgNrIkPU1e_Dk",
+        "fingerprint": "3yXUBxkvHdUxSfHWV3z6pw"
+      }
+    },
+    {
+      "token": "hdr_legacy-only",
+      "parsed": {
+        "auth": "hdr_legacy-only"
+      }
+    }
+  ]
+}
