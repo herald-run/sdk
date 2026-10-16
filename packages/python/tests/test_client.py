@@ -5,8 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 from pydantic import BaseModel
-from herald import ActionAnswer, Herald, HeraldError, LiveSocket, Message, Tombstone, backoff
+from herald import ActionAnswer, Herald, HeraldError, LiveSocket, Message, Tombstone, backoff, e2ee
 from websockets.exceptions import InvalidStatus
+from fixtures import keyed
 
 
 class Approval(BaseModel):
@@ -16,10 +17,6 @@ class Approval(BaseModel):
 
 def message(status="pending", **extra):
     return Message(id="one", title="Request", status=status, **extra)
-
-
-def mock(handle):
-    return Herald(api_key="test-only", url="https://herald.test", transport=httpx.MockTransport(handle))
 
 
 class FakeSocket:
@@ -79,7 +76,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             if request.url.path == "/api/v1/files" and request.method == "POST":
                 return httpx.Response(201, json={"id": "reserved", "name": "private", "size": 7, "type": "text/plain"})
             return httpx.Response(307, headers={"Location": "https://other.example/collect"}, json={"id": "not-success"})
-        async with mock(handle) as client:
+        async with keyed(handle) as client:
             with self.assertRaises(HeraldError) as caught:
                 await client.send(title="Private", idempotency_key="stable")
             self.assertEqual(caught.exception.status, 307)
@@ -90,6 +87,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_thread_history_follows_pages(self):
         async with Herald() as client:
+            client._open = AsyncMock(side_effect=lambda m, task=False: m)
             client.request = AsyncMock(side_effect=[
                 {"messages": [{"id": "root", "title": "Root", "status": "answered"}], "next": 1},
                 {"messages": [{"id": "reply", "title": "Reply", "status": "pending", "replyTo": "root"}]},
@@ -102,6 +100,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_feed_parses_tombstones_and_future_values(self):
         page = [{"id": "gone", "revision": 4, "deleted": True}, {"id": "new", "title": "New", "status": "archived", "revision": 5, "execution": {"logs": [{"sequence": 0, "stream": "trace", "text": "hi"}]}}]
         async with Herald() as client:
+            client._open = AsyncMock(side_effect=lambda m, task=False: m)
             client.request = AsyncMock(return_value=page)
             gone, new = await client.messages(after=3, tombstones=1)
             client.request.assert_awaited_once_with("/messages?after=3&tombstones=1")
@@ -117,7 +116,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
                 raise httpx.ConnectError("Connection lost", request=request)
             return httpx.Response(201, json={"id": "one", "title": "Hello", "status": "pending"})
         with patch("herald.client.asyncio.sleep", new_callable=AsyncMock):
-            async with mock(handle) as client:
+            async with keyed(handle) as client:
                 self.assertEqual((await client.send(title="Hello", idempotency_key="stable")).id, "one")
         self.assertEqual(len(requests), 2)
         self.assertEqual(requests[0].content, requests[1].content)
@@ -127,11 +126,11 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         replies = [httpx.Response(429, headers={"Retry-After": "2"}, json={"error": "Slow down."}), httpx.Response(200, json={"id": "t", "title": "Run", "status": "failed"})]
         sleep = AsyncMock()
         with patch("herald.client.asyncio.sleep", sleep):
-            async with mock(lambda _: replies.pop(0)) as client:
+            async with keyed(lambda _: replies.pop(0)) as client:
                 self.assertEqual((await client.update_task("t", lease="l", status="failed")).status, "failed")
         sleep.assert_awaited_once_with(2)
         replies[:] = [httpx.Response(429, headers={"Retry-After": "120"}, json={"error": "Slow down."})]
-        async with mock(lambda _: replies.pop(0)) as client:
+        async with keyed(lambda _: replies.pop(0)) as client:
             with self.assertRaises(HeraldError) as caught:
                 await client.update_task("t", lease="l", status="failed")
         self.assertEqual((caught.exception.status, caught.exception.retry_after), (429, 120))
@@ -141,46 +140,49 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         def handle(request):
             calls.append(request)
             return httpx.Response(502, text="<html>Bad gateway</html>", headers={"Content-Type": "text/html"})
-        async with mock(handle) as client:
+        async with keyed(handle) as client:
             with self.assertRaises(HeraldError) as caught:
                 await client.cancel("m")
         self.assertEqual((str(caught.exception), caught.exception.status, len(calls)), ("Herald request failed (502).", 502, 1))
 
     async def test_checks_content_type_before_parsing(self):
         replies = [httpx.Response(200, text="<html>Portal</html>", headers={"Content-Type": "text/html"}), httpx.Response(204)]
-        async with mock(lambda _: replies.pop(0)) as client:
+        async with keyed(lambda _: replies.pop(0)) as client:
             with self.assertRaises(HeraldError):
                 await client.request("/messages")
             self.assertIsNone(await client.request("/messages/m", method="DELETE"))
 
-    async def test_upload_streams_with_an_idle_timeout_and_attaches(self):
-        bodies, sent = [], []
+    async def test_upload_seals_with_an_idle_timeout_and_attaches(self):
+        file_id = "00000000-0000-4000-8000-000000000001"
+        bodies, posts = [], []
         async def handle(request):
-            if request.url.path.endswith("/messages"):
-                sent.append(json.loads(await request.aread()))
-                return httpx.Response(201, json={"id": "m", "title": "Log", "status": "delivered"})
             if request.method == "POST":
-                return httpx.Response(201, json={"id": "f", "name": "log", "size": 6, "type": "text/plain", "owner": "internal"})
+                posts.append(json.loads(await request.aread()))
+                if request.url.path.endswith("/messages"):
+                    return httpx.Response(201, json={"id": "m", "title": "Log", "status": "delivered"})
+                return httpx.Response(201, json={**posts[-1], "id": file_id, "owner": "internal"})
             bodies.append((request.headers["Content-Length"], await request.aread()))
             return httpx.Response(200, json={"ok": True})
         async def source():
             yield b"abc"
             yield b"def"
-        async with mock(handle) as client:
-            file = await client.upload("log", source(), "text/plain", size=6)
-            self.assertEqual(file.wire(), {"id": "f", "name": "log", "size": 6, "type": "text/plain"})
-            self.assertEqual(bodies, [("6", b"abcdef")])
+        async with keyed(handle) as client:
+            file = await client.upload("log", source(), "text/plain")
+            self.assertEqual({**file.wire(), "key": None}, {"id": file_id, "name": "log", "size": 6, "type": "text/plain", "key": None})
+            size = e2ee.sealed_size(6)
+            self.assertEqual(posts[0], {"name": "encrypted", "type": "application/octet-stream", "size": size})
+            self.assertEqual(bodies[0][0], str(size))
+            self.assertEqual(b"".join(e2ee.open_file(file.key, bodies[0][1])), b"abcdef")
             await client.send(title="Log", kind="files", attachments=[file])
-            self.assertEqual(sent[0]["attachments"], [file.wire()])
+            self.assertEqual(posts[1]["attachments"], [{"id": file_id}])
+            self.assertNotIn("log", json.dumps({k: v for k, v in posts[1].items() if k != "sealed"}))
             async def stalled():
                 yield b"abc"
                 await asyncio.sleep(1)
                 yield b"def"
             with self.assertRaises(HeraldError) as caught:
-                await client.upload("log", stalled(), "text/plain", size=6, idle_timeout=0.05)
+                await client.upload("log", stalled(), "text/plain", idle_timeout=0.05)
             self.assertEqual(caught.exception.status, 408)
-            with self.assertRaises(ValueError):
-                await client.upload("log", stalled(), "text/plain")
 
     async def test_pydantic_schema_and_typed_response(self):
         async with Herald() as client:

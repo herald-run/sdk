@@ -8,6 +8,7 @@ from pathlib import Path
 
 import httpx
 from herald import Herald, HeraldError, SyncHerald, __version__, create_keys, seal, unseal, verify_webhook
+from fixtures import keyed
 
 VECTORS = json.loads((Path(__file__).parents[2] / "sdk/fixtures/crypto-vectors.json").read_text())
 
@@ -70,15 +71,11 @@ class EndpointTests(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(200, json={"id": "t", "name": "CI", "scopes": ["messages:send"], "createdAt": "x", "lastUsedAt": None, "account": {"email": "a@example.com", "name": "A"}})
             if route == ("DELETE", "/api/v1/token"):
                 return httpx.Response(204)
-            if route == ("GET", "/api/v1/files/f1"):
-                return httpx.Response(200, content=b"bytes", headers={"Content-Disposition": "attachment; filename*=UTF-8''..%2Fr%C3%A9port.txt"})
             return httpx.Response(404, json={"error": "Not found."})
 
         async with mock(handle) as client:
             self.assertEqual((await client.ping()).channel, "staging")
             self.assertEqual((await client.token()).account.email, "a@example.com")
-            download = await client.download("f1")
-            self.assertEqual((download.name, download.data), ("réport.txt", b"bytes"))
             await client.revoke_token()
         self.assertIn(("DELETE", "/api/v1/token", None), seen)
 
@@ -92,7 +89,7 @@ class SyncTests(unittest.TestCase):
                 return httpx.Response(200, json={**page, "next": 1} if after == "0" else page)
             return httpx.Response(201, json={"id": "m", "title": "Hi", "status": "delivered"})
 
-        with mock(handle, SyncHerald) as client:
+        with keyed(handle, SyncHerald) as client:
             self.assertEqual(client.send(title="Hi").id, "m")
             self.assertEqual([m.id for m in client.thread_messages("m")], ["a0", "a1"])
             self.assertTrue(client.url.startswith("https://"))

@@ -2,7 +2,7 @@ import asyncio
 import os
 import re
 import uuid
-from urllib.parse import quote, unquote, urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 from pydantic import BaseModel
@@ -10,13 +10,13 @@ from websockets.asyncio.client import connect
 
 from ._version import __version__
 from . import e2ee
-from .crypto import unseal
 from .http import HeraldError, chunks, idle_body, parse_retry_after, raise_error, read_json, retry_delay, retryable
 from .keyed import KeyedSession
 from .live import LiveSocket
 from .models import Account, ActionAnswer, Attachment, CreatedIntegration, Destination, Envelope, FileDownload, Integration, Lease, Message, Ping, SecretReceiver, TaskClaim, TaskLog, ThreadPage, TokenInfo, Tombstone
 
 RETRIES = 2
+UNKEYED = "This token has no end-to-end key. Create a new token in Herald (Settings → Connections) or run herald login."
 # Seconds between HTTP checks while the live socket is quiet or down.
 POLL = 30
 FINAL = ("answered", "expired", "cancelled")
@@ -31,14 +31,6 @@ class OriginConnection(connect):
 
 def path(value):
     return quote(value, safe="")
-
-
-def file_name(header):
-    """The file name from `Content-Disposition`, without any directory part."""
-    encoded = re.search(r"filename\*=UTF-8''([^;]+)", header or "", re.I)
-    plain = re.search(r'filename="([^"]*)"', header or "", re.I)
-    name = unquote(encoded[1]) if encoded else plain[1] if plain else ""
-    return re.split(r"[\\/]", name)[-1]
 
 
 def wire(value):
@@ -61,12 +53,14 @@ class Herald:
         if origin.username or origin.password or origin.query or origin.fragment or origin.path not in ("", "/"):
             raise ValueError("Use a server URL without credentials, path, query or fragment.")
         token = (api_key or os.getenv("HERALD_API_KEY") or os.getenv("HERALD_TOKEN", "")).strip()
-        # A keyed token (`hdr_<auth>.<seed>.<fingerprint>`) seals content; only `hdr_<auth>` is sent.
-        # Anything shaped like one is parsed, so a malformed keyed token fails instead of leaking.
+        # Connection tokens are `hdr_<auth>.<seed>.<fingerprint>`; only `hdr_<auth>` is sent.
+        # Human session tokens carry no key and reach only account, key and connection routes.
         keyed = token.startswith("hdr_") or re.search(r"\.[\w-]{43}\.[\w-]{22}$", token, re.ASCII)
-        parsed = e2ee.parse_token(token) if keyed and "." in token else {"auth": token}
+        parsed = e2ee.parse_token(token) if keyed else {"auth": token}
+        if keyed and "seed" not in parsed:
+            raise e2ee.E2eeError(UNKEYED)
         self.key = parsed["auth"]
-        self.keyed = KeyedSession(parsed["seed"], parsed["fingerprint"], lambda: self.request("/keys")) if "seed" in parsed else None
+        self._keyed = KeyedSession(parsed["seed"], parsed["fingerprint"], lambda: self.request("/keys")) if "seed" in parsed else None
         # Longest server Retry-After, in seconds, that a request waits out before failing.
         self.max_retry_after = max_retry_after
         # `transport` replaces the network, e.g. with `httpx.MockTransport` in tests.
@@ -136,20 +130,27 @@ class Herald:
 
     @property
     def fingerprint(self):
-        """The account safety code a keyed token is pinned to; None for legacy tokens."""
-        return self.keyed and self.keyed.fingerprint
+        """The account safety code the token is pinned to."""
+        return self._keyed and self._keyed.fingerprint
+
+    @property
+    def _keys(self):
+        """Content is end-to-end encrypted, so content calls need a connection token's key."""
+        if not self._keyed:
+            raise e2ee.E2eeError(UNKEYED)
+        return self._keyed
 
     async def _open(self, record, task=False):
-        return await self.keyed.open_record(record, task) if self.keyed else record
+        return await self._keys.open_record(record, task)
 
     async def open_task(self, task):
-        """Opens a task record received elsewhere, such as in a webhook delivery. Keyed clients flag a task without sealed input as `unverified`."""
+        """Opens a task record received elsewhere, such as in a webhook delivery; one without sealed input is `unverified`."""
         return Message.model_validate(await self._open(wire(task), True))
 
     async def send(self, *, idempotency_key=None, **message):
-        """Keyed clients validate and seal the content, secret offers included."""
+        """Validates and seals the content, secret offers included."""
         idempotency_key = idempotency_key or str(uuid.uuid4())
-        body = await self.keyed.seal_message(wire(message), idempotency_key) if self.keyed else message
+        body = await self._keys.seal_message(wire(message), idempotency_key)
         return Message.model_validate(await self._open(await self.request("/messages", body, idempotency_key=idempotency_key)))
 
     async def get(self, message_id):
@@ -157,7 +158,7 @@ class Herald:
 
     async def messages(self, **query):
         """One page of the revision feed (`after=`, with `Tombstone`s for `tombstones=1`), or
-        messages matching `status`/`direction`."""
+        messages matching `status`/`direction`. `search` matches sender names only."""
         search = urlencode({key: value for key, value in query.items() if value is not None})
         page = await self.request("/messages" + ("?" + search if search else ""))
         return [Tombstone.model_validate(m) if m.get("deleted") is True else Message.model_validate(await self._open(m)) for m in page]
@@ -178,22 +179,25 @@ class Herald:
 
     async def cancel(self, message_id):
         """Cancels a pending request this integration sent."""
+        self._keys
         return Message.model_validate(await self._open(await self.request("/messages/" + path(message_id) + "/cancel", {})))
 
     async def task_logs(self, message_id, *, after=None):
         """A task's retained log lines after `after` (a sequence number)."""
         query = "" if after is None else "?after=" + str(int(after))
         page = await self.request(f"/messages/{path(message_id)}/logs{query}")
-        logs = await self.keyed.open_logs(message_id, page["logs"], lambda: self.request("/messages/" + path(message_id))) if self.keyed else page["logs"]
+        logs = await self._keys.open_logs(message_id, page["logs"], lambda: self.request("/messages/" + path(message_id)))
         return [TaskLog.model_validate(log) for log in logs]
 
     async def download(self, file):
-        """An attachment's name and bytes, from its ID or attachment. Keyed clients decrypt files
-        whose key they hold, from an upload or an opened message."""
+        """An attachment's name and decrypted bytes, from its ID or attachment; the key comes from
+        an upload or an opened message."""
         given = {} if isinstance(file, str) else {k: v for k, v in wire(file).items() if v is not None}
         file_id = file if isinstance(file, str) else given["id"]
-        known = {**(self.keyed.files.get(file_id, {}) if self.keyed else {}), **given}
+        known = {**self._keys.files.get(file_id, {}), **given}
         key = known.get("key")
+        if not key:
+            raise e2ee.E2eeError("Download a file through an attachment of an opened message.")
         response = await self._fetch("/api/v1/files/" + path(file_id), stream=True)
         try:
             if response.is_error:
@@ -202,12 +206,7 @@ class Herald:
             data = await response.aread()
         finally:
             await response.aclose()
-        name = file_name(response.headers.get("Content-Disposition")) or file_id
-        if key:
-            return FileDownload(name=known["name"], type=known["type"], data=b"".join(e2ee.open_file(key, data)))
-        if self.keyed and name == "encrypted":
-            raise e2ee.E2eeError("This file is end-to-end encrypted; download it through its attachment.")
-        return FileDownload(name=name, type=response.headers.get("Content-Type", "application/octet-stream"), data=data)
+        return FileDownload(name=known["name"], type=known["type"], data=b"".join(e2ee.open_file(key, data)))
 
     async def register(self, **destination):
         """Creates a destination, or updates the one registered with the same `key`."""
@@ -229,6 +228,7 @@ class Herald:
 
     async def claim_task(self, task_id, *, runner_id, heartbeat=False):
         """`heartbeat=True` asks for a lease that lapses unless renewed with `heartbeat_task`."""
+        self._keys
         claim = await self.request(f"/tasks/{path(task_id)}/claim", {"runnerId": runner_id, "heartbeat": heartbeat})
         return TaskClaim.model_validate({**claim, "task": await self._open(claim["task"], True)})
 
@@ -236,11 +236,9 @@ class Herald:
         return Lease.model_validate(await self.request(f"/tasks/{path(task_id)}/heartbeat", {"lease": lease}))
 
     async def update_task(self, task_id, *, lease=None, status=None, error=None, logs=None, idempotency_key=None, retry=True):
-        """Reports logs and/or the outcome; keyed log batches retry safely."""
+        """Reports logs and/or the outcome, both sealed; log batches retry safely."""
         update = {"lease": lease, "status": status, "error": error, "logs": logs}
-        body = wire({key: value for key, value in update.items() if value is not None})
-        if self.keyed:
-            body = await self.keyed.seal_update(task_id, body)
+        body = await self._keys.seal_update(task_id, wire({key: value for key, value in update.items() if value is not None}))
         return Message.model_validate(await self._open(await self.request(f"/tasks/{path(task_id)}/update", body, idempotency_key=idempotency_key, retry=retry), True))
 
     async def collect_secrets(self, message_id):
@@ -249,26 +247,21 @@ class Herald:
         # End-to-end envelopes (sealed to a keyed client) stay dicts.
         return {field: envelope if "ct" in envelope else Envelope.model_validate(envelope) for field, envelope in envelopes.items()}
 
-    async def reveal_secrets(self, message_id, private_key=None):
-        """`collect_secrets`, decrypted: end-to-end envelopes with this client's key, others with the
-        private JWK whose public key the request carried."""
-        values = {}
+    async def reveal_secrets(self, message_id):
+        """`collect_secrets`, decrypted with this client's key."""
+        keys, values = self._keys, {}
         for field, envelope in (await self.collect_secrets(message_id)).items():
-            if isinstance(envelope, dict):
-                if not self.keyed:
-                    raise e2ee.E2eeError("Use a keyed token to open end-to-end secrets.")
-                values[field] = await self.keyed.open_secret(message_id, field, envelope)
-            elif private_key is None:
-                raise ValueError("Pass the private key for this secret.")
-            else:
-                values[field] = unseal(envelope, private_key)
+            if not isinstance(envelope, dict):
+                raise e2ee.E2eeError("This secret is not end-to-end encrypted.")
+            values[field] = await keys.open_secret(message_id, field, envelope)
         return values
 
     async def secret_receiver(self, message_id):
         """For a `kind="secret"` offer: the receiver's claim and public key once a device claims it.
-        Keyed clients accept only a key the account identity signed."""
+        Only a key the account identity signed is accepted."""
+        keys = self._keys
         receiver = await self.request(f"/messages/{path(message_id)}/secret-receiver")
-        return SecretReceiver.model_validate(await self.keyed.check_receiver(message_id, receiver) if self.keyed else receiver)
+        return SecretReceiver.model_validate(await keys.check_receiver(message_id, receiver))
 
     async def deliver_secret(self, message_id, *, claim_id, envelope):
         """Deposits the value sealed to the claimed receiver's key; repeating the same deposit is safe."""
@@ -278,15 +271,15 @@ class Herald:
         """Human sessions only: the account's connections."""
         return [Integration.model_validate(i) for i in await self.request("/integrations")]
 
-    async def create_integration(self, *, name, scopes, certificate=None):
+    async def create_integration(self, *, name, scopes, certificate):
         """Human sessions only; the token is returned once. Not retried, so it never creates two.
         `certificate` certifies the connection's end-to-end key."""
-        body = {"name": name, "scopes": scopes, **({"certificate": certificate} if certificate else {})}
+        body = {"name": name, "scopes": scopes, "certificate": certificate}
         return CreatedIntegration.model_validate(await self.request("/integrations", body))
 
     async def keys(self):
-        """The account statement and integration certificates; keyed clients return them verified."""
-        return (await self.keyed.state())["directory"] if self.keyed else await self.request("/keys")
+        """The account statement and integration certificates; a connection token returns them verified."""
+        return (await self._keyed.state())["directory"] if self._keyed else await self.request("/keys")
 
     async def device_certificate(self, user_code):
         """Human sessions only: the certificate an owner approved for a device login, once."""
@@ -385,27 +378,17 @@ class Herald:
             self.live.unsubscribe(event)
 
     async def upload(self, name, data, content_type="application/octet-stream", *, size=None, idle_timeout=60):
-        """Reserves and uploads bytes or an async iterable of bytes (pass `size`); aborts only
-        after `idle_timeout` seconds without progress."""
-        key = None
-        if self.keyed:
-            # Keyed uploads are encrypted in memory; the server sees only the sealed size.
-            plain = bytes(data) if isinstance(data, (bytes, bytearray)) else b"".join([bytes(c) async for c in data])
-            key, size = e2ee.file_key(), len(plain)
-            data = b"".join(e2ee.seal_file(key, plain))
-        if isinstance(data, (bytes, bytearray)):
-            size = len(data) if key is None else size
-            sealed_size, data = len(data), chunks(data)
-        else:
-            sealed_size = size
-        if not isinstance(size, int) or size < 0:
-            raise ValueError("Pass the byte size for streamed uploads.")
-        reserve = {"name": "encrypted", "type": "application/octet-stream", "size": sealed_size} if key else {"name": name, "type": content_type, "size": size}
+        """Encrypts (in memory), reserves and uploads bytes or an async iterable of bytes; aborts
+        after `idle_timeout` seconds without progress. The server sees only the sealed size, so
+        `size` is unused."""
+        keys = self._keys
+        plain = bytes(data) if isinstance(data, (bytes, bytearray)) else b"".join([bytes(c) async for c in idle_body(data, idle_timeout)])
+        key, size = e2ee.file_key(), len(plain)
+        sealed = b"".join(e2ee.seal_file(key, plain))
+        reserve = {"name": "encrypted", "type": "application/octet-stream", "size": len(sealed)}
         file = Attachment.model_validate(await self.request("/files", reserve))
-        response = await self.http.put(self.url + "/api/v1/files/" + path(file.id), content=idle_body(data, idle_timeout), headers={"Content-Length": str(sealed_size)}, timeout=idle_timeout)
+        response = await self.http.put(self.url + "/api/v1/files/" + path(file.id), content=idle_body(chunks(sealed), idle_timeout), headers={"Content-Length": str(len(sealed))}, timeout=idle_timeout)
         if not response.is_success:
             raise_error(response, "File upload failed.")
-        if key is None:
-            return Attachment(id=file.id, name=file.name, size=file.size, type=file.type)
-        self.keyed.files[file.id] = {"id": file.id, "name": name, "type": content_type, "size": size, "key": key}
+        keys.files[file.id] = {"id": file.id, "name": name, "type": content_type, "size": size, "key": key}
         return Attachment(id=file.id, name=name, size=size, type=content_type, key=key)
