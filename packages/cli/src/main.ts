@@ -3,6 +3,7 @@ import { readFile, stat, unlink } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { parseArgs } from 'node:util';
+import * as e2ee from '@herald-run/sdk/e2ee';
 import {
   Herald,
   HeraldError,
@@ -20,7 +21,7 @@ import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
 import { integrate, type Run } from './integrate';
 import { listen } from './listen';
-import { encryptionLine, login, safetyGroups, userAgent } from './login';
+import { encryptionLine, login, userAgent } from './login';
 import { requestSecret, sendSecret, secretFailure } from './secrets';
 
 /** A keyed client's verified account safety code; undefined for legacy tokens. */
@@ -256,7 +257,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
         print([...lines, encryptionLine(fingerprint)].join('\n'), {
           token: info,
           account,
-          e2ee: { enabled: !!fingerprint, safetyCode: fingerprint },
+          e2ee: { enabled: !!fingerprint, safetyCode: fingerprint && e2ee.safetyCode(fingerprint) },
         });
         return 0;
       }
@@ -275,7 +276,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             info = await client.token();
             lines.push(`token    ${info.name} for ${info.account.email}`);
             const code = await safetyCode(client);
-            lines.push(`e2ee     ${code ? `on (safety code ${safetyGroups(code)})` : 'off'}`);
+            lines.push(`e2ee     ${code ? `on (safety code ${e2ee.safetyCode(code)})` : 'off'}`);
           } catch (error) {
             problem = `token rejected: ${(error as Error).message}`;
           }

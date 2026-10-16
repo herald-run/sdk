@@ -16,6 +16,9 @@ it('opens every committed vector', async () => {
   const v = committed;
   const keys = await e2ee.keyringKeys(v.keyring.value);
   expect([keys.signerKid, keys.inboxKid]).toEqual([v.keyring.signerKid, v.keyring.inboxKid]);
+  expect(e2ee.safetyCode(v.keyring.fingerprint)).toBe(v.keyring.safetyCode);
+  expect(v.keyring.safetyCode).toMatch(/^\d{5}( \d{5}){5}$/);
+  expect(e2ee.safetyCode('AAAAAAAAAAAAAAAAAAAAAA')).toBe('00000 00000 00000 00000 00000 00000');
   const info = await e2ee.verifyAccount(
     v.statement,
     v.keyring.fingerprint,

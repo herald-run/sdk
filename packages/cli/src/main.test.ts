@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Herald, version, type Message } from '@herald-run/sdk';
+import * as e2ee from '@herald-run/sdk/e2ee';
 import contracts from '@herald-run/sdk/fixtures/contracts.json';
 import { main, type Io } from './main';
 let home = '';
@@ -292,7 +293,7 @@ it('uses a stored keyed login: safety code, local search and encrypted secrets',
   });
   vi.spyOn(Herald.prototype, 'wait').mockResolvedValue({ ...form, status: 'answered' } as never);
   expect((await run(['whoami'], {})).out).toContain(
-    `End-to-end encryption: on (safety code ${fingerprint.match(/.{1,4}/g)!.join(' ')})`,
+    `End-to-end encryption: on (safety code ${e2ee.safetyCode(fingerprint)})`,
   );
   const found = JSON.parse((await run(['search', 'deploy v2', '--json'], {})).out);
   expect(found.map((m: { title: string }) => m.title)).toEqual(['Deploy v2?']);

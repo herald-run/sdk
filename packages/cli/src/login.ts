@@ -13,10 +13,8 @@ export type Saved = {
   seed?: string;
   fingerprint?: string;
 };
-/** Four-character groups, as the app shows the safety code. */
-export const safetyGroups = (code: string) => code.match(/.{1,4}/g)?.join(' ') ?? '';
 export const encryptionLine = (fingerprint?: string) =>
-  `End-to-end encryption: ${fingerprint ? `on (safety code ${safetyGroups(fingerprint)})` : 'off'}`;
+  `End-to-end encryption: ${fingerprint ? `on (safety code ${e2ee.safetyCode(fingerprint)})` : 'off'}`;
 export const userAgent = `herald-cli/${version}`;
 export type LoginIo = {
   log: (line: string) => void;
@@ -118,15 +116,17 @@ type Keyed = { seed: string; fingerprint: string; certificate: e2ee.Certificate 
  * otherwise.
  */
 async function confirmSafetyCode(fingerprint: string, io: LoginIo, given?: string) {
+  const code = e2ee.safetyCode(fingerprint);
   if (given !== undefined) {
-    if (given.replace(/\s+/g, '') === fingerprint) return;
+    // Digits only, whitespace ignored.
+    if (given.replace(/\s+/g, '') === code.replace(/ /g, '')) return;
     throw new Error('The safety code does not match this account. Nothing was stored.');
   }
   if (!io.ask)
     throw new Error(
       'This account uses end-to-end encryption. Run herald login --safety-code "<code>" with the safety code shown on the approval page or in Settings.',
     );
-  io.log(`Account safety code: ${safetyGroups(fingerprint)}`);
+  io.log(`Account safety code: ${code}`);
   const answer = await io.ask('Does this match the safety code on the approval page? [y/N] ');
   if (!/^y(es)?$/i.test(answer.trim()))
     throw new Error('The safety code was not confirmed. Nothing was stored.');

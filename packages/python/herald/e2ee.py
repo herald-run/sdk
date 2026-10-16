@@ -187,8 +187,14 @@ def _kid(*parts):
 
 
 def fingerprint(identity_sign_pub) -> str:
-    """The account safety code: `b64u(H("fp", identitySignPub)[0:16])`."""
+    """The account fingerprint: `b64u(H("fp", identitySignPub)[0:16])`; tokens pin it."""
     return b64u_encode(H("fp", _bytes(identity_sign_pub, 32))[:16])
+
+
+def safety_code(fp: str) -> str:
+    """The safety code people compare: the fingerprint as a big-endian integer mod 10^30, in 6 groups of 5 digits."""
+    digits = str(int.from_bytes(_bytes(fp, 16), "big") % 10**30).zfill(30)
+    return " ".join(digits[i : i + 5] for i in range(0, 30, 5))
 
 
 @dataclass(frozen=True)

@@ -358,6 +358,7 @@ export async function generateVectors() {
         signerKid: keys.signerKid,
         inboxKid: keys.inboxKid,
         fingerprint,
+        safetyCode: e2ee.safetyCode(fingerprint),
       },
       keySets,
       statement,

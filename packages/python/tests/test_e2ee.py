@@ -89,6 +89,8 @@ class KeyTests(unittest.TestCase):
             self.assertEqual(e2ee.create_keyring(ACCOUNT), V["keyring"]["value"])
         self.assertEqual((S.keys.signer_kid, S.keys.inbox_kid), (V["keyring"]["signerKid"], V["keyring"]["inboxKid"]))
         self.assertEqual(e2ee.fingerprint(S.keys.identity.sign_pub), V["keyring"]["fingerprint"])
+        self.assertEqual(e2ee.safety_code(V["keyring"]["fingerprint"]), V["keyring"]["safetyCode"])
+        self.assertEqual(e2ee.safety_code("A" * 22), "00000 00000 00000 00000 00000 00000")
         self.assertEqual(e2ee.account_statement(V["keyring"]["value"]), V["statement"])
         with draws([]):
             for c in V["certificates"]:

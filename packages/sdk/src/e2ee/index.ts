@@ -2,7 +2,7 @@
 export { b64u, E2eeError, type Bytes } from './bytes';
 export { canon } from './canon';
 export { H } from './hash';
-export { fingerprint, keySet, type KeySet } from './keys';
+export { fingerprint, keySet, safetyCode, type KeySet } from './keys';
 export {
   envelopeDigest,
   grant,

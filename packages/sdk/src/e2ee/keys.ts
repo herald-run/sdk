@@ -49,9 +49,14 @@ export async function verify(pub: Uint8Array | string, sig: string, message: Uin
 /** `b64u(H("kid", ...parts)[0:16])`. */
 export const kid = async (...parts: Uint8Array[]) =>
   b64u.encode((await H('kid', ...parts)).slice(0, 16));
-/** The account safety code: `b64u(H("fp", identitySignPub)[0:16])`. */
+/** The account fingerprint: `b64u(H("fp", identitySignPub)[0:16])`; tokens pin it. */
 export const fingerprint = async (identitySignPub: Uint8Array | string) =>
   b64u.encode((await H('fp', bytesOf(identitySignPub, 32))).slice(0, 16));
+/** The safety code people compare: the fingerprint as a big-endian integer mod 10^30, in 6 groups of 5 digits. */
+export function safetyCode(fp: string): string {
+  const n = bytesOf(fp, 16).reduce((acc, byte) => (acc << 8n) | BigInt(byte), 0n);
+  return (n % 10n ** 30n).toString().padStart(30, '0').match(/.{5}/g)!.join(' ');
+}
 /** Public parts are base64url; `signPriv` and `boxPriv` are WebCrypto keys. */
 export interface KeySet {
   seed: string;

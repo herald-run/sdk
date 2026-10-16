@@ -86,7 +86,7 @@ const describe: Record<string, string> = {
   name: '--name NAME        Connection name (default: Herald CLI (<host>))',
   scopes: '--scopes LIST      all, or comma-separated scopes',
   'no-browser': '--no-browser       Print the approval link only',
-  'safety-code': '--safety-code CODE Expected account safety code (end-to-end encryption)',
+  'safety-code': '--safety-code CODE Expected 30-digit account safety code (end-to-end encryption)',
   search: '--search TEXT',
   status: '--status STATUS    pending, answered, expired, cancelled, ...',
   direction: '--direction DIR    inbound or outbound',
