@@ -2,13 +2,27 @@ import { afterEach, expect, it } from 'vitest';
 import { mkdtemp, writeFile, readFile, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Herald, HeraldError } from '@herald-run/sdk';
+import { HeraldError } from '@herald-run/sdk';
 import type { Message } from '@herald-run/sdk/schema';
+import { keyedClient } from '../../sdk/fixtures/client';
+import { opened, sealedTask } from '../../sdk/fixtures/sealed';
 import { listen } from './listen';
 const folders: string[] = [];
-// A real client whose HTTP and watch are stubbed, so its task and destination methods are exercised.
-const fake = (stubs: object) =>
-  Object.assign(new Herald({ url: 'https://herald.test', apiKey: 'test-only' }), stubs);
+// A real keyed client whose HTTP and watch are stubbed, so its task methods seal and open.
+const fake = async (stubs: object) => Object.assign(await keyedClient(), stubs);
+/** A claim of the task at `path`, sealed by the owner. */
+const claimed = async (path: string, destinationId: string, record: Partial<Message> = {}) => ({
+  lease: 'lease',
+  task: await sealedTask(
+    { values: record.response?.values, session: record.session, attachments: record.attachments },
+    { ...record, id: path.split('/')[2], destinationId },
+  ),
+});
+/** Task IDs by readable name. */
+const ids = (...names: string[]) =>
+  Object.fromEntries(names.map((n) => [n, crypto.randomUUID()])) as Record<string, string>;
+const named = (by: Record<string, string>, values: Record<string, string>) =>
+  Object.fromEntries(Object.entries(by).map(([n, id]) => [n, values[id]]));
 afterEach(async () => {
   for (const folder of folders.splice(0)) await rm(folder, { recursive: true, force: true });
 });
@@ -35,13 +49,14 @@ it('persists completion and retries a lost outcome without rerunning the executa
   let reportFailed = false;
   const claimedElsewhere = crypto.randomUUID();
   let consume: ((message: Message) => Promise<void>) | undefined;
-  const client = fake({
+  let message = {} as Message;
+  const client = await fake({
     async request(path: string, body: unknown) {
       requests.push({ path, body });
       if (path === '/destinations') return [{ id: destinationId }];
       if (path === `/tasks/${claimedElsewhere}/claim`)
         throw new HeraldError('Already claimed', 409);
-      if (path.endsWith('/claim')) return { lease: 'lease' };
+      if (path.endsWith('/claim')) return claimed(path, destinationId, message);
       if ((body as { status?: string })?.status === 'completed' && !reportFailed) {
         reportFailed = true;
         throw new TypeError('Connection lost');
@@ -56,11 +71,12 @@ it('persists completion and retries a lost outcome without rerunning the executa
   const run = listen(client, config, 'test', folder, controller.signal);
   for (let i = 0; i < 100 && !consume; i++) await new Promise((r) => setTimeout(r, 10));
   expect(consume).toBeDefined();
-  const message = {
+  const key = 'k'.repeat(43);
+  message = {
     title: 'Task',
     body: '',
     fields: [],
-    attachments: [{ id: 'sample-file', name: 'brief.txt', type: 'text/plain', size: 4 }],
+    attachments: [{ id: crypto.randomUUID(), name: 'brief.txt', type: 'text/plain', size: 4, key }],
     session: {
       prompt: 'literal $(do-not-run)',
       modes: { permission: 'ask' },
@@ -86,7 +102,7 @@ it('persists completion and retries a lost outcome without rerunning the executa
       secretFields: [],
       createdAt: new Date().toISOString(),
     },
-  } as Message;
+  } as unknown as Message;
   try {
     await expect(consume!(message)).rejects.toThrow('Connection lost');
     await consume!(message);
@@ -124,24 +140,25 @@ it('retries rate-limited log batches with a stable key and never fails a task ov
     }),
   );
   const logPosts: Array<{ id: string; key?: string; sequence: number }> = [];
+  const task = ids('limited', 'broken', 'broken-again');
   const statuses: Record<string, string> = {};
   let consume: ((message: Message) => Promise<void>) | undefined;
-  const client = fake({
+  const client = await fake({
     async request(
       path: string,
       body: Record<string, unknown>,
       options?: { idempotencyKey?: string },
     ) {
       if (path === '/destinations') return [{ id: destinationId }];
-      if (path.endsWith('/claim')) return { lease: 'lease' };
+      if (path.endsWith('/claim')) return claimed(path, destinationId);
       const id = path.split('/')[2];
       if (body.logs) {
         const sequence = (body.logs as Array<{ sequence: number }>)[0].sequence;
         logPosts.push({ id, key: options?.idempotencyKey, sequence });
         // 'limited' is rate limited once; 'broken*' never get their logs through.
-        if (id === 'limited' && logPosts.filter((p) => p.id === id).length === 1)
+        if (id === task.limited && logPosts.filter((p) => p.id === id).length === 1)
           throw new HeraldError('Rate limited.', 429, undefined, 0);
-        if (id.startsWith('broken')) throw new HeraldError('Unavailable.', 503, undefined, 0);
+        if (id !== task.limited) throw new HeraldError('Unavailable.', 503, undefined, 0);
         return {};
       }
       statuses[id] = body.status as string;
@@ -155,28 +172,28 @@ it('retries rate-limited log batches with a stable key and never fails a task ov
   const controller = new AbortController();
   const run = listen(client, config, 'test', folder, controller.signal);
   for (let i = 0; i < 100 && !consume; i++) await new Promise((r) => setTimeout(r, 10));
-  const task = (id: string) =>
+  const queued = (id: string) =>
     ({ id, direction: 'outbound', destinationId, status: 'queued', revision: 1 }) as Message;
   try {
-    await consume!(task('limited'));
-    await consume!(task('broken'));
-    await consume!(task('broken-again'));
+    await consume!(queued(task.limited));
+    await consume!(queued(task.broken));
+    await consume!(queued(task['broken-again']));
   } finally {
     controller.abort();
     await run;
   }
-  expect(statuses).toEqual({
+  expect(named(task, statuses)).toEqual({
     limited: 'completed',
     broken: 'completed',
     'broken-again': 'completed',
   });
-  const limited = logPosts.filter((p) => p.id === 'limited');
+  const limited = logPosts.filter((p) => p.id === task.limited);
   expect(limited).toHaveLength(2);
-  expect(limited[0].key).toBe('limited:logs:0');
+  expect(limited[0].key).toBe(`${task.limited}:logs:0`);
   expect(limited[1].key).toBe(limited[0].key);
-  expect(logPosts.filter((p) => p.id === 'broken')).toHaveLength(5);
+  expect(logPosts.filter((p) => p.id === task.broken)).toHaveLength(5);
   // Once delivery has failed, later batches try once instead of stalling the queue.
-  expect(logPosts.filter((p) => p.id === 'broken-again')).toHaveLength(1);
+  expect(logPosts.filter((p) => p.id === task['broken-again'])).toHaveLength(1);
 });
 it.each([
   ['stops a task whose lapsing lease was lost', '2026-01-01T00:05:00Z'],
@@ -196,13 +213,14 @@ it.each([
     }),
   );
   const paths: string[] = [];
-  const reports: unknown[] = [];
+  const reports: Array<Record<string, unknown>> = [];
   let consume: ((message: Message) => Promise<void>) | undefined;
-  const client = fake({
+  const client = await fake({
     async request(path: string, body: Record<string, unknown>) {
       paths.push(path);
       if (path === '/destinations') return [{ id: destinationId }];
-      if (path.endsWith('/claim')) return { lease: 'lease', leaseExpiresAt };
+      if (path.endsWith('/claim'))
+        return { ...(await claimed(path, destinationId)), leaseExpiresAt };
       if (path.endsWith('/heartbeat')) throw new HeraldError('Task is not running.', 409);
       if (body.status) reports.push(body);
       return {};
@@ -216,14 +234,18 @@ it.each([
   const run = listen(client, config, 'test', folder, controller.signal, 50);
   for (let i = 0; i < 100 && !consume; i++) await new Promise((r) => setTimeout(r, 10));
   try {
-    await consume!({ id: 't', direction: 'outbound', destinationId, status: 'queued' } as Message);
+    const id = crypto.randomUUID();
+    await consume!({ id, direction: 'outbound', destinationId, status: 'queued' } as Message);
   } finally {
     controller.abort();
     await run;
   }
   expect(paths.find((p) => p.endsWith('/claim'))).toBeDefined();
   if (leaseExpiresAt) {
-    expect(reports).toEqual([{ lease: 'lease', status: 'failed', error: 'Task lease was lost.' }]);
+    expect(reports).toEqual([{ lease: 'lease', status: 'failed', errorSealed: expect.anything() }]);
+    expect(await opened(reports[0].errorSealed as never)).toMatchObject({
+      error: 'Task lease was lost.',
+    });
   } else {
     expect(paths.some((p) => p.endsWith('/heartbeat'))).toBe(false);
     expect(reports).toEqual([{ lease: 'lease', status: 'completed' }]);
@@ -245,11 +267,12 @@ it.each([
     JSON.stringify({ destinationId, command: process.execPath, args: ['-e', script], cwd: folder }),
   );
   const statuses: Record<string, string> = {};
+  const task = ids('a', 'b', 'c');
   let consume: ((message: Message) => Promise<void>) | undefined;
-  const client = fake({
+  const client = await fake({
     async request(path: string, body: Record<string, unknown>) {
       if (path === '/destinations') return [{ id: destinationId }];
-      if (path.endsWith('/claim')) return { lease: 'lease' };
+      if (path.endsWith('/claim')) return claimed(path, destinationId);
       if (body.status) statuses[path.split('/')[2]] = body.status as string;
       return {};
     },
@@ -262,7 +285,7 @@ it.each([
   const run = listen(client, config, 'test', folder, controller.signal, 60000, concurrency);
   for (let i = 0; i < 100 && !consume; i++) await new Promise((r) => setTimeout(r, 10));
   try {
-    for (const [i, id] of ['a', 'b', 'c'].entries())
+    for (const [i, id] of Object.values(task).entries())
       await consume!({
         id,
         direction: 'outbound',
@@ -276,7 +299,7 @@ it.each([
     controller.abort();
     await run;
   }
-  expect(statuses).toEqual({ a: 'completed', b: 'completed', c: 'completed' });
+  expect(named(task, statuses)).toEqual({ a: 'completed', b: 'completed', c: 'completed' });
   const counts = (await readFile(log, 'utf8')).trim().split('\n').map(Number);
   expect(Math.max(...counts)).toBe(expected);
   const journal = (await readdir(join(folder, 'runners'))).find((f) => f.endsWith('.json'))!;
@@ -287,17 +310,18 @@ it('keeps the cursor before a running task while later tasks finish', async () =
   folders.push(folder);
   const config = join(folder, 'runner.json'),
     destinationId = crypto.randomUUID();
-  const script = `setTimeout(()=>{},process.env.HERALD_TASK_ID==='slow'?800:0)`;
+  const task = ids('slow', 'fast');
+  const script = `setTimeout(()=>{},process.env.HERALD_TASK_ID==='${task.slow}'?800:0)`;
   await writeFile(
     config,
     JSON.stringify({ destinationId, command: process.execPath, args: ['-e', script], cwd: folder }),
   );
   const statuses: Record<string, string> = {};
   let consume: ((message: Message) => Promise<void>) | undefined;
-  const client = fake({
+  const client = await fake({
     async request(path: string, body: Record<string, unknown>) {
       if (path === '/destinations') return [{ id: destinationId }];
-      if (path.endsWith('/claim')) return { lease: 'lease' };
+      if (path.endsWith('/claim')) return claimed(path, destinationId);
       if (body.status) statuses[path.split('/')[2]] = body.status as string;
       return {};
     },
@@ -318,7 +342,7 @@ it('keeps the cursor before a running task while later tasks finish', async () =
   };
   await until(() => !!consume);
   try {
-    for (const [i, id] of ['slow', 'fast'].entries())
+    for (const [i, id] of Object.values(task).entries())
       await consume!({
         id,
         direction: 'outbound',
@@ -326,15 +350,15 @@ it('keeps the cursor before a running task while later tasks finish', async () =
         status: 'queued',
         revision: i + 1,
       } as Message);
-    await until(() => !!statuses.fast);
-    expect(statuses.slow).toBeUndefined();
+    await until(() => !!statuses[task.fast]);
+    expect(statuses[task.slow]).toBeUndefined();
     expect(await cursor()).toBe(0);
-    await until(() => !!statuses.slow);
+    await until(() => !!statuses[task.slow]);
   } finally {
     controller.abort();
     await run;
   }
-  expect(statuses).toEqual({ slow: 'completed', fast: 'completed' });
+  expect(named(task, statuses)).toEqual({ slow: 'completed', fast: 'completed' });
   expect(await cursor()).toBe(2);
 });
 it('resolves the destination from the --target key when the config omits it', async () => {
@@ -344,7 +368,7 @@ it('resolves the destination from the --target key when the config omits it', as
     destinationId = crypto.randomUUID();
   await writeFile(config, JSON.stringify({ command: process.execPath, cwd: folder }));
   let watching = false;
-  const client = fake({
+  const client = await fake({
     async request(path: string) {
       if (path === '/destinations') return [{ id: destinationId, key: 'laptop' }];
       return {};

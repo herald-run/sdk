@@ -15,36 +15,17 @@ import { b64u, keyringKeys, open, openFile, parseToken, sealedSize } from './e2e
 import { Herald, HeraldError } from './index';
 afterEach(() => vi.restoreAllMocks());
 type Args = { body: never; key?: string; id: string };
-/** Every SDK step of the shared contract fixtures, as this client makes it. */
+/** Every SDK step of the shared contract fixtures without content, as this client makes it. */
 const calls: Record<string, (h: Herald, a: Args) => Promise<unknown>> = {
   register: (h, a) => h.register(a.body),
   destinations: (h) => h.destinations(),
   'update-destination': (h, a) => h.updateDestination(a.id, a.body),
-  upload: (h) => h.upload('notes.txt', new TextEncoder().encode('hello'), 'text/plain'),
-  send: (h, a) => h.send(a.body, a.key),
-  get: (h, a) => h.get(a.id),
-  thread: (h, a) => h.thread(a.id, 0),
-  messages: (h) => h.messages({ after: 0 }),
   'get-missing': (h, a) => h.get(a.id),
-  'send-secret-form': (h, a) => h.send(a.body, a.key),
-  'collect-secrets': (h, a) => h.collectSecrets(a.id),
-  download: async (h, a) => new TextDecoder().decode(await (await h.download(a.id)).bytes()),
-  'read-task-logs': async (h, a) => ({ logs: await h.taskLogs(a.id) }),
   'rotate-secret': (h, a) => h.rotateDestinationSecret(a.id),
   account: (h) => h.account(),
-  'offer-secret': (h, a) => h.send(a.body, a.key),
-  'secret-receiver': (h, a) => h.secretReceiver(a.id),
-  'deliver-secret': (h, a) => h.deliverSecret(a.id, a.body),
-  cancel: (h, a) => h.cancel(a.id),
-  'claim-task': (h, a) => h.claimTask(a.id, a.body),
-  'heartbeat-task': (h, a) => h.heartbeatTask(a.id, (a.body as { lease: string }).lease),
-  'task-logs': (h, a) => h.updateTask(a.id, a.body, { idempotencyKey: a.key }),
-  'complete-task': (h, a) => h.updateTask(a.id, a.body),
-  'delete-destination': (h, a) => h.deleteDestination(a.id),
-  'create-integration': (h, a) => h.createIntegration(a.body),
-  integrations: (h) => h.integrations(),
-  'delete-integration': (h, a) => h.deleteIntegration(a.id),
   keys: (h) => h.keys(),
+  'delete-destination': (h, a) => h.deleteDestination(a.id),
+  integrations: (h) => h.integrations(),
 };
 /** Answers fetches with the step's replies, recording each request. */
 function serve(replies: Reply[], auth = 'Bearer test-only') {

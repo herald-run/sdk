@@ -17,7 +17,6 @@ import type {
   TaskLog,
   ThreadPage,
 } from './schema/index.js';
-import { unseal } from './schema/crypto.js';
 import { E2eeError, fileKey, openFile, parseToken, sealedSize, sealFile } from './e2ee/index.js';
 import { KeyedSession, type FileAttachment, type OpenedLog } from './keyed.js';
 import { HeraldError, parseRetryAfter, readError, readJson, retryDelay, sleep } from './http.js';
@@ -113,7 +112,7 @@ export type SecretReceiver = {
   claimId?: string;
   publicKey?: JsonWebKey;
   received?: boolean;
-  /** The account identity's signature over the claim, checked by keyed clients. */
+  /** The account identity's signature over the claim, checked by the client. */
   sig?: string;
 };
 export function duration(value: number | string): number {
@@ -125,18 +124,9 @@ export function duration(value: number | string): number {
   return seconds;
 }
 const RETRIES = 2;
+const UNKEYED =
+  'This token has no end-to-end key. Create a new token in Herald (Settings → Connections) or run herald login.';
 const path = (id: string) => encodeURIComponent(id);
-/** The file name from `Content-Disposition`, without any directory part. */
-function fileName(header: string | null): string | undefined {
-  const encoded = header?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  let name = header?.match(/filename="([^"]*)"/i)?.[1];
-  try {
-    if (encoded) name = decodeURIComponent(encoded);
-  } catch {
-    /* Keep the plain filename. */
-  }
-  return name?.split(/[\\/]/).pop() || undefined;
-}
 export class Herald {
   readonly base: string;
   readonly apiKey: string;
@@ -167,31 +157,34 @@ export class Herald {
       process.env.HERALD_TOKEN ||
       ''
     ).trim();
-    // End-to-end tokens (`hdr_<auth>.<seed>.<fingerprint>`): only `hdr_<auth>` leaves the process.
-    // Anything shaped like one is parsed, so a malformed keyed token fails instead of leaking.
+    // Connection tokens are `hdr_<auth>.<seed>.<fingerprint>`; only `hdr_<auth>` leaves the process.
+    // Human session tokens carry no key and reach only account, key and connection routes.
     const keyed = token.startsWith('hdr_') || /\.[\w-]{43}\.[\w-]{22}$/.test(token);
-    const parsed = keyed && token.includes('.') ? parseToken(token) : undefined;
+    const parsed = keyed ? parseToken(token) : undefined;
+    if (parsed && !parsed.seed) throw new E2eeError(UNKEYED);
     this.apiKey = parsed?.auth ?? token;
     if (parsed?.seed)
       this.#keyed = new KeyedSession(parsed.seed, parsed.fingerprint!, () => this.request('/keys'));
     this.maxRetryAfter = options.maxRetryAfter ?? 60;
     this.userAgent = options.userAgent || `herald-sdk-ts/${version}`;
   }
-  /** True for an end-to-end token: content is sealed and opened locally, never sent in plaintext. */
-  get keyed(): boolean {
-    return !!this.#keyed;
-  }
-  /** The account safety code a keyed token is pinned to. */
+  /** The account safety code the token is pinned to. */
   get fingerprint(): string | undefined {
     return this.#keyed?.fingerprint;
   }
-  #open = <M extends Message>(m: M): Promise<M> =>
-    this.#keyed ? this.#keyed.openRecord(m) : Promise.resolve(m);
-  #openTask = <M extends Message>(m: M): Promise<M> =>
-    this.#keyed ? this.#keyed.openRecord(m, { task: true }) : Promise.resolve(m);
+  /** Content is end-to-end encrypted, so content calls need a connection token's key. */
+  get #keys(): KeyedSession {
+    if (!this.#keyed) throw new E2eeError(UNKEYED);
+    return this.#keyed;
+  }
+  // Tombstones from the revision feed carry no content to open.
+  #open = async <M extends Message>(m: M): Promise<M> =>
+    (m as { deleted?: unknown }).deleted === true ? m : this.#keys.openRecord(m);
+  #openTask = async <M extends Message>(m: M): Promise<M> =>
+    this.#keys.openRecord(m, { task: true });
   /**
-   * Opens a task delivered outside this client, such as a webhook's `task`. Keyed clients flag a
-   * task without sealed input as `unverified`.
+   * Opens a task delivered outside this client, such as a webhook's `task`; one without sealed
+   * input is `unverified`.
    */
   openTask(task: Message): Promise<Message> {
     return this.#openTask(task);
@@ -270,14 +263,14 @@ export class Herald {
   account(): Promise<Account> {
     return this.request('/account');
   }
-  /** Sends a message; keyed clients validate it locally and seal its content first. */
+  /** Sends a message; it is validated locally and its content sealed first. */
   async send(
     input: MessageRequest,
     options: string | { idempotencyKey?: string } = crypto.randomUUID(),
   ): Promise<Message> {
     const idempotencyKey =
       (typeof options === 'string' ? options : options.idempotencyKey) || crypto.randomUUID();
-    const body = this.#keyed ? await this.#keyed.sealMessage(input, idempotencyKey) : input;
+    const body = await this.#keys.sealMessage(input, idempotencyKey);
     return this.#open(await this.request<Message>('/messages', body, { idempotencyKey }));
   }
   async get(id: string): Promise<Message> {
@@ -296,8 +289,10 @@ export class Herald {
       after = page.next;
     }
   }
-  /** One page of the revision feed (`after`), or messages matching a filter. */
-  /** Server search skips sealed records; keyed clients filter opened pages themselves. */
+  /**
+   * One page of the revision feed (`after`), or messages matching a filter. The server searches
+   * sender names only; filter opened pages for content.
+   */
   async messages(query: MessageQuery = {}): Promise<Message[]> {
     const search = new URLSearchParams(
       Object.entries(query).flatMap(([k, v]) => (v === undefined ? [] : [[k, String(v)]])),
@@ -307,50 +302,38 @@ export class Herald {
   }
   /** Cancels a pending request this integration sent. */
   async cancel(id: string): Promise<Message> {
-    return this.#open(await this.request<Message>(`/messages/${path(id)}/cancel`, {}));
+    const keys = this.#keys;
+    return keys.openRecord(await this.request<Message>(`/messages/${path(id)}/cancel`, {}));
   }
   /** A task's retained log lines after `after` (a sequence number); sealed lines are opened. */
   async taskLogs(id: string, options: { after?: number } = {}): Promise<OpenedLog[]> {
     const query = options.after === undefined ? '' : `?after=${options.after}`;
     const page = await this.request<{ logs: TaskLog[] }>(`/messages/${path(id)}/logs${query}`);
-    if (!this.#keyed) return page.logs;
-    return this.#keyed.openLogs(id, page.logs, () =>
-      this.request<Message>('/messages/' + path(id)),
-    );
+    return this.#keys.openLogs(id, page.logs, () => this.request<Message>('/messages/' + path(id)));
   }
   /**
-   * Streams an attachment's bytes. Pass the attachment from an opened record (or its ID once this
-   * client has seen it) to decrypt an end-to-end encrypted file.
+   * Streams and decrypts an attachment's bytes. Pass the attachment from an opened record, or its
+   * ID once this client has seen it.
    */
   async download(
     file: string | FileAttachment,
     options: { signal?: AbortSignal } = {},
   ): Promise<FileDownload> {
     const id = typeof file === 'string' ? file : file.id;
-    const known = typeof file === 'string' ? this.#keyed?.files.get(file) : file;
+    const known = typeof file === 'string' ? this.#keys.files.get(file) : file;
+    if (!known?.key)
+      throw new E2eeError('Download a file through an attachment of an opened record.');
     const response = await this.#fetch('/api/v1/files/' + path(id), undefined, {
       ...options,
       stream: true,
     });
     if (!response.ok) await readError(response, 'File download failed.');
     if (!response.body) throw new HeraldError('Herald returned no file body.', response.status);
-    const name = fileName(response.headers.get('Content-Disposition')) || id;
-    if (this.#keyed && !known?.key && name === 'encrypted') {
-      await response.body.cancel();
-      throw new E2eeError('This file is end-to-end encrypted; download it through its attachment.');
-    }
-    const body = known?.key ? openFile(known.key, response.body) : response.body;
-    const length = Number(response.headers.get('Content-Length'));
+    const body = openFile(known.key, response.body);
     return {
-      name: known?.key ? known.name : name,
-      type: known?.key
-        ? known.type
-        : response.headers.get('Content-Type') || 'application/octet-stream',
-      size: known?.key
-        ? known.size
-        : Number.isSafeInteger(length) && length >= 0 && response.headers.has('Content-Length')
-          ? length
-          : undefined,
+      name: known.name,
+      type: known.type,
+      size: known.size,
       body,
       bytes: async () => new Uint8Array(await new Response(body).arrayBuffer()),
     };
@@ -383,13 +366,13 @@ export class Herald {
     name: string;
     scopes: Scope[];
     /** Certifies the connection's end-to-end key. */
-    certificate?: Certificate;
+    certificate: Certificate;
   }): Promise<{ token: string; integration: Integration }> {
     return this.request('/integrations', input);
   }
   /**
-   * The account's end-to-end key directory: signed statement and connection certificates. Keyed
-   * clients load it once and verify it against the token's safety code before any sealed call.
+   * The account's end-to-end key directory: signed statement and connection certificates. A
+   * connection token loads it once and verifies it against its safety code before any sealed call.
    */
   async keys(): Promise<KeyDirectory> {
     return this.#keyed ? (await this.#keyed.state()).directory : this.request('/keys');
@@ -407,55 +390,52 @@ export class Herald {
     id: string,
     input: { runnerId: string; heartbeat?: boolean },
   ): Promise<TaskClaim> {
+    const keys = this.#keys;
     const claim = await this.request<TaskClaim>(`/tasks/${path(id)}/claim`, input);
-    return { ...claim, task: await this.#openTask(claim.task) };
+    return { ...claim, task: await keys.openRecord(claim.task, { task: true }) };
   }
   heartbeatTask(id: string, lease: string): Promise<{ lease: string; leaseExpiresAt: string }> {
     return this.request(`/tasks/${path(id)}/heartbeat`, { lease });
   }
-  /** Reports logs and/or the outcome; keyed log batches retry safely. Keyed clients seal both. */
+  /** Reports logs and/or the outcome, both sealed; log batches retry safely. */
   async updateTask(
     id: string,
     update: TaskUpdate,
     options: Pick<RequestOptions, 'idempotencyKey' | 'retry'> = {},
   ): Promise<Message> {
-    const body = this.#keyed ? await this.#keyed.sealUpdate(id, update) : update;
+    const body = await this.#keys.sealUpdate(id, update);
     return this.#openTask(await this.request<Message>(`/tasks/${path(id)}/update`, body, options));
   }
   /** Consumes the encrypted envelopes of an answered request's secret fields. */
   collectSecrets(id: string): Promise<Record<string, Envelope | SealedEnvelope>> {
     return this.request(`/messages/${path(id)}/secrets`, {});
   }
-  /**
-   * `collectSecrets`, decrypted: end-to-end envelopes with this client's key, others with the
-   * private key whose public key the request carried.
-   */
-  async revealSecrets(id: string, privateKey?: JsonWebKey): Promise<Record<string, string>> {
+  /** `collectSecrets`, decrypted with this client's key. */
+  async revealSecrets(id: string): Promise<Record<string, string>> {
+    const keys = this.#keys;
     const envelopes = await this.collectSecrets(id);
     const values: Record<string, string> = {};
     for (const [field, envelope] of Object.entries(envelopes)) {
-      if ('ct' in envelope) {
-        if (!this.#keyed) throw new E2eeError('Use a keyed token to open end-to-end secrets.');
-        values[field] = await this.#keyed.openSecret(id, field, envelope);
-      } else if (privateKey) values[field] = await unseal(envelope, privateKey);
-      else throw new Error('Pass the private key for this secret.');
+      if (!('ct' in envelope)) throw new E2eeError('This secret is not end-to-end encrypted.');
+      values[field] = await keys.openSecret(id, field, envelope);
     }
     return values;
   }
   /**
    * For a `kind: 'secret'` offer: the receiver's claim and public key once a device claims it.
-   * Keyed clients accept only a key the account identity signed.
+   * Only a key the account identity signed is accepted.
    */
   async secretReceiver(
     id: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SecretReceiver> {
+    const keys = this.#keys;
     const receiver = await this.request<SecretReceiver>(
       `/messages/${path(id)}/secret-receiver`,
       undefined,
       options,
     );
-    return this.#keyed ? this.#keyed.checkReceiver(id, receiver) : receiver;
+    return keys.checkReceiver(id, receiver);
   }
   /** Deposits the value sealed to the claimed receiver's key; repeating the same deposit is safe. */
   deliverSecret(
@@ -601,8 +581,8 @@ export class Herald {
     return stop;
   }
   /**
-   * Reserves and uploads a file; streams abort only after `idleTimeout` without progress. Keyed
-   * clients encrypt it and return the attachment with its `key`, which `send` seals in.
+   * Encrypts, reserves and uploads a file; streams abort only after `idleTimeout` without
+   * progress. Returns the attachment with its `key`, which `send` seals in.
    */
   async upload(
     name: string,
@@ -618,14 +598,15 @@ export class Herald {
           : options.size;
     if (size === undefined || !Number.isSafeInteger(size) || size < 0)
       throw new Error('Pass the byte size for streamed uploads.');
-    const key = this.#keyed && fileKey();
-    const sent = key ? sealedSize(size) : size;
-    const reserve = key ? { name: 'encrypted', type: 'application/octet-stream' } : { name, type };
-    const file = await this.request<Attachment>('/files', { ...reserve, size: sent });
+    const keys = this.#keys;
+    const key = fileKey();
+    const sent = sealedSize(size);
+    const reserve = { name: 'encrypted', type: 'application/octet-stream', size: sent };
+    const file = await this.request<Attachment>('/files', reserve);
     const controller = new AbortController();
     const abort = () => controller.abort(options.signal!.reason);
     options.signal?.addEventListener('abort', abort, { once: true });
-    const source = key ? sealFile(key, plainStream(data)) : data;
+    const source = sealFile(key, plainStream(data));
     const { body, done } = idleBody(source, (options.idleTimeout ?? 60) * 1000, controller);
     try {
       const response = await fetch(this.base + '/api/v1/files/' + path(file.id), {
@@ -638,9 +619,8 @@ export class Herald {
       } as RequestInit);
       if (!response.ok) await readError(response, 'File upload failed.');
       await response.body?.cancel();
-      if (!key) return { id: file.id, name: file.name, size: file.size, type: file.type };
       const attachment = { id: file.id, name, size, type, key };
-      this.#keyed!.files.set(file.id, attachment);
+      keys.files.set(file.id, attachment);
       return attachment;
     } finally {
       done();

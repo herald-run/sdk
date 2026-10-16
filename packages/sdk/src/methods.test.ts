@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createKeys, seal, unseal } from './schema/crypto.js';
+import { unseal } from './schema/crypto.js';
+import { keyedClient } from '../fixtures/client';
 import { Herald, HeraldError, version } from './index';
 afterEach(() => {
   vi.useRealTimers();
@@ -7,12 +8,6 @@ afterEach(() => {
 });
 const client = () => new Herald({ apiKey: 'test-only', url: 'https://herald.test' });
 // Request and response shapes of every method: contracts.test.ts.
-it('reveals collected secret fields with the requester key', async () => {
-  const keys = await createKeys();
-  const envelope = await seal('test-only-value', keys.publicKey);
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ secret: envelope }));
-  expect(await client().revealSecrets('m', keys.privateKey)).toEqual({ secret: 'test-only-value' });
-});
 it('waits out Retry-After, even for unkeyed writes the server rejected unprocessed', async () => {
   vi.useFakeTimers();
   const fetch = vi
@@ -49,13 +44,14 @@ it('checks status and content type before parsing JSON', async () => {
   expect(await herald.request('/messages/m', undefined, { method: 'DELETE' })).toBeUndefined();
 });
 it('leaves retries to callers that opt out', async () => {
+  const keyed = await keyedClient();
   const fetch = vi
     .spyOn(globalThis, 'fetch')
     .mockResolvedValue(
       Response.json({ error: 'Slow down.' }, { status: 429, headers: { 'Retry-After': '1' } }),
     );
   await expect(
-    client().updateTask('t', { lease: 'l', logs: [] }, { idempotencyKey: 'k', retry: false }),
+    keyed.updateTask('t', { lease: 'l', logs: [] }, { idempotencyKey: 'k', retry: false }),
   ).rejects.toMatchObject({ status: 429, retryAfter: 1 });
   expect(fetch).toHaveBeenCalledTimes(1);
 });
@@ -91,13 +87,9 @@ it('calls the token and ping endpoints', async () => {
   expect(await herald.revokeToken()).toBeUndefined();
   expect(seen).toEqual(['GET /api/ping', 'GET /api/v1/token', 'DELETE /api/v1/token']);
 });
-it('streams downloads with the server-given file name', async () => {
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response('bytes', {
-      headers: { 'Content-Disposition': "attachment; filename*=UTF-8''..%2Fr%C3%A9port.txt" },
-    }),
-  );
-  const file = await client().download('f1');
-  expect(file.name).toBe('réport.txt');
-  expect(new TextDecoder().decode(await file.bytes())).toBe('bytes');
+it('passes revision-feed tombstones through unopened', async () => {
+  const herald = await keyedClient();
+  const tombstone = { id: 'gone', revision: 3, deleted: true };
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json([tombstone]));
+  expect(await herald.messages({ after: 2, tombstones: 1 })).toEqual([tombstone]);
 });

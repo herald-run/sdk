@@ -8,7 +8,7 @@ from urllib.parse import unquote
 
 import httpx
 from pydantic import BaseModel
-from herald import Envelope, Herald, HeraldError, TaskLog, e2ee
+from herald import Herald, HeraldError, e2ee
 
 FIXTURES = json.loads((Path(__file__).parents[2] / "sdk/fixtures/contracts.json").read_text())
 SAMPLES = {"<id>": lambda step: step + "-id", "<time>": lambda _: "2030-01-01T00:00:00.000Z", "<string>": lambda _: "string", "<number>": lambda _: 1}
@@ -57,47 +57,20 @@ def plain(value, top=True):
     return value
 
 
-async def text_of(download):
-    return (await download).data.decode()
-
-
 async def logs_of(logs):
     return {"logs": await logs}
-
-
-def send(h, a):
-    return h.send(idempotency_key=a.key, **a.body)
 
 
 CALLS = {
     "register": lambda h, a: h.register(**a.body),
     "destinations": lambda h, a: h.destinations(),
     "update-destination": lambda h, a: h.update_destination(a.id, **a.body),
-    "upload": lambda h, a: h.upload("notes.txt", b"hello", "text/plain"),
-    "send": send,
-    "get": lambda h, a: h.get(a.id),
-    "thread": lambda h, a: h.thread(a.id),
-    "messages": lambda h, a: h.messages(after=0),
     "get-missing": lambda h, a: h.get(a.id),
-    "send-secret-form": send,
-    "collect-secrets": lambda h, a: h.collect_secrets(a.id),
-    "download": lambda h, a: text_of(h.download(a.id)),
-    "read-task-logs": lambda h, a: logs_of(h.task_logs(a.id)),
     "rotate-secret": lambda h, a: h.rotate_destination_secret(a.id),
     "account": lambda h, a: h.account(),
     "keys": lambda h, a: h.keys(),
-    "offer-secret": send,
-    "secret-receiver": lambda h, a: h.secret_receiver(a.id),
-    "deliver-secret": lambda h, a: h.deliver_secret(a.id, claim_id=a.body["claimId"], envelope=Envelope(**a.body["envelope"])),
-    "cancel": lambda h, a: h.cancel(a.id),
-    "claim-task": lambda h, a: h.claim_task(a.id, runner_id=a.body["runnerId"], heartbeat=a.body["heartbeat"]),
-    "heartbeat-task": lambda h, a: h.heartbeat_task(a.id, a.body["lease"]),
-    "task-logs": lambda h, a: h.update_task(a.id, lease=a.body["lease"], logs=[TaskLog(**log) for log in a.body["logs"]], idempotency_key=a.key),
-    "complete-task": lambda h, a: h.update_task(a.id, lease=a.body["lease"], status=a.body["status"]),
     "delete-destination": lambda h, a: h.delete_destination(a.id),
-    "create-integration": lambda h, a: h.create_integration(name=a.body["name"], scopes=a.body["scopes"]),
     "integrations": lambda h, a: h.integrations(),
-    "delete-integration": lambda h, a: h.delete_integration(a.id),
 }
 
 

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { fileKey, openFile, sealedSize, sealFile } from './index';
+import { fileKey, openFile, plaintextSize, sealedSize, sealFile } from './index';
 const CHUNK = 65536;
 const read = async (stream: ReadableStream<Uint8Array>) =>
   new Uint8Array(await new Response(stream).arrayBuffer());
@@ -24,6 +24,10 @@ it('round trips files of every chunk shape, from bytes and streams', async () =>
   expect(sealedSize(0)).toBe(23);
   expect(sealedSize(CHUNK)).toBe(7 + CHUNK + 16);
   expect(sealedSize(CHUNK + 1)).toBe(7 + CHUNK + 1 + 32);
+  for (const size of [0, 1, CHUNK - 1, CHUNK, CHUNK + 1, 3 * CHUNK + 9])
+    expect(plaintextSize(sealedSize(size))).toBe(size);
+  for (const sealed of [0, 22, 7 + CHUNK + 17, 7 + CHUNK + 32])
+    expect(plaintextSize(sealed)).toBe(undefined);
 });
 it('rejects tampering, truncation, reordering, extension and the wrong key', async () => {
   const key = fileKey();

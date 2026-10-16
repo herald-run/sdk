@@ -30,11 +30,13 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
 export const readProfiles = (directory: string) =>
   readJson<Profiles>(join(directory, 'profiles.json'), {});
 export const readSaved = (path: string) => readJson<Saved>(path, {});
-/** The token a client uses: keyed (`hdr_<auth>.<seed>.<fingerprint>`) when the login stored keys. */
-export const savedToken = (saved: Saved) =>
-  saved.token && saved.seed && saved.fingerprint
-    ? formatToken(saved.token, saved.seed, saved.fingerprint)
-    : saved.token;
+/** The token a client uses, `hdr_<auth>.<seed>.<fingerprint>`; a login without a key is refused. */
+export function savedToken(saved: Saved) {
+  if (!saved.token) return undefined;
+  if (!saved.seed || !saved.fingerprint)
+    throw new Error('This login has no end-to-end key. Run herald login again.');
+  return formatToken(saved.token, saved.seed, saved.fingerprint);
+}
 async function writePrivate(directory: string, path: string, value: unknown) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await mkdir(join(path, '..'), { recursive: true, mode: 0o700 });

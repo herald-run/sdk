@@ -257,7 +257,7 @@ class KeyedSession:
         directory = await self._directory()
         me = e2ee.key_set(self.seed)
         if not directory.get("account"):
-            e2ee._fail("End-to-end encryption is not set up for this account; a keyed token never uses plaintext.")
+            e2ee._fail("End-to-end encryption is not set up for this account yet. Open Herald on a signed-in device first.")
         info = e2ee.verify_account(directory["account"], self.fingerprint)
         account = directory["account"]["statement"]["account"]
         signers, kids = {}, {}
@@ -322,12 +322,11 @@ class KeyedSession:
     async def open_record(self, m, task=False):
         """A record's sealed parts opened, with `e2ee: True`; failures are flagged `locked` or `unverified`.
 
-        Content comes only from verified envelopes: a task (or `task=True`) without sealed input, an
-        unsealed record from a keyed connection and a sealed request with an unsealed answer are all
-        `unverified`. Plaintext from connections without keys is returned as is, without `e2ee`."""
+        Content comes only from verified envelopes: an unsealed record and a sealed request with an
+        unsealed answer are `unverified`."""
         if not isinstance(m, dict):
             return m
-        s = await self.state()
+        await self.state()
         task = task or m.get("direction") == "outbound"
         response = m.get("response") or {}
         try:
@@ -337,11 +336,7 @@ class KeyedSession:
                 if m.get("recipientId"):
                     self._runners[m["id"]] = m["recipientId"]
             elif not m.get("sealed"):
-                if response.get("sealed"):
-                    e2ee._fail("A sealed answer needs a sealed request.")
-                if m.get("senderId") in s["kids"]:
-                    e2ee._fail("A keyed connection sent this record unsealed.")
-                return m
+                e2ee._fail("This message is not end-to-end encrypted.")
             out = {**m, "e2ee": True}
             out = await (self._task(out, m["input"]["sealed"]) if task else self._content(out, m["sealed"]))
             if not task and response.get("sealed"):
@@ -412,20 +407,14 @@ class KeyedSession:
         """A task's log lines opened; only the integration running the task may sign them. `fetch` loads the task record when this session has not opened it."""
         if not logs:
             return logs
-        s = await self.state()
         if task not in self._runners:
             await self.open_record(await fetch(), task=True)
         runner = self._runners.get(task)
-        # Plaintext lines from a keyed runner are not trusted.
-        keyed = runner in s["kids"]
         opened = []
         for log in logs:
-            if not log.get("sealed") and not keyed:
-                opened.append(log)
-                continue
             try:
                 if not log.get("sealed"):
-                    e2ee._fail("A keyed runner sent this log line unsealed.")
+                    e2ee._fail("This log line is not end-to-end encrypted.")
                 text = (await self._open(log["sealed"], {"t": "log", "task": task, "seq": log["sequence"]}, self._integration(runner))).get("text")
                 opened.append({**log, "text": text, "e2ee": True} if isinstance(text, str) else e2ee._fail("Malformed log."))
             except E2eeError as error:

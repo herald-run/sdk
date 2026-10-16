@@ -1,16 +1,13 @@
 """Keyed tokens: only the auth part is sent, content is sealed, and anything unverifiable fails closed."""
 import json
 import unittest
-from pathlib import Path
 
 import httpx
 from pydantic import BaseModel
 from herald import Herald, HeraldError, SyncHerald, e2ee
+from fixtures import DIRECTORY, SCENARIO, STEP, TOKEN
 
-SCENARIO = json.loads((Path(__file__).parents[2] / "sdk/fixtures/contracts.json").read_text())["e2ee"]
-STEP = {s["name"]: s for s in SCENARIO["steps"]}
-DIRECTORY, SENT = STEP["keys"]["response"]["body"], STEP["send"]["response"]["body"]
-TOKEN = SCENARIO["token"]
+SENT = STEP["send"]["response"]["body"]
 
 
 def client(routes, seen, cls=Herald):
@@ -48,11 +45,12 @@ class KeyedTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(json.loads(seen[-1].content)["asks"])
         with self.assertRaises(e2ee.E2eeError):
             Herald(api_key="hdr_x.short.fp")
-        self.assertIsNone(Herald(api_key="hdr_legacy").keyed)
+        with self.assertRaisesRegex(e2ee.E2eeError, "no end-to-end key"):
+            Herald(api_key="hdr_legacy")
         # Surrounding whitespace or a missing prefix never sends the seed.
         self.assertEqual(Herald(api_key=f"  {TOKEN}\n").key, "hdr_test-only")
         self.assertEqual(Herald(api_key=TOKEN[4:]).key, "test-only")
-        self.assertIsNone(Herald(api_key="a.b.c").keyed)
+        self.assertEqual(Herald(api_key="a.b.c").key, "a.b.c")
 
     async def test_fails_closed(self):
         for keys in [{"account": None, "certificates": []}, {**DIRECTORY, "certificates": []}, {**DIRECTORY, "account": e2ee.account_statement(e2ee.create_keyring("acct-contracts"))}]:
@@ -87,7 +85,7 @@ class KeyedTests(unittest.IsolatedAsyncioTestCase):
         async with client(routes, []) as herald:
             task = await herald.open_task(claim["response"]["body"]["task"])
             self.assertEqual(task.wire(), claim["result"]["task"])
-            with self.assertRaisesRegex(e2ee.E2eeError, "end-to-end encrypted"):
+            with self.assertRaisesRegex(e2ee.E2eeError, "attachment of an opened message"):
                 await herald.download("00000000-0000-4000-8000-0000000000ff")
 
     async def test_binds_logs_and_results_to_the_runner_and_refuses_unsealed_tasks(self):
@@ -108,6 +106,8 @@ class KeyedTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([(entry.text, entry.unverified) for entry in await herald.task_logs(raw["id"])], [("", True), ("", True)])
             plain = await herald.open_task({**raw, "input": {**{k: v for k, v in raw["input"].items() if k != "sealed"}, "values": {"prompt": "rm -rf"}}})
             self.assertEqual((plain.unverified, plain.input.values, plain.response.values), (True, {}, {}))
+            message = await herald._open({**SENT, "title": "Injected", "sealed": None})
+            self.assertEqual((message.get("unverified"), message["title"]), (True, "Encrypted message"))
             injected = await herald.open_task({**raw, "session": {"prompt": "injected"}, "response": {**raw["response"], "actionId": "x"}})
             self.assertNotIn("session", injected.wire())
             self.assertIsNone(injected.response.action_id)

@@ -1,17 +1,17 @@
 /** Every command: arguments, summary and the options it accepts besides the global ones. */
 export type Spec = { args?: string; summary: string; options?: string[]; detail?: string };
 const searchNote =
-  'With end-to-end encryption the server cannot search content: the newest five pages are decrypted and filtered locally.';
+  'Content is end-to-end encrypted, so the server cannot search it: the newest five pages are decrypted and filtered locally.';
 const message = ['input', 'title', 'body', 'file', 'reply-to', 'deadline', 'key'];
 export const commands: Record<string, Spec> = {
   login: {
     summary: 'Connect this device in the browser and store a token',
     options: ['name', 'scopes', 'no-browser', 'safety-code'],
     detail:
-      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.\nOn accounts with end-to-end encryption, the approval also certifies a key stored with the token. Confirm that the safety code matches the approval page, or pass it with --safety-code when not in a terminal.',
+      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.\nThe approval also certifies an end-to-end key stored with the token. Confirm that the safety code matches the approval page, or pass it with --safety-code when not in a terminal.',
   },
   logout: { summary: 'Revoke the stored token and delete it locally' },
-  whoami: { summary: 'Show the token, its scopes, the account and end-to-end encryption' },
+  whoami: { summary: 'Show the token, its scopes, the account and its safety code' },
   status: { summary: 'Check the server and the stored token' },
   send: {
     summary: 'Send a message; --wait waits for an answer',
@@ -39,7 +39,7 @@ export const commands: Record<string, Spec> = {
     args: '<file-id>',
     summary: 'Download an attachment (--out - writes stdout)',
     options: ['out', 'message'],
-    detail: 'End-to-end encrypted files need --message, the message that carries them.',
+    detail: 'Files are end-to-end encrypted: --message names the message that carries the file.',
   },
   destinations: {
     args: '[list | update <id> -i file | remove <id> | rotate-secret <id>]',

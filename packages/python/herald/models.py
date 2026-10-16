@@ -53,10 +53,15 @@ class TaskInput(Model):
     session: dict[str, Any] | None = None
 
 
+# Why the server, not the runner, failed a task.
+TaskFailureReason = Literal["webhook-unavailable", "not-acknowledged", "lease-lapsed"]
+
+
 class TaskResult(Model):
     status: Literal["completed", "failed"]
     completed_at: str
     error: str | None = None
+    reason: TaskFailureReason | None = None
 
 
 class TaskExecution(Model):
@@ -64,6 +69,7 @@ class TaskExecution(Model):
     acknowledged_at: str | None = None
     completed_at: str | None = None
     error: str | None = None
+    reason: TaskFailureReason | None = None
     logs: list[TaskLog] | None = None
 
 

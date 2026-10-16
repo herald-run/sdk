@@ -209,7 +209,11 @@ export function createServer(client: () => Promise<Herald>) {
     'list_messages',
     'List recent Herald messages, newest first (up to 100), optionally filtered.',
     {
-      search: z.string().max(200).optional(),
+      search: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Sender name; content is end-to-end encrypted, so the server cannot search it'),
       status: z
         .enum([
           'pending',
@@ -258,12 +262,10 @@ export function createServer(client: () => Promise<Herald>) {
     {
       id,
       path: z.string().min(1),
-      messageId: id
-        .optional()
-        .describe('Message carrying the attachment; needed when end-to-end encrypted'),
+      messageId: id.describe('Message carrying the attachment, which holds its key'),
     },
     async (input, herald) => {
-      if (input.messageId) await herald.get(input.messageId);
+      await herald.get(input.messageId);
       const file = await herald.download(input.id);
       const body = Readable.fromWeb(file.body as import('node:stream/web').ReadableStream);
       try {

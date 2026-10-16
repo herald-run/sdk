@@ -49,18 +49,17 @@ it('sends only the auth part of a keyed token', async () => {
   const herald = new Herald({ apiKey: token, url });
   const seed = e2ee.parseToken(token).seed!;
   expect(herald.apiKey).toBe('hdr_test-only');
-  expect(herald.keyed).toBe(true);
   const seen = serve({ 'GET /api/v1/keys': directory, 'POST /api/v1/messages': sent });
   await herald.send({ title: 'Hello', body: 'World' });
   expect(seen.map((s) => s.auth)).toEqual(['Bearer hdr_test-only', 'Bearer hdr_test-only']);
   expect(JSON.stringify(seen)).not.toContain(seed);
   expect(JSON.stringify(seen)).not.toContain('World');
   expect(() => new Herald({ apiKey: 'hdr_x.short.fp', url })).toThrow(E2eeError);
-  expect(new Herald({ apiKey: 'hdr_legacy', url }).keyed).toBe(false);
+  expect(() => new Herald({ apiKey: 'hdr_legacy', url })).toThrow('no end-to-end key');
   // Surrounding whitespace or a missing prefix never sends the seed.
   expect(new Herald({ apiKey: `  ${token}\n`, url }).apiKey).toBe('hdr_test-only');
   expect(new Herald({ apiKey: token.slice(4), url }).apiKey).toBe('test-only');
-  expect(new Herald({ apiKey: 'a.b.c', url }).keyed).toBe(false);
+  expect(new Herald({ apiKey: 'a.b.c', url }).fingerprint).toBeUndefined();
 });
 it('fails closed without a matching account statement or certificate', async () => {
   const cases = [
@@ -177,7 +176,7 @@ it('verifies answers against the request and its digest', async () => {
   vi.spyOn(herald.live, 'subscribe').mockReturnValue(() => {});
   await expect(herald.ask({ title: 'Deploy?' })).rejects.toBeInstanceOf(HeraldError);
 });
-it('opens webhook tasks and refuses encrypted downloads without a key', async () => {
+it('opens webhook tasks and refuses downloads without a file key', async () => {
   serve({
     'GET /api/v1/keys': directory,
     'GET /api/v1/files/': new Response('x', {
@@ -188,5 +187,11 @@ it('opens webhook tasks and refuses encrypted downloads without a key', async ()
   const task = (step('claim-task').result as { task: Message }).task;
   const raw = (step('claim-task').response.body as { task: Message }).task;
   expect(await herald.openTask(raw)).toEqual(task);
-  await expect(herald.download(crypto.randomUUID())).rejects.toThrow('end-to-end encrypted');
+  await expect(herald.download(crypto.randomUUID())).rejects.toThrow('attachment of an opened');
+});
+it('trusts no unsealed record, from any connection', async () => {
+  const plain = { ...sent, sealed: undefined, senderId: crypto.randomUUID(), title: 'Plain' };
+  serve({ 'GET /api/v1/keys': directory, [`GET /api/v1/messages/${sent.id}`]: plain });
+  const opened = await new Herald({ apiKey: token, url }).get(sent.id);
+  expect(opened).toMatchObject({ unverified: true, title: 'Encrypted message' });
 });

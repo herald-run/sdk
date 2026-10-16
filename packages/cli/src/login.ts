@@ -3,8 +3,8 @@ import { Herald, version } from '@herald-run/sdk';
 import { scopes, type Integration, type Scope } from '@herald-run/sdk/schema';
 import * as e2ee from '@herald-run/sdk/e2ee';
 /**
- * The local config: the token plus the connection it belongs to (older configs hold the token only).
- * End-to-end connections add their key seed and the account safety code they are pinned to.
+ * The local config: the token, the connection it belongs to, its key seed and the account safety
+ * code it is pinned to. Older configs without a seed need a new login.
  */
 export type Saved = {
   token?: string;
@@ -13,8 +13,8 @@ export type Saved = {
   seed?: string;
   fingerprint?: string;
 };
-export const encryptionLine = (fingerprint?: string) =>
-  `End-to-end encryption: ${fingerprint ? `on (safety code ${e2ee.safetyCode(fingerprint)})` : 'off'}`;
+export const encryptionLine = (fingerprint: string) =>
+  `End-to-end encryption: on (safety code ${e2ee.safetyCode(fingerprint)})`;
 export const userAgent = `herald-cli/${version}`;
 export type LoginIo = {
   log: (line: string) => void;
@@ -68,7 +68,7 @@ export async function login(
     client_id: 'herald-cli',
   });
   if (!started.ok) throw new Error(device.error_description || 'Could not start login.');
-  // The fragment never reaches the server; an enrolled account's approval page certifies these keys.
+  // The fragment never reaches the server; the approval page certifies these keys.
   const keys = await e2ee.keySet();
   const page = `${device.verification_uri_complete || device.verification_uri}#k=${keys.signPub}.${keys.boxPub}`;
   const opened = /^https?:\/\//.test(page) && !!io.open?.(page);
@@ -101,7 +101,6 @@ export async function login(
         io,
         options.safetyCode,
       );
-      if (!keyed) io.log(encryptionLine());
       return await connect(human, name, chosen, saved, io, keyed);
     } finally {
       await post(base, '/api/auth/sign-out', {}, result.access_token).catch(() => {});
@@ -124,14 +123,14 @@ async function confirmSafetyCode(fingerprint: string, io: LoginIo, given?: strin
   }
   if (!io.ask)
     throw new Error(
-      'This account uses end-to-end encryption. Run herald login --safety-code "<code>" with the safety code shown on the approval page or in Settings.',
+      'Run herald login --safety-code "<code>" with the safety code shown on the approval page or in Settings.',
     );
   io.log(`Account safety code: ${code}`);
   const answer = await io.ask('Does this match the safety code on the approval page? [y/N] ');
   if (!/^y(es)?$/i.test(answer.trim()))
     throw new Error('The safety code was not confirmed. Nothing was stored.');
 }
-/** For an enrolled account: the owner's certificate for this login's keys, checked locally. */
+/** The owner's certificate for this login's keys, checked locally. */
 async function certificate(
   human: Herald,
   keys: e2ee.KeySet,
@@ -140,17 +139,16 @@ async function certificate(
   safetyCode?: string,
 ) {
   const directory = await human.keys();
-  if (!directory.account) {
-    if (safetyCode !== undefined)
-      throw new Error('This account has no end-to-end encryption keys. Nothing was stored.');
-    return undefined;
-  }
+  if (!directory.account)
+    throw new Error(
+      'Open Herald on a signed-in device to finish setting up encryption, then run herald login again.',
+    );
   const fingerprint = await e2ee.fingerprint(directory.account.statement.identity);
   await confirmSafetyCode(fingerprint, io, safetyCode);
   const account = await e2ee.verifyAccount(directory.account, fingerprint);
   const cert = await human.deviceCertificate(userCode).catch(() => {
     throw new Error(
-      'The approval did not certify this device for end-to-end encryption. Update Herald and run herald login again.',
+      'The approval did not certify this device. Update Herald and run herald login again.',
     );
   });
   const checked = await e2ee.verifyCertificate(
@@ -168,34 +166,38 @@ async function connect(
   chosen: Scope[],
   saved: Saved,
   io: LoginIo,
-  keyed?: Keyed,
+  keyed: Keyed,
 ) {
   const same = (await human.integrations()).filter((i) => i.name === name);
   const current = same.find((i) => i.id === saved.integrationId);
-  const keys = keyed && { seed: keyed.seed, fingerprint: keyed.fingerprint };
-  // A keyed login keeps its stored key only while that key's account is still the same one.
-  const sameKeys = keyed ? saved.seed && saved.fingerprint === keyed.fingerprint : !saved.seed;
+  // A stored key is kept only while its account is still the same one.
   if (
     saved.token &&
     current &&
-    sameKeys &&
+    saved.seed &&
+    saved.fingerprint === keyed.fingerprint &&
     current.scopes.length === chosen.length &&
     chosen.every((s) => current.scopes.includes(s))
   ) {
-    const stored = { token: saved.token, integrationId: current.id, name };
     return {
-      saved: keyed ? { ...stored, seed: saved.seed, fingerprint: saved.fingerprint } : stored,
+      saved: { ...saved, integrationId: current.id, name },
       reused: true,
     };
   }
   const created = await human.createIntegration({
     name,
     scopes: chosen,
-    ...(keyed ? { certificate: keyed.certificate } : {}),
+    certificate: keyed.certificate,
   });
   if (same.length) await revokeOlder(human, name, same, io);
   return {
-    saved: { token: created.token, integrationId: created.integration.id, name, ...keys },
+    saved: {
+      token: created.token,
+      integrationId: created.integration.id,
+      name,
+      seed: keyed.seed,
+      fingerprint: keyed.fingerprint,
+    },
     reused: false,
   };
 }
