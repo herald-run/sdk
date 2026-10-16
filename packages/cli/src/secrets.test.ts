@@ -99,20 +99,24 @@ it('requests directly into a new owner-only file without stdout/stderr/history p
   expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
 });
 it('requests a secret file into a new owner-only file without printing it', async () => {
-  for (const mode of ['secret', 'plain'] as const) {
-    incoming = [];
-    fileAnswer = mode;
-    const path = join(folder, 'requested-' + mode);
-    const result = await cli('request-file', '--json', '--out', path, '--label', 'Kubeconfig');
-    const sent = JSON.parse(incoming.find(Boolean)!);
-    expect(await sealed.opened(sent.sealed)).toMatchObject({
-      fields: [{ id: 'file', type: 'file', secret: true, maxItems: 1, label: 'Kubeconfig' }],
-    });
-    expect(await readFile(path, 'utf8')).toBe(canary);
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
-    expect(JSON.parse(result.stdout).status).toBe('stored');
-    expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
-  }
+  incoming = [];
+  fileAnswer = 'secret';
+  const path = join(folder, 'requested');
+  const result = await cli('request-file', '--json', '--out', path, '--label', 'Kubeconfig');
+  const sent = JSON.parse(incoming.find(Boolean)!);
+  expect(await sealed.opened(sent.sealed)).toMatchObject({
+    fields: [{ id: 'file', type: 'file', secret: true, maxItems: 1, label: 'Kubeconfig' }],
+  });
+  expect(await readFile(path, 'utf8')).toBe(canary);
+  expect((await stat(path)).mode & 0o777).toBe(0o600);
+  expect(JSON.parse(result.stdout).status).toBe('stored');
+  expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
+  // An older app's plain attachment stays in history, so it is refused.
+  fileAnswer = 'plain';
+  const plain = join(folder, 'requested-plain');
+  const refused = await cli('request-file', '--out', plain).catch((error) => error);
+  expect(refused.stderr).toContain('File transfer failed');
+  expect(await stat(plain).catch(() => null)).toBeNull();
   fileAnswer = undefined;
 });
 it('sends a file exactly as encrypted ciphertext without printing its value', async () => {

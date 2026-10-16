@@ -105,7 +105,7 @@ export const sealedResponseSchema = z
     sealed: sealedEnvelopeSchema,
     secrets: z.record(z.string().max(64), sealedEnvelopeSchema).default({}),
     files: z.array(z.string().uuid()).max(30).default([]),
-    secretFiles: z.array(z.string().uuid()).max(10).default([]),
+    secretFiles: z.array(z.string().uuid()).max(30).default([]),
   })
   .strict();
 /** `POST /outbox` to a keyed destination. `id` is the task's UUID, bound into the envelope. */

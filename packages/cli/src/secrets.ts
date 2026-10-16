@@ -92,12 +92,10 @@ export async function requestFile(client: Herald, path: string, options: Options
     });
     messageId = message.id;
     const answer = await client.wait(message.id, { waitTimeout: options.timeout });
-    if (answer.status !== 'answered') throw new Error(fileFailure);
-    // Apps without secret files answer with an ordinary attachment.
-    const ids = answer.response?.values.file;
-    const files = answer.response?.secretFields.includes('file')
-      ? (await client.revealSecrets(message.id)).file
-      : answer.attachments.filter((file) => Array.isArray(ids) && ids.includes(file.id));
+    // Apps without secret files answer with an ordinary attachment, kept in history: refuse it.
+    if (answer.status !== 'answered' || !answer.response?.secretFields.includes('file'))
+      throw new Error(fileFailure);
+    const files = (await client.revealSecrets(message.id)).file;
     if (!Array.isArray(files) || files.length !== 1) throw new Error(fileFailure);
     const file = await client.download(files[0]);
     for await (const chunk of Readable.fromWeb(file.body as ReadableStream))
