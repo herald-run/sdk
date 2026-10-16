@@ -1,7 +1,7 @@
 """Herald API records. Attributes are snake_case; the wire format stays camelCase."""
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 # Known values for typing; newer servers' values still parse as plain strings.
@@ -19,10 +19,12 @@ class Model(BaseModel):
 
 
 class Attachment(Model):
+    """`key` is the file key of an end-to-end encrypted file."""
     id: str
     name: str
     size: int
     type: str
+    key: str | None = None
 
 
 class Envelope(Model):
@@ -88,6 +90,12 @@ class Message(Model):
     input: TaskInput | None = None
     result: TaskResult | None = None
     execution: TaskExecution | None = None
+    # End-to-end encryption: `sealed` content was opened (`e2ee`), or could not be decrypted
+    # (`locked`) or verified (`unverified`), leaving placeholder content.
+    sealed: dict[str, Any] | None = None
+    e2ee: bool | None = Field(None, alias="e2ee")
+    locked: bool | None = None
+    unverified: bool | None = None
 
 
 class Tombstone(Model):
@@ -127,6 +135,7 @@ class SecretReceiver(Model):
     claim_id: str | None = None
     public_key: dict[str, Any] | None = None
     received: bool | None = None
+    sig: str | None = None
 
 
 class Integration(Model):
