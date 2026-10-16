@@ -26,9 +26,7 @@ export async function dh(priv: CryptoKey, pub: Uint8Array): Promise<Bytes> {
       false,
       [],
     );
-    out = new Uint8Array(
-      await crypto.subtle.deriveBits(x25519(key), priv, 256),
-    );
+    out = new Uint8Array(await crypto.subtle.deriveBits(x25519(key), priv, 256));
   } catch {
     fail('Invalid X25519 public key.');
   }

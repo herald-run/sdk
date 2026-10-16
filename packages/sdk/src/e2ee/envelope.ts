@@ -24,26 +24,32 @@ export interface Opener {
 }
 export type Expect = { t: string; account: string } & Record<string, string | number>;
 /** Extra context fields per type; `t` and `account` are always present. */
-const CTX: Record<string, Record<string, 'string' | 'number'>> = {
-  message: { cid: 'string' },
+const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid'>> = {
+  message: { id: 'uuid' },
   response: { message: 'string', request: 'string' },
-  task: { destination: 'string', type: 'string' },
+  task: { id: 'uuid', destination: 'string', type: 'string' },
   log: { task: 'string', seq: 'number' },
   result: { task: 'string' },
   secret: { message: 'string', field: 'string' },
   keyring: { device: 'string' },
 };
 const KEY_INFO = utf8('herald/e2ee/v1 key');
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** Largest payload JSON, in UTF-8 bytes, whose ciphertext fits the envelope schema. */
+export const MAX_PAYLOAD_BYTES = 134_984;
 export function checkCtx(ctx: Ctx, expect?: Expect) {
   if (!ctx || typeof ctx !== 'object' || !Object.hasOwn(CTX, ctx.t)) fail('Unknown context type.');
   const want: Record<string, string> = { t: 'string', account: 'string', ...CTX[ctx.t] };
+  // `id` is the record's UUID, chosen by the sender, so the server cannot replay content elsewhere.
   for (const key of Object.keys(ctx)) if (!Object.hasOwn(want, key)) fail(`Unexpected ctx.${key}.`);
   for (const [key, type] of Object.entries(want)) {
     const value = ctx[key];
     const ok =
       type === 'number'
         ? Number.isSafeInteger(value) && (value as number) >= 0
-        : typeof value === 'string' && value !== '';
+        : type === 'uuid'
+          ? typeof value === 'string' && UUID.test(value)
+          : typeof value === 'string' && value !== '';
     if (!ok) fail(`Invalid ctx.${key}.`);
   }
   if (!expect) return;
@@ -117,7 +123,7 @@ async function wrapKey(head: Bytes, cek: Uint8Array, to: RecipientKey): Promise<
   const { enc, ct } = await hpkeSeal(bytesOf(to.box, 32), KEY_INFO, aad, cek);
   return { kid: to.kid, enc: b64u.encode(enc), key: b64u.encode(ct) };
 }
-/** Encrypts and signs `payload`. A `message` context without `cid` gets a random one. */
+/** Encrypts and signs `payload`. `message` and `task` contexts carry the record's `id`. */
 export async function seal(input: {
   payload: Payload;
   ctx: Ctx;
@@ -126,17 +132,17 @@ export async function seal(input: {
 }): Promise<SealedEnvelope> {
   const { signer, to } = input;
   if (!to.length || to.length > 16) fail('Seal to 1 to 16 recipients.');
-  const ctx =
-    input.ctx.t === 'message' && input.ctx.cid === undefined
-      ? { ...input.ctx, cid: b64u.encode(randomBytes(16)) }
-      : input.ctx;
+  const { ctx } = input;
   checkCtx(ctx);
   const payload = withVersion(input.payload);
+  const plain = utf8(JSON.stringify(payload));
+  if (plain.length > MAX_PAYLOAD_BYTES)
+    fail(`Content is too large to encrypt: ${plain.length} bytes, at most ${MAX_PAYLOAD_BYTES}.`);
   const base = { v: 1 as const, ctx, from: signer.kid };
   const head = await headOf(base);
   const cek = randomBytes(32);
   const iv = randomBytes(12);
-  const ct = await aesEncrypt(cek, iv, await H('content', head), utf8(JSON.stringify(payload)));
+  const ct = await aesEncrypt(cek, iv, await H('content', head), plain);
   const recipients: Recipient[] = [];
   for (const recipient of to) recipients.push(await wrapKey(head, cek, recipient));
   const env = { ...base, to: recipients, iv: b64u.encode(iv), ct: b64u.encode(ct), sig: '' };
@@ -176,8 +182,17 @@ export async function grant(
 /** `b64u(SHA-256(iv || ct))`; binds a response to its request. */
 export const envelopeDigest = async (env: SealedEnvelope) =>
   b64u.encode(await sha256(b64u.decode(env.iv), b64u.decode(env.ct)));
-/** A retry-stable digest of a payload, keyed by the integration seed. */
-export async function idempotencyDigest(seed: Uint8Array | string, payload: Payload) {
+/**
+ * A retry-stable digest of a payload and its idempotency key, keyed by the integration seed.
+ * Binding the key keeps equal content under different keys unlinkable.
+ */
+export async function idempotencyDigest(
+  seed: Uint8Array | string,
+  payload: Payload,
+  idempotencyKey: string,
+) {
+  if (typeof idempotencyKey !== 'string' || !idempotencyKey) fail('Missing idempotency key.');
   const key = await hkdf(bytesOf(seed, 32), 'herald/e2ee/v1 idem');
-  return b64u.encode(await hmac(key, utf8(canon(withVersion(payload)))));
+  const input = canon({ key: idempotencyKey, payload: withVersion(payload) });
+  return b64u.encode(await hmac(key, utf8(input)));
 }

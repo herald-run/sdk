@@ -12,6 +12,7 @@ import type { SealedEnvelope } from '../src/schema/e2ee';
 export const NOW = '2026-01-01T00:00:00.000Z';
 const ACCOUNT = 'acct-vectors';
 const ID = '0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b';
+const TASK_ID = '5d1c2b3a-6e7f-4a8b-9c0d-1e2f3a4b5c6d';
 /** File plaintext: byte i is (i * 7) % 251. */
 export const filePattern = (size: number) =>
   Uint8Array.from({ length: size }, (_, i) => (i * 7) % 251);
@@ -145,7 +146,7 @@ export async function generateVectors() {
         name: 'message',
         signer: 'integration',
         to: ['inbox', 'integration'],
-        ctx: { t: 'message', account: ACCOUNT },
+        ctx: { t: 'message', account: ACCOUNT, id: ID },
         payload: message,
       },
       {
@@ -159,7 +160,7 @@ export async function generateVectors() {
         name: 'task',
         signer: 'account',
         to: ['inbox', 'destination'],
-        ctx: { t: 'task', account: ACCOUNT, destination: ID, type: 'deploy' },
+        ctx: { t: 'task', account: ACCOUNT, id: TASK_ID, destination: ID, type: 'deploy' },
         payload: { values: { branch: 'main' }, session: null },
       },
       {
@@ -203,9 +204,15 @@ export async function generateVectors() {
       { name: 'tampered iv', envelope: { ...env, iv: flip(env.iv) }, error: 'Bad signature' },
       {
         name: 'tampered head',
-        envelope: { ...env, ctx: { ...env.ctx, cid: flip(env.ctx.cid as string) } },
+        envelope: { ...env, ctx: { ...env.ctx, id: TASK_ID } },
         expect: { t: 'message', account: ACCOUNT },
         error: 'Bad signature',
+      },
+      {
+        name: 'replayed under another id',
+        envelope: env,
+        expect: { ...expect, id: TASK_ID },
+        error: 'Context mismatch: id',
       },
       { name: 'tampered sig', envelope: { ...env, sig: flip(env.sig, 5) }, error: 'Bad signature' },
       {
@@ -261,7 +268,14 @@ export async function generateVectors() {
       {
         name: 'integration',
         payload: message,
-        digest: await e2ee.idempotencyDigest(sets.integration.seed, message),
+        key: 'retry-key-1',
+        digest: await e2ee.idempotencyDigest(sets.integration.seed, message, 'retry-key-1'),
+      },
+      {
+        name: 'integration',
+        payload: message,
+        key: 'retry-key-2',
+        digest: await e2ee.idempotencyDigest(sets.integration.seed, message, 'retry-key-2'),
       },
     ];
 

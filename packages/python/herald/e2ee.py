@@ -257,15 +257,18 @@ def _hpke_open(sk_r, pk_r, enc, info, aad, ct, aead=2):
 # Envelopes
 
 _CTX = {
-    "message": {"cid": str},
+    "message": {"id": "uuid"},
     "response": {"message": str, "request": str},
-    "task": {"destination": str, "type": str},
+    "task": {"id": "uuid", "destination": str, "type": str},
     "log": {"task": str, "seq": int},
     "result": {"task": str},
     "secret": {"message": str, "field": str},
     "keyring": {"device": str},
 }
 _KEY_INFO = b"herald/e2ee/v1 key"
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+# Largest payload JSON, in UTF-8 bytes, whose ciphertext fits the envelope schema.
+MAX_PAYLOAD_BYTES = 134984
 
 
 def _check_ctx(ctx, expect=None):
@@ -279,6 +282,9 @@ def _check_ctx(ctx, expect=None):
         value = ctx.get(key)
         if kind is int:
             ok = isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= _MAX_INT
+        elif kind == "uuid":
+            # The record's UUID, chosen by the sender, so the server cannot replay content elsewhere.
+            ok = isinstance(value, str) and _UUID.fullmatch(value) is not None
         else:
             ok = isinstance(value, str) and value != ""
         if not ok:
@@ -350,17 +356,18 @@ def _wrap_key(head, cek, to):
 
 
 def seal(*, payload: dict, ctx: dict, signer, to: list) -> dict:
-    """Encrypts and signs `payload` from `signer` (`.kid`, `.sign_priv`) to `{kid, box}` recipients. A `message` context without `cid` gets a random one."""
+    """Encrypts and signs `payload` from `signer` (`.kid`, `.sign_priv`) to `{kid, box}` recipients. `message` and `task` contexts carry the record's `id`."""
     if not 1 <= len(to) <= 16:
         _fail("Seal to 1 to 16 recipients.")
-    if ctx.get("t") == "message" and "cid" not in ctx:
-        ctx = {**ctx, "cid": b64u_encode(_random(16))}
     _check_ctx(ctx)
     payload = _with_version(payload)
+    plain = _dump(payload, False).encode()
+    if len(plain) > MAX_PAYLOAD_BYTES:
+        _fail(f"Content is too large to encrypt: {len(plain)} bytes, at most {MAX_PAYLOAD_BYTES}.")
     env = {"v": 1, "ctx": ctx, "from": signer.kid}
     head = _head(env)
     cek, iv = _random(32), _random(12)
-    ct = AESGCM(cek).encrypt(iv, _dump(payload, False).encode(), H("content", head))
+    ct = AESGCM(cek).encrypt(iv, plain, H("content", head))
     env.update(to=[_wrap_key(head, cek, r) for r in to], iv=b64u_encode(iv), ct=b64u_encode(ct))
     env["sig"] = b64u_encode(signer.sign_priv.sign(_sig_input(head, env)))
     return env
@@ -392,9 +399,12 @@ def envelope_digest(env: dict) -> str:
     return b64u_encode(_sha256(b64u_decode(env["iv"]), b64u_decode(env["ct"])))
 
 
-def idempotency_digest(seed, payload: dict) -> str:
-    """A retry-stable digest of a payload, keyed by the integration seed."""
-    return b64u_encode(_hmac(_hkdf(_bytes(seed, 32), "herald/e2ee/v1 idem"), canon(_with_version(payload)).encode()))
+def idempotency_digest(seed, payload: dict, idempotency_key: str) -> str:
+    """A retry-stable digest of a payload and its idempotency key, keyed by the integration seed; equal content under different keys stays unlinkable."""
+    if not isinstance(idempotency_key, str) or not idempotency_key:
+        _fail("Missing idempotency key.")
+    data = canon({"key": idempotency_key, "payload": _with_version(payload)})
+    return b64u_encode(_hmac(_hkdf(_bytes(seed, 32), "herald/e2ee/v1 idem"), data.encode()))
 
 
 # Files: 7-byte random prefix, then AES-256-GCM chunks of up to 64 KiB plaintext.

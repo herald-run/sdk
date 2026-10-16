@@ -7,6 +7,7 @@ export {
   envelopeDigest,
   grant,
   idempotencyDigest,
+  MAX_PAYLOAD_BYTES,
   open,
   openKey,
   seal,

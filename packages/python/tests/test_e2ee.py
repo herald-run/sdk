@@ -121,6 +121,9 @@ class KeyTests(unittest.TestCase):
                 e2ee.parse_token(bad)
 
 
+MSG_ID = "6f1c1a4e-58d3-4f9c-9a38-7f0d1c2b3a4d"
+
+
 class EnvelopeTests(unittest.TestCase):
     def test_reproduces_and_opens_every_context_type(self):
         for case in V["envelopes"]:
@@ -139,13 +142,20 @@ class EnvelopeTests(unittest.TestCase):
 
     def test_seal_validates_contexts_and_payloads(self):
         signer, to = S.sets["integration"], [S.recipients["inbox"]]
-        for ctx, error in [({"t": "nope", "account": ACCOUNT}, "Unknown context"), ({"t": "log", "account": ACCOUNT, "task": "x", "seq": True}, "ctx.seq"), ({"t": "result", "account": ACCOUNT, "task": "x", "extra": "y"}, "Unexpected ctx.extra")]:
+        msg = {"t": "message", "account": ACCOUNT, "id": MSG_ID}
+        bad = [({"t": "nope", "account": ACCOUNT}, "Unknown context"), ({"t": "log", "account": ACCOUNT, "task": "x", "seq": True}, "ctx.seq"), ({"t": "result", "account": ACCOUNT, "task": "x", "extra": "y"}, "Unexpected ctx.extra")]
+        bad += [({"t": "message", "account": ACCOUNT}, "ctx.id"), ({**msg, "id": "not-a-uuid"}, "ctx.id"), ({"t": "task", "account": ACCOUNT, "destination": "d", "type": "x"}, "ctx.id")]
+        for ctx, error in bad:
             with self.assertRaisesRegex(E2eeError, error):
                 e2ee.seal(payload={}, ctx=ctx, signer=signer, to=to)
         with self.assertRaisesRegex(E2eeError, "version"):
-            e2ee.seal(payload={"v": 2}, ctx={"t": "message", "account": ACCOUNT}, signer=signer, to=to)
-        env = e2ee.seal(payload={"x": 1}, ctx={"t": "message", "account": ACCOUNT}, signer=signer, to=to)
+            e2ee.seal(payload={"v": 2}, ctx=msg, signer=signer, to=to)
+        with self.assertRaisesRegex(E2eeError, "too large to encrypt"):
+            e2ee.seal(payload={"body": "\u4e2d" * 50000}, ctx=msg, signer=signer, to=to)
+        env = e2ee.seal(payload={"x": 1}, ctx=msg, signer=signer, to=to)
         self.assertEqual(e2ee.open(env, recipients=S.keys.inbox, signers=S.signers(ALL), expect={"t": "message", "account": ACCOUNT}), {"v": 1, "x": 1})
+        with self.assertRaisesRegex(E2eeError, "Context mismatch: id"):
+            e2ee.open(env, recipients=S.keys.inbox, signers=S.signers(ALL), expect={**msg, "id": "00000000-0000-4000-8000-000000000000"})
 
     def test_grant_and_idempotency(self):
         message = V["envelopes"][0]
@@ -155,7 +165,10 @@ class EnvelopeTests(unittest.TestCase):
         granted = {**message["envelope"], "to": [V["grant"]["recipient"]]}
         self.assertEqual(e2ee.open(granted, recipients=[S.sets["destination"]], signers=S.signers(ALL), expect=granted["ctx"]), {"v": 1, **message["payload"]})
         for case in V["idempotency"]:
-            self.assertEqual(e2ee.idempotency_digest(S.sets[case["name"]].seed, case["payload"]), case["digest"])
+            self.assertEqual(e2ee.idempotency_digest(S.sets[case["name"]].seed, case["payload"], case["key"]), case["digest"])
+        self.assertNotEqual(V["idempotency"][0]["digest"], V["idempotency"][1]["digest"])
+        with self.assertRaisesRegex(E2eeError, "idempotency key"):
+            e2ee.idempotency_digest(S.sets["integration"].seed, {}, "")
 
 
 class FileTests(unittest.TestCase):

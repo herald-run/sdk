@@ -39,15 +39,20 @@ const signers = (kid: string) => trusted.get(kid);
 const inbox = { kid: info.inboxKid, box: info.inbox };
 const to = (set: { kid: string; boxPub: string }) => ({ kid: set.kid, box: set.boxPub });
 const message = '6f1c1a4e-58d3-4f9c-9a38-7f0d1c2b3a4d';
+const other = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
 const cases: { ctx: Ctx; signer: 'account' | 'integration'; to: Opener[] }[] = [
-  { ctx: { t: 'message', account }, signer: 'integration', to: [keys.inbox[0], integration] },
+  {
+    ctx: { t: 'message', account, id: message },
+    signer: 'integration',
+    to: [keys.inbox[0], integration],
+  },
   {
     ctx: { t: 'response', account, message, request: 'x'.repeat(43) },
     signer: 'account',
     to: [keys.inbox[0], integration],
   },
   {
-    ctx: { t: 'task', account, destination: message, type: 'deploy' },
+    ctx: { t: 'task', account, id: other, destination: message, type: 'deploy' },
     signer: 'account',
     to: [keys.inbox[0], destination],
   },
@@ -84,11 +89,6 @@ it('round trips every context type for every recipient', async () => {
         ...payload,
       });
   }
-  const env = await sealed();
-  expect(env.ctx.cid).toMatch(/^[\w-]{22}$/);
-  expect(
-    await open(env, { recipients: keys.inbox, signers, expect: { t: 'message', account } }),
-  ).toMatchObject(payload);
 });
 const tamper = (text: string) => {
   const bytes = b64u.decode(text);
@@ -104,7 +104,7 @@ it('rejects tampering, untrusted signers, wrong recipients and wrong contexts', 
     ['Bad signature', { ...env, sig: tamper(env.sig) }, {}],
     [
       'Bad signature',
-      { ...env, ctx: { ...env.ctx, cid: tamper(env.ctx.cid as string) } },
+      { ...env, ctx: { ...env.ctx, id: other } },
       { expect: { t: 'message', account } },
     ],
     ['Bad signature', { ...env, from: info.signerKid }, {}],
@@ -114,7 +114,7 @@ it('rejects tampering, untrusted signers, wrong recipients and wrong contexts', 
     ['No recipient entry', env, { recipients: [outsider] }],
     ['Context mismatch: account', env, { expect: { ...expect_, account: 'other' } }],
     ['Context mismatch: t', env, { expect: { ...expect_, t: 'log' } }],
-    ['Context mismatch: cid', env, { expect: { ...expect_, cid: 'A'.repeat(22) } }],
+    ['Context mismatch: id', env, { expect: { ...expect_, id: other } }],
     ['Unsupported envelope version', { ...env, v: 2 as 1 }, {}],
     ['Untrusted signer', { ...env, from: outsider.kid }, {}],
     ['Expected 12 bytes', { ...env, iv: env.iv + 'AA' }, {}],
@@ -133,6 +133,9 @@ it('validates contexts and payloads when sealing', async () => {
     [{ t: 'log', account, task: message, seq: 1.5 }, 'Invalid ctx.seq'],
     [{ t: 'result', account, task: message, extra: 'x' }, 'Unexpected ctx.extra'],
     [{ t: 'result', account: '', task: message }, 'Invalid ctx.account'],
+    [{ t: 'message', account }, 'Invalid ctx.id'],
+    [{ t: 'message', account, id: 'not-a-uuid' }, 'Invalid ctx.id'],
+    [{ t: 'task', account, destination: message, type: 'deploy' }, 'Invalid ctx.id'],
   ];
   for (const [ctx, error] of bad)
     await expect(seal({ payload, ctx, signer, to: [inbox] }), error).rejects.toThrow(error);
@@ -140,6 +143,11 @@ it('validates contexts and payloads when sealing', async () => {
     'version',
   );
   await expect(seal({ payload, ctx: cases[0].ctx, signer, to: [] })).rejects.toThrow(E2eeError);
+  // 50,000 three-byte characters exceed the envelope cap: a clean error, not a schema failure.
+  const big = { body: '\u4e2d'.repeat(50_000) };
+  await expect(seal({ payload: big, ctx: cases[0].ctx, signer, to: [inbox] })).rejects.toThrow(
+    'Content is too large to encrypt',
+  );
 });
 it('grants another key access without re-signing', async () => {
   const env = await sealed();
@@ -149,7 +157,7 @@ it('grants another key access without re-signing', async () => {
   expect(
     await open(granted, { recipients: [destination], signers, expect: expectOf(env) }),
   ).toMatchObject(payload);
-  const moved = { ...env, ctx: { ...env.ctx, cid: 'B'.repeat(22) } };
+  const moved = { ...env, ctx: { ...env.ctx, id: other } };
   const forged = { ...moved, to: [await grant(env, cek, to(destination))] };
   await expect(
     open(forged, { recipients: [destination], signers, expect: expectOf(forged) }),
@@ -159,7 +167,9 @@ it('digests envelopes and payloads', async () => {
   const env = await sealed();
   expect(await envelopeDigest(env)).toMatch(/^[\w-]{43}$/);
   expect(await envelopeDigest(await sealed())).not.toBe(await envelopeDigest(env));
-  const a = await idempotencyDigest(integration.seed, { b: 1, a: [0.5] });
-  expect(await idempotencyDigest(integration.seed, { a: [0.5], b: 1, v: 1 })).toBe(a);
-  expect(await idempotencyDigest(destination.seed, { a: [0.5], b: 1 })).not.toBe(a);
+  const a = await idempotencyDigest(integration.seed, { b: 1, a: [0.5] }, 'k1');
+  expect(await idempotencyDigest(integration.seed, { a: [0.5], b: 1, v: 1 }, 'k1')).toBe(a);
+  expect(await idempotencyDigest(integration.seed, { a: [0.5], b: 1 }, 'k2')).not.toBe(a);
+  expect(await idempotencyDigest(destination.seed, { a: [0.5], b: 1 }, 'k1')).not.toBe(a);
+  await expect(idempotencyDigest(integration.seed, {}, '')).rejects.toThrow('idempotency key');
 });
