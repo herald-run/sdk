@@ -2,7 +2,7 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
-## Unreleased
+## 0.3.0-beta.4
 
 - Content is always end-to-end encrypted; tokens without a key are refused. Connection tokens have the form `hdr_<auth>.<seed>.<fingerprint>` (from `herald login` or Settings → Connections); the SDKs encrypt what they send and decrypt what they read: messages, forms, answers, tasks, logs, results, files, secrets and secret offers. Only `hdr_<auth>` is sent to the server. If the account's keys are missing or do not match the token, content calls fail; nothing falls back to plaintext.
 - SDKs: decrypted records carry `e2ee: true`; records this connection cannot decrypt carry `locked: true`, and unsealed or forged ones `unverified: true`, with their content withheld. Leading or trailing whitespace in a token is ignored. New `keys()`, `safetyCode()` / `safety_code()` for the 30-digit account safety code, `openTask()` / `open_task()` for webhook tasks, `deviceCertificate()`, and a required `certificate` on `createIntegration()`. Failed tasks may carry `reason` (`webhook-unavailable`, `not-acknowledged`, `lease-lapsed`). Uploads return the attachment with its file `key`; `download()` takes that attachment, or an ID of a file seen in an opened record. `revealSecrets()` takes no private key. The `keyed` getter is gone.
