@@ -10,6 +10,8 @@ npx @herald-run/cli --help        # or: npm install -g @herald-run/cli
 
 `herald login` opens the browser to approve this device and stores a scoped token in `~/.config/herald` (mode 0600); `--no-browser` prints the link only. `herald logout` revokes it. In CI, set `HERALD_API_KEY` (or `HERALD_TOKEN`) instead. `--profile NAME` (or `HERALD_PROFILE`) keeps separate logins; `--url` or `HERALD_URL` selects another server.
 
+On accounts with end-to-end encryption, `herald login` also stores a device key, and `herald whoami` shows the account safety code to compare with the one in Settings. Encrypted attachments download with `herald download <file-id> --message <message-id>`. Search runs locally over the newest five pages, since the server cannot read encrypted content.
+
 ## One-minute example
 
 ```sh

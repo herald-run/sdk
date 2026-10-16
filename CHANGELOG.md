@@ -2,6 +2,13 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
+## Unreleased
+
+- End-to-end encryption for accounts that turn it on. Tokens of the form `hdr_<auth>.<seed>.<fingerprint>` (from `herald login` or Settings → Connections) make the SDKs encrypt what they send and decrypt what they read: messages, forms, answers, tasks, logs, results, files and secrets. Only `hdr_<auth>` is sent to the server. A keyed client never falls back to plaintext: if the account's keys are missing or do not match the token, calls fail.
+- SDKs: decrypted records carry `e2ee: true`; records this connection cannot decrypt carry `locked: true`, and ones that fail verification `unverified: true`, with their content withheld. New `keys()`, `openTask()` / `open_task()` for webhook tasks, `deviceCertificate()`, and a `certificate` option on `createIntegration()`. Keyed uploads return the attachment with its file `key`; `download()` accepts that attachment. `revealSecrets()` needs no private key on keyed clients.
+- CLI: `herald login` certifies a key for the device on accounts with end-to-end encryption and prints the account safety code; `whoami` and `status` show whether encryption is on. `download --message ID` decrypts an attachment of that message. `messages --search` and `search` filter the newest five decrypted pages locally, since the server cannot search encrypted content.
+- MCP: uses keyed CLI logins; `download_file` takes an optional `messageId` for encrypted files.
+
 ## 0.3.0-beta.3
 
 - CLI: `integrate claude-code|codex` works with `--profile`, `--url` and `HERALD_PROFILE`, and re-registers the MCP server when they change.
