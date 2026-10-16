@@ -23,7 +23,7 @@ herald messages --search deploy
 
 ## Claude Code and Codex
 
-`herald integrate claude-code` (or `codex`) installs Herald skills (send a report, ask for approval, request or share a secret through a file) and registers the [`@herald-run/mcp`](https://www.npmjs.com/package/@herald-run/mcp) server. `--scope project` writes into the current directory instead of your user config; `--dry-run` previews the changes. Rerunning is safe.
+`herald integrate claude-code` (or `codex`) installs Herald skills (send a report, ask for approval, request or share a secret through a file, request a file) and registers the [`@herald-run/mcp`](https://www.npmjs.com/package/@herald-run/mcp) server. `--scope project` writes into the current directory instead of your user config; `--dry-run` previews the changes. Rerunning is safe.
 
 ## Output
 

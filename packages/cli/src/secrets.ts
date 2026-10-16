@@ -1,5 +1,7 @@
 import { open, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { Readable } from 'node:stream';
+import type { ReadableStream } from 'node:stream/web';
 import { setTimeout as pause } from 'node:timers/promises';
 import { Herald } from '@herald-run/sdk';
 import { seal } from '@herald-run/sdk/crypto';
@@ -16,9 +18,11 @@ type Options = {
 // Only this fixed message reaches stderr: server errors may contain untrusted values.
 export const secretFailure =
   'Secret transfer failed. Check authentication, file access, and the request deadline. Secret output files must not already exist.';
-function checkOptions(options: Options) {
+export const fileFailure =
+  'File transfer failed. Check authentication, file access, and the request deadline. Output files must not already exist.';
+function checkOptions(options: Options, failure = secretFailure) {
   if (![options.deadline, options.timeout].every((n) => Number.isFinite(n) && n > 0 && n <= 86400))
-    throw new Error(secretFailure);
+    throw new Error(failure);
 }
 export async function requestSecret(client: Herald, path: string, options: Options) {
   checkOptions(options);
@@ -49,6 +53,53 @@ export async function requestSecret(client: Herald, path: string, options: Optio
     const value = (await client.revealSecrets(message.id)).secret;
     if (typeof value !== 'string') throw new Error(secretFailure);
     await output.writeFile(value, 'utf8');
+    await output.sync();
+    complete = true;
+    return { id: message.id, status: 'stored' };
+  } finally {
+    await output.close();
+    if (!complete) {
+      await unlink(path).catch(() => {});
+      if (messageId) await client.cancel(messageId).catch(() => {});
+    }
+  }
+}
+/** Requests one file sealed to this connection alone and writes it to a new 0600 file. */
+export async function requestFile(client: Herald, path: string, options: Options) {
+  checkOptions(options, fileFailure);
+  const output = await open(path, 'wx', 0o600);
+  let complete = false;
+  let messageId: string | undefined;
+  try {
+    await output.chmod(0o600);
+    const message = await client.send({
+      title: options.title || 'File Requested',
+      body: options.body,
+      replyTo: options.replyTo,
+      kind: 'form',
+      fields: [
+        {
+          id: 'file',
+          label: options.label || 'File',
+          type: 'file',
+          secret: true,
+          required: true,
+          minItems: 1,
+          maxItems: 1,
+        },
+      ],
+      expiresIn: Math.min(options.deadline, options.timeout),
+    });
+    messageId = message.id;
+    const answer = await client.wait(message.id, { waitTimeout: options.timeout });
+    // Apps without secret files answer with an ordinary attachment, kept in history: refuse it.
+    if (answer.status !== 'answered' || !answer.response?.secretFields.includes('file'))
+      throw new Error(fileFailure);
+    const files = (await client.revealSecrets(message.id)).file;
+    if (!Array.isArray(files) || files.length !== 1) throw new Error(fileFailure);
+    const file = await client.download(files[0]);
+    for await (const chunk of Readable.fromWeb(file.body as ReadableStream))
+      await output.write(chunk);
     await output.sync();
     complete = true;
     return { id: message.id, status: 'stored' };

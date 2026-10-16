@@ -37,6 +37,8 @@ export const fieldSchema = z.object({
   minItems: z.number().int().min(0).max(50).optional(),
   maxItems: z.number().int().min(0).max(50).optional(),
   required: z.boolean().default(false),
+  /** File fields only: the files go to the asker alone, like a secret, and leave no history. */
+  secret: z.boolean().optional(),
   help: z.string().max(300).optional(),
   placeholder: z.string().max(120).optional(),
   options: z
@@ -67,8 +69,10 @@ export const fieldsSchema = z
           code: 'custom',
           message: 'Minimum constraints must not exceed maximum constraints.',
         });
-      if (f.type === 'secret' && f.default !== undefined)
+      if ((f.type === 'secret' || f.secret) && f.default !== undefined)
         ctx.addIssue({ code: 'custom', message: 'Secrets cannot have defaults.' });
+      if (f.secret && f.type !== 'file')
+        ctx.addIssue({ code: 'custom', message: 'Only file fields can be secret.' });
       if (['select', 'multiselect'].includes(f.type) && !f.options?.length)
         ctx.addIssue({ code: 'custom', message: `${f.label} needs choices.` });
       if (
@@ -100,7 +104,7 @@ export function validateAnswers(
     if (!ids.has(id)) errors[id] = 'Unknown field.';
   for (const f of fields) {
     const v = values[f.id];
-    if (f.type === 'secret' && secretIds.includes(f.id)) continue;
+    if ((f.type === 'secret' || f.secret) && secretIds.includes(f.id)) continue;
     if (v === null) {
       if (!f.nullable) errors[f.id] = 'Null is not allowed.';
       continue;

@@ -371,10 +371,19 @@ export class KeyedSession {
     return out;
   }
   /** A secret answer sealed by the account to this integration only. */
-  async openSecret(message: string, field: string, env: SealedEnvelope): Promise<string> {
+  /** A secret field's text, or a secret file field's attachments (their keys are learned). */
+  async openSecret(
+    message: string,
+    field: string,
+    env: SealedEnvelope,
+  ): Promise<string | FileAttachment[]> {
     const expect = { t: 'secret', message, field };
-    const { value } = await this.#open(env, expect, KeyedSession.#identity);
-    return typeof value === 'string' ? value : fail('Malformed secret.');
+    const { value, files } = await this.#open(env, expect, KeyedSession.#identity);
+    if (typeof value === 'string') return value;
+    const list = fileList.safeParse(files);
+    if (!files || !list.success || !list.data!.length) fail('Malformed secret.');
+    this.#learn(list.data);
+    return list.data!;
   }
   /** Checks that the account identity signed a claimed secret receiver's one-time key. */
   async checkReceiver<R extends { claimId?: string; publicKey?: unknown; sig?: string }>(

@@ -91,6 +91,7 @@ it('lists every tool with a description', async () => {
       'download_file',
       'get_message',
       'list_messages',
+      'request_file',
       'request_secret',
       'send',
       'send_secret',
@@ -160,6 +161,14 @@ it('stores a requested secret in a 0600 file without returning it', async () => 
   const again = await call('request_secret', { path });
   expect(again.error).toBe(true);
   expect(again.text).not.toContain(canary);
+});
+
+it('fails a file request with fixed text and leaves no file', async () => {
+  answer = { status: 'answered' };
+  const path = join(folder, 'requested');
+  const result = await call('request_file', { path, label: 'Kubeconfig' });
+  expect(result).toMatchObject({ error: true, text: expect.stringContaining('File transfer') });
+  expect(await stat(path).catch(() => null)).toBeNull();
 });
 
 it('uses the CLI login when no token is set, and explains when there is none', async () => {

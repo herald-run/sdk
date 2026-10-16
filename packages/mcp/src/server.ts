@@ -13,7 +13,13 @@ import {
   type MessageRequest,
 } from '@herald-run/sdk';
 import { uploadPath } from '@herald-run/cli/files';
-import { requestSecret, secretFailure, sendSecret } from '@herald-run/cli/secrets';
+import {
+  fileFailure,
+  requestFile,
+  requestSecret,
+  secretFailure,
+  sendSecret,
+} from '@herald-run/cli/secrets';
 
 type Result = { content: { type: 'text'; text: string }[]; isError?: boolean };
 const json = (value: unknown): Result => ({
@@ -304,6 +310,30 @@ export function createServer(client: () => Promise<Herald>) {
       } catch {
         // Fixed text only: errors may carry untrusted values.
         return failure(secretFailure);
+      }
+    },
+  );
+
+  tool(
+    'request_file',
+    'Ask the human for a file (key file, certificate, document) through an end-to-end encrypted Herald form and write it to a new file at path (mode 0600). Only this connection can decrypt it and Herald deletes it 15 minutes after the answer. The content is never returned; never print the file.',
+    {
+      path: z.string().min(1).describe('New file to create; must not exist'),
+      label: z.string().max(120).optional().describe('Field label, such as "Kubeconfig"'),
+      title: z.string().max(180).optional(),
+      body: z.string().max(50000).optional().describe('Markdown: which file and why'),
+      replyTo,
+      wait: time.optional().describe('How long to wait for the human (default 10m)'),
+    },
+    async (input, herald) => {
+      try {
+        const timeout = duration(input.wait || '10m');
+        const { title, label, body, replyTo: thread } = input;
+        const settings = { title, label, body, replyTo: thread, deadline: timeout, timeout };
+        const result = await requestFile(herald, input.path, settings);
+        return json({ ...result, path: input.path });
+      } catch {
+        return failure(fileFailure);
       }
     },
   );

@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 import { build } from 'esbuild';
 import { createKeys, unseal } from '@herald-run/sdk/crypto';
+import { fileKey, sealFile } from '@herald-run/sdk/e2ee';
 import type { Envelope, Message } from '@herald-run/sdk/schema';
 import * as sealed from '../../sdk/fixtures/sealed';
 const execute = promisify(execFile);
@@ -17,6 +18,17 @@ let incoming: string[] = [],
   failure = false;
 let receiver: Awaited<ReturnType<typeof createKeys>>;
 let request: Message;
+/** `request-file` answers: through a secret envelope, or as an older app's plain attachment. */
+let fileAnswer: 'secret' | 'plain' | undefined;
+const fileId = crypto.randomUUID();
+const fileBytes = new TextEncoder().encode(canary);
+const sentFile = {
+  id: fileId,
+  name: 'kubeconfig',
+  type: 'text/plain',
+  size: fileBytes.length,
+  key: fileKey(),
+};
 const server = createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
@@ -33,10 +45,18 @@ const server = createServer(async (req, res) => {
   else if (req.url === '/api/v1/messages' && req.method === 'POST')
     result = request = sealed.stored(input);
   else if (req.url === `/api/v1/messages/${request?.id}`)
-    result = await sealed.sealedAnswer(request, {}, { secretFields: ['secret'] });
+    result = await (fileAnswer === 'plain'
+      ? sealed.sealedAnswer(request, { file: [fileId] }, { attachments: [sentFile] })
+      : sealed.sealedAnswer(request, {}, { secretFields: [fileAnswer ? 'file' : 'secret'] }));
   else if (req.url?.endsWith('/secrets'))
-    result = { secret: await sealed.sealedSecret(request.id, 'secret', canary) };
-  else if (req.url?.endsWith('/secret-receiver'))
+    result = fileAnswer
+      ? { file: await sealed.sealedSecret(request.id, 'file', [sentFile]) }
+      : { secret: await sealed.sealedSecret(request.id, 'secret', canary) };
+  else if (req.url === `/api/v1/files/${fileId}`) {
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.end(new Uint8Array(await new Response(sealFile(sentFile.key, fileBytes)).arrayBuffer()));
+    return;
+  } else if (req.url?.endsWith('/secret-receiver'))
     result = await sealed.signedReceiver(request.id, receiver.publicKey);
   else if (req.url?.endsWith('/secret-delivery')) delivered = input.envelope;
   res.end(JSON.stringify(result));
@@ -78,6 +98,27 @@ it('requests directly into a new owner-only file without stdout/stderr/history p
   expect(JSON.parse(result.stdout).status).toBe('stored');
   expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
 });
+it('requests a secret file into a new owner-only file without printing it', async () => {
+  incoming = [];
+  fileAnswer = 'secret';
+  const path = join(folder, 'requested');
+  const result = await cli('request-file', '--json', '--out', path, '--label', 'Kubeconfig');
+  const sent = JSON.parse(incoming.find(Boolean)!);
+  expect(await sealed.opened(sent.sealed)).toMatchObject({
+    fields: [{ id: 'file', type: 'file', secret: true, maxItems: 1, label: 'Kubeconfig' }],
+  });
+  expect(await readFile(path, 'utf8')).toBe(canary);
+  expect((await stat(path)).mode & 0o777).toBe(0o600);
+  expect(JSON.parse(result.stdout).status).toBe('stored');
+  expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
+  // An older app's plain attachment stays in history, so it is refused.
+  fileAnswer = 'plain';
+  const plain = join(folder, 'requested-plain');
+  const refused = await cli('request-file', '--out', plain).catch((error) => error);
+  expect(refused.stderr).toContain('File transfer failed');
+  expect(await stat(plain).catch(() => null)).toBeNull();
+  fileAnswer = undefined;
+});
 it('sends a file exactly as encrypted ciphertext without printing its value', async () => {
   incoming = [];
   const path = join(folder, 'source');
@@ -96,6 +137,7 @@ it('does not overwrite existing files or follow output symlinks', async () => {
   await symlink(target, link);
   for (const path of [target, link]) {
     await expect(cli('request-secret', '--out', path)).rejects.toMatchObject({ code: 1 });
+    await expect(cli('request-file', '--out', path)).rejects.toMatchObject({ code: 1 });
     expect(await readFile(target, 'utf8')).toBe('keep');
   }
 });
@@ -110,6 +152,10 @@ it('redacts errors from the server and rejects value arguments without echoing t
     expect(result.stdout + result.stderr).not.toContain(canary.split('\n')[0]);
     expect(result.stderr).toContain('Secret transfer failed');
   }
+  expect(await stat(path).catch(() => null)).toBeNull();
+  const fileError = await cli('request-file', '--out', path).catch((error) => error);
+  expect(fileError.stderr).toContain('File transfer failed');
+  expect(fileError.stdout + fileError.stderr).not.toContain(canary.split('\n')[0]);
   expect(await stat(path).catch(() => null)).toBeNull();
   failure = false;
   await expect(cli('send-secret', '--secret-value', canary)).rejects.toMatchObject({ code: 2 });

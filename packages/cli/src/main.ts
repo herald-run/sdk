@@ -22,7 +22,7 @@ import { aliases, commands, completion, usage } from './help';
 import { integrate, type Run } from './integrate';
 import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
-import { requestSecret, sendSecret, secretFailure } from './secrets';
+import { fileFailure, requestFile, requestSecret, sendSecret, secretFailure } from './secrets';
 
 /** The token's verified account safety code. */
 async function safetyCode(client: Herald) {
@@ -111,13 +111,18 @@ const integer = (value: string | undefined, name: string) => {
 
 /** Runs one CLI invocation and returns its exit code. */
 export async function main(argv: string[], io: Io): Promise<number> {
-  const secret = argv.some((value) => ['request-secret', 'send-secret'].includes(value));
+  // Secret transfers print fixed failures only: errors may carry untrusted values.
+  const quiet = argv.some((value) => ['request-secret', 'send-secret'].includes(value))
+    ? secretFailure
+    : argv.includes('request-file')
+      ? fileFailure
+      : undefined;
   let values: ReturnType<typeof parse>['values'], positionals: string[];
   const parse = () => parseArgs({ args: argv, allowPositionals: true, options, strict: true });
   try {
     ({ values, positionals } = parse());
   } catch (error) {
-    io.err(secret ? secretFailure : (error as Error).message + ' Run herald help.');
+    io.err(quiet ?? (error as Error).message + ' Run herald help.');
     return 2;
   }
   if (values.version) {
@@ -144,11 +149,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
   const allowed = new Set([...globalOptions, ...(spec.options || [])]);
   const extra = Object.keys(values).find((name) => !allowed.has(name));
   if (extra) {
-    io.err(
-      secret
-        ? secretFailure
-        : `herald ${command} does not take --${extra}. Run herald help ${command}.`,
-    );
+    io.err(quiet ?? `herald ${command} does not take --${extra}. Run herald help ${command}.`);
     return 2;
   }
   const print = (human: string, json: unknown) => {
@@ -165,7 +166,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
       // The SDK validates the origin; never echo a malformed credential-bearing URL.
       host = new URL(new Herald({ url: base, apiKey: 'x' }).base).hostname;
     } catch {
-      throw new Error(secret ? secretFailure : 'Use a valid Herald HTTPS server origin.');
+      throw new Error(quiet ?? 'Use a valid Herald HTTPS server origin.');
     }
     const savedPath = tokenPath(directory, profile, host);
     const saved = await readSaved(savedPath);
@@ -191,14 +192,16 @@ export async function main(argv: string[], io: Io): Promise<number> {
     };
     switch (command) {
       case 'request-secret':
+      case 'request-file':
       case 'send-secret': {
         if (
           positionals.length !== 1 ||
-          !(command === 'request-secret' ? values.out && !values.input : values.input)
+          !(command === 'send-secret' ? values.input : values.out && !values.input)
         )
-          throw new UsageError(secretFailure);
+          throw new UsageError(quiet);
         const settings = {
           title: values.title,
+          body: values.body,
           replyTo: values['reply-to'],
           label: values.label,
           deadline: duration(values.deadline || values.timeout || 3600),
@@ -207,7 +210,9 @@ export async function main(argv: string[], io: Io): Promise<number> {
         const result =
           command === 'request-secret'
             ? await requestSecret(client, values.out!, settings)
-            : await sendSecret(client, values.input!, settings);
+            : command === 'request-file'
+              ? await requestFile(client, values.out!, settings)
+              : await sendSecret(client, values.input!, settings);
         print(`${result.id}  ${result.status}`, result);
         return 0;
       }
@@ -488,8 +493,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
     }
     throw new UsageError(`Unknown command ${command}.`);
   } catch (error) {
-    if (secret) {
-      io.err(secretFailure);
+    if (quiet) {
+      io.err(quiet);
       return error instanceof UsageError ? 2 : 1;
     }
     io.err((error as Error).message);
