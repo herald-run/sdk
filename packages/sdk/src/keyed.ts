@@ -36,9 +36,6 @@ type Payload = Record<string, unknown>;
 /** Picks the one kid allowed to sign an envelope, from the verified directory. */
 type SignerOf = (s: State) => string | undefined;
 const NO_ENTRY = 'No recipient entry for these keys.';
-const SECRET_KEY = 'Secret fields require a requester public key.';
-// Keyed requests receive secrets sealed to the integration key, so no RSA key is needed.
-const placeholderKey = { kty: 'RSA', n: 'A'.repeat(342), e: 'AQAB' } as const;
 const CONTENT = [
   'title',
   'body',
@@ -63,13 +60,6 @@ const fileList = z.array(fileEntry).max(30).optional();
 const fail = (message: string): never => {
   throw new E2eeError(message);
 };
-/** `messageInputSchema`, without the requester key that keyed secret fields do not use. */
-function parseInput(input: MessageRequest) {
-  let result = messageInputSchema.safeParse(input);
-  if (!result.success && result.error.issues.some((i) => i.message === SECRET_KEY))
-    result = messageInputSchema.safeParse({ ...input, publicKey: placeholderKey });
-  return result;
-}
 /** A shallow copy without `keys` and without undefined values. */
 function omit<T extends object>(value: T, ...keys: string[]): T {
   const entries = Object.entries(value).filter(([k, v]) => v !== undefined && !keys.includes(k));
@@ -116,7 +106,7 @@ export class KeyedSession {
     const [directory, me] = await Promise.all([this.#directory(), e2ee.keySet(this.seed)]);
     if (!directory.account)
       fail(
-        'End-to-end encryption is not set up for this account; a keyed token never uses plaintext.',
+        'End-to-end encryption is not set up for this account yet. Open Herald on a signed-in device first.',
       );
     const info = await e2ee.verifyAccount(directory.account!, this.fingerprint);
     const account = directory.account!.statement.account;
@@ -171,7 +161,7 @@ export class KeyedSession {
    * value itself goes to the receiver the account signs.
    */
   async sealMessage(input: MessageRequest, idempotencyKey: string): Promise<SealedMessageInput> {
-    const parsed = parseInput(input);
+    const parsed = messageInputSchema.safeParse(input);
     if (!parsed.success) throw new HeraldError(z.prettifyError(parsed.error), 400);
     const s = await this.state();
     const id = crypto.randomUUID();
@@ -219,23 +209,18 @@ export class KeyedSession {
   }
   /**
    * Opens a record's sealed parts into a plain record with `e2ee: true`; failures are flagged.
-   * Content comes only from verified envelopes: a task (or `task: true`) without sealed input, an
-   * unsealed record from a keyed connection and a sealed request with an unsealed answer are all
-   * `unverified`. Plaintext from connections without keys is returned as is, without `e2ee`.
+   * Content comes only from verified envelopes: an unsealed record and a sealed request with an
+   * unsealed answer are `unverified`.
    */
   async openRecord<M extends Message>(m: M, options: { task?: boolean } = {}): Promise<M> {
     if (!m || typeof m !== 'object') return m;
-    const s = await this.state();
+    await this.state();
     const task = options.task || m.direction === 'outbound';
     try {
       if (task) {
         if (!m.input?.sealed) fail('This task is not end-to-end encrypted.');
         if (m.recipientId) this.#runners.set(m.id, m.recipientId);
-      } else if (!m.sealed) {
-        if (m.response?.sealed) fail('A sealed answer needs a sealed request.');
-        if (s.kids.has(m.senderId)) fail('A keyed connection sent this record unsealed.');
-        return m;
-      }
+      } else if (!m.sealed) fail('This message is not end-to-end encrypted.');
       let out: M = { ...m, e2ee: true };
       if (task) out = await this.#task(out, m.input!.sealed!);
       else out = await this.#content(out, m.sealed!);
@@ -268,7 +253,7 @@ export class KeyedSession {
     const opened = await this.#open(env, { t: 'message', id: out.id }, sender);
     const { attachments, ...rest } = opened;
     const files = fileList.safeParse(attachments);
-    const parsed = parseInput({ ...rest, attachments: files.data } as MessageRequest);
+    const parsed = messageInputSchema.safeParse({ ...rest, attachments: files.data });
     if (!files.success || !parsed.success) return fail('Malformed message content.');
     if ((parsed.data.kind === 'secret') !== (out.kind === 'secret'))
       fail('The message kind does not match its record.');
@@ -331,16 +316,12 @@ export class KeyedSession {
    */
   async openLogs(id: string, logs: TaskLog[], task: () => Promise<Message>): Promise<OpenedLog[]> {
     if (!logs.length) return logs;
-    const s = await this.state();
     if (!this.#runners.has(id)) await this.openRecord(await task(), { task: true });
     const runner = this.#runners.get(id);
-    // Plaintext lines from a keyed runner are not trusted.
-    const keyed = !!runner && s.kids.has(runner);
     return Promise.all(
       logs.map(async (log): Promise<OpenedLog> => {
-        if (!log.sealed && !keyed) return log;
         try {
-          if (!log.sealed) fail('A keyed runner sent this log line unsealed.');
+          if (!log.sealed) fail('This log line is not end-to-end encrypted.');
           const expect = { t: 'log', task: id, seq: log.sequence };
           const signer = KeyedSession.#integration(runner);
           const { text } = await this.#open(log.sealed!, expect, signer);

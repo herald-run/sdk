@@ -114,8 +114,6 @@ export const messageInputSchema = z
             message: 'Actions must completely answer a form without secrets or files.',
           });
     }
-    if (m.fields.some((f) => f.type === 'secret') && !m.publicKey)
-      ctx.addIssue({ code: 'custom', message: 'Secret fields require a requester public key.' });
   });
 export type MessageInput = z.infer<typeof messageInputSchema>;
 export type MessageRequest = z.input<typeof messageInputSchema>;
@@ -140,11 +138,15 @@ export interface TaskLog {
   /** End-to-end encrypted chunk (`ctx.t = "log"`); `text` is empty. */
   sealed?: SealedEnvelope;
 }
+/** Why the server failed a task: no usable webhook, no acknowledgement, or a lapsed lease. */
+export type TaskFailureReason = 'webhook-unavailable' | 'not-acknowledged' | 'lease-lapsed';
 export interface TaskExecution {
   attempt: number;
   acknowledgedAt?: string;
   completedAt?: string;
+  /** Client-side: opened from `sealed`. */
   error?: string;
+  reason?: TaskFailureReason;
   /** @deprecated Read `GET /messages/:id/logs`. */
   logs?: TaskLog[];
   /** End-to-end encrypted error (`ctx.t = "result"`). */
@@ -163,7 +165,10 @@ export interface TaskInput {
 export interface TaskResult {
   status: 'completed' | 'failed';
   completedAt: string;
+  /** Client-side: opened from `sealed`. */
   error?: string;
+  /** Set when the server, not the runner, failed the task. */
+  reason?: TaskFailureReason;
   /** End-to-end encrypted error (`ctx.t = "result"`). */
   sealed?: SealedEnvelope;
 }

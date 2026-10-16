@@ -10,6 +10,12 @@ export type FileSource = ReadableStream<Uint8Array> | Uint8Array;
 export const fileKey = () => b64u.encode(randomBytes(32));
 export const sealedSize = (size: number) =>
   PREFIX + size + TAG * Math.max(1, Math.ceil(size / CHUNK));
+/** The plaintext size behind a sealed size, or undefined when no plaintext seals to it. */
+export function plaintextSize(sealed: number): number | undefined {
+  const body = sealed - PREFIX;
+  const size = body - TAG * Math.max(1, Math.ceil(body / (CHUNK + TAG)));
+  return Number.isSafeInteger(size) && size >= 0 && sealedSize(size) === sealed ? size : undefined;
+}
 const toStream = (source: FileSource): ReadableStream<Uint8Array> =>
   source instanceof Uint8Array
     ? new ReadableStream({ start: (c) => (c.enqueue(source), c.close()) })

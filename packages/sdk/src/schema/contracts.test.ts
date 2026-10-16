@@ -16,14 +16,14 @@ describe('form boundaries', () => {
     expect(validateAnswers([choice], { injected: 'yes' })).toHaveProperty('injected');
     expect(validateAnswers([choice], { environment: 'staging' })).toEqual({});
   });
-  it('rejects duplicate fields and secrets without a key', () => {
+  it('rejects duplicate fields and takes secret fields without a requester key', () => {
     expect(fieldsSchema.safeParse([choice, choice]).success).toBe(false);
     expect(
       messageInputSchema.safeParse({
         title: 'Key',
         fields: [{ id: 'key', label: 'Key', type: 'secret' }],
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
   it('encrypts long secrets for only the requesting key', async () => {
     const a = await createKeys();

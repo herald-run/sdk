@@ -1,20 +1,27 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { Herald, HeraldError, verifyWebhook } from './index';
+import { keyedClient } from '../fixtures/client';
+import { E2eeError, Herald, HeraldError, verifyWebhook } from './index';
 afterEach(() => vi.restoreAllMocks());
 it('retries a lost creation response with the same key and body', async () => {
+  const client = await keyedClient();
   const fetch = vi
     .spyOn(globalThis, 'fetch')
     .mockRejectedValueOnce(new TypeError('Connection closed'))
     .mockResolvedValueOnce(Response.json({ id: 'message' }));
-  const client = new Herald({ apiKey: 'test-only-token' });
-  expect(await client.send({ title: 'Hello' }, 'stable-key')).toEqual({ id: 'message' });
+  expect(await client.send({ title: 'Hello' }, 'stable-key')).toMatchObject({ id: 'message' });
   expect(fetch.mock.calls).toHaveLength(2);
   expect(fetch.mock.calls[0][1]?.body).toBe(fetch.mock.calls[1][1]?.body);
   expect(new Headers(fetch.mock.calls[1][1]?.headers).get('Idempotency-Key')).toBe('stable-key');
 });
+it('refuses tokens without a key and content calls without one', async () => {
+  expect(() => new Herald({ apiKey: 'hdr_legacy' })).toThrow(E2eeError);
+  const session = new Herald({ apiKey: 'session-token' });
+  await expect(session.send({ title: 'Hello' })).rejects.toThrow('no end-to-end key');
+  await expect(session.upload('a', new Uint8Array(1))).rejects.toThrow(E2eeError);
+});
 it('sets request deadlines separately from wait timeouts and returns typed answers', async () => {
-  const client = new Herald();
+  const client = await keyedClient();
   const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ id: 'message' }));
   vi.spyOn(client, 'wait').mockResolvedValue({
     status: 'answered',
@@ -61,7 +68,7 @@ it('verifies exact webhook bytes and rejects stale or tampered deliveries', () =
 });
 
 it('returns action identity with empty or typed values without changing ordinary ask', async () => {
-  const client = new Herald();
+  const client = await keyedClient();
   const fetch = vi
     .spyOn(globalThis, 'fetch')
     .mockImplementation(async () => Response.json({ id: 'action-request' }));
@@ -82,7 +89,7 @@ it('returns action identity with empty or typed values without changing ordinary
   });
   expect(wait).toHaveBeenCalledWith('action-request', { waitTimeout: 2 });
   const sent = JSON.parse(String(fetch.mock.calls[0][1]?.body));
-  expect(sent.actions).toEqual(input.actions);
+  expect(sent.sealed).toBeDefined();
   expect(sent.expiresIn).toBe(300);
   expect(new Headers(fetch.mock.calls[0][1]?.headers).get('Idempotency-Key')).toBe('stable-action');
   wait.mockResolvedValue({
@@ -148,7 +155,7 @@ it('preserves action request expiry and resumable wait failures', async () => {
 });
 
 it('follows all thread pages and retains reply metadata', async () => {
-  const client = new Herald({ apiKey: 'test-only', url: 'https://app.herald.run' });
+  const client = await keyedClient('https://app.herald.run');
   const fetch = vi
     .spyOn(globalThis, 'fetch')
     .mockResolvedValueOnce(

@@ -1,5 +1,6 @@
 /**
- * Contract fixtures: one scenario the server replays and both SDKs reproduce.
+ * Contract fixtures. `steps`: routes without content, which the server replays and both SDKs
+ * reproduce. `e2ee.steps`: a keyed integration's content scenario, which both SDKs replay.
  * Responses use `<id>`, `<time>`, `<string>` and `<number>` for generated values; requests use
  * `{step.path}` for an earlier step's result, or `{values.name}` for shared literals. Python mirrors
  * this in `packages/python/tests/test_contracts.py`.

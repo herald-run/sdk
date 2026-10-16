@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
+import { keyedClient } from '../fixtures/client';
 import { Herald } from './index';
 let base: string,
   destination: string,
@@ -46,8 +47,8 @@ it.each([307, 308])(
     expect(received).toBe(0);
   },
 );
-it('does not forward raw attachments across redirects', async () => {
-  const client = new Herald({ url: base, apiKey: 'test-only-token' });
+it('does not forward attachments across redirects', async () => {
+  const client = await keyedClient(base);
   await expect(
     client.upload('private.txt', new TextEncoder().encode('test-only-private-file')),
   ).rejects.toMatchObject({ status: 307 });

@@ -32,7 +32,7 @@ export {
   type KeyringKeys,
   type ReceiverClaim,
 } from './keyring';
-export { fileKey, openFile, sealedSize, sealFile, type FileSource } from './files';
+export { fileKey, openFile, plaintextSize, sealedSize, sealFile, type FileSource } from './files';
 export {
   parseRecoveryKey,
   prfSalt,

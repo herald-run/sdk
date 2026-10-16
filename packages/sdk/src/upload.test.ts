@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createServer } from 'node:http';
-import { Herald } from './index';
+import { keyedClient } from '../fixtures/client';
+import { sealedSize } from './e2ee/index';
+import type { Herald } from './index';
 import { idleBody } from './upload';
 const received: number[] = [];
 const server = createServer(async (req, res) => {
@@ -22,7 +24,7 @@ let client: Herald;
 beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as { port: number }).port;
-  client = new Herald({ url: 'http://127.0.0.1:' + port, apiKey: 'test-only' });
+  client = await keyedClient('http://127.0.0.1:' + port);
 });
 afterAll(async () => {
   server.closeAllConnections();
@@ -30,16 +32,18 @@ afterAll(async () => {
 });
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 it('streams uploads that run longer than the idle timeout while they progress', async () => {
+  // Encryption emits whole 64 KiB chunks, so each slow piece is one chunk.
+  const chunk = 65536;
   async function* slow() {
     for (let i = 0; i < 5; i++) {
       await wait(80);
-      yield new Uint8Array(1000);
+      yield new Uint8Array(chunk);
     }
   }
-  await client.upload('slow.bin', slow(), undefined, { size: 5000, idleTimeout: 0.25 });
-  expect(received.at(-1)).toBe(5000);
+  await client.upload('slow.bin', slow(), undefined, { size: 5 * chunk, idleTimeout: 0.25 });
+  expect(received.at(-1)).toBe(sealedSize(5 * chunk));
   await client.upload('small.bin', new Uint8Array(200_000));
-  expect(received.at(-1)).toBe(200_000);
+  expect(received.at(-1)).toBe(sealedSize(200_000));
 });
 it('aborts a stalled upload after the idle timeout', async () => {
   async function* stalled() {
