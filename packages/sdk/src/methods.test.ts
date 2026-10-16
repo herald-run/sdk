@@ -87,3 +87,9 @@ it('calls the token and ping endpoints', async () => {
   expect(await herald.revokeToken()).toBeUndefined();
   expect(seen).toEqual(['GET /api/ping', 'GET /api/v1/token', 'DELETE /api/v1/token']);
 });
+it('passes revision-feed tombstones through unopened', async () => {
+  const herald = await keyedClient();
+  const tombstone = { id: 'gone', revision: 3, deleted: true };
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json([tombstone]));
+  expect(await herald.messages({ after: 2, tombstones: 1 })).toEqual([tombstone]);
+});

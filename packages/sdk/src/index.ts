@@ -177,7 +177,9 @@ export class Herald {
     if (!this.#keyed) throw new E2eeError(UNKEYED);
     return this.#keyed;
   }
-  #open = async <M extends Message>(m: M): Promise<M> => this.#keys.openRecord(m);
+  // Tombstones from the revision feed carry no content to open.
+  #open = async <M extends Message>(m: M): Promise<M> =>
+    (m as { deleted?: unknown }).deleted === true ? m : this.#keys.openRecord(m);
   #openTask = async <M extends Message>(m: M): Promise<M> =>
     this.#keys.openRecord(m, { task: true });
   /**
