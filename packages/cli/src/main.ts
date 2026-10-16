@@ -20,7 +20,7 @@ import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
 import { integrate, type Run } from './integrate';
 import { listen } from './listen';
-import { encryptionLine, login, userAgent } from './login';
+import { encryptionLine, login, safetyGroups, userAgent } from './login';
 import { requestSecret, sendSecret, secretFailure } from './secrets';
 
 /** A keyed client's verified account safety code; undefined for legacy tokens. */
@@ -98,6 +98,7 @@ const options = {
   name: { type: 'string' },
   scopes: { type: 'string' },
   'no-browser': { type: 'boolean' },
+  'safety-code': { type: 'string' },
   scope: { type: 'string' },
   'dry-run': { type: 'boolean' },
 } as const;
@@ -208,7 +209,12 @@ export async function main(argv: string[], io: Io): Promise<number> {
         return 0;
       }
       case 'login': {
-        const result = await login(base, { name: values.name, scopes: values.scopes }, saved, {
+        const options = {
+          name: values.name,
+          scopes: values.scopes,
+          safetyCode: values['safety-code'],
+        };
+        const result = await login(base, options, saved, {
           log: io.err,
           ask: io.ask,
           open: values['no-browser'] ? undefined : io.open,
@@ -269,7 +275,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             info = await client.token();
             lines.push(`token    ${info.name} for ${info.account.email}`);
             const code = await safetyCode(client);
-            lines.push(`e2ee     ${code ? `on (safety code ${code})` : 'off'}`);
+            lines.push(`e2ee     ${code ? `on (safety code ${safetyGroups(code)})` : 'off'}`);
           } catch (error) {
             problem = `token rejected: ${(error as Error).message}`;
           }

@@ -13,8 +13,10 @@ export type Saved = {
   seed?: string;
   fingerprint?: string;
 };
+/** Four-character groups, as the app shows the safety code. */
+export const safetyGroups = (code: string) => code.match(/.{1,4}/g)?.join(' ') ?? '';
 export const encryptionLine = (fingerprint?: string) =>
-  `End-to-end encryption: ${fingerprint ? `on (safety code ${fingerprint})` : 'off'}`;
+  `End-to-end encryption: ${fingerprint ? `on (safety code ${safetyGroups(fingerprint)})` : 'off'}`;
 export const userAgent = `herald-cli/${version}`;
 export type LoginIo = {
   log: (line: string) => void;
@@ -57,7 +59,7 @@ async function post(base: string, path: string, body: unknown, token?: string) {
 /** Browser-approved device login; reuses this device's connection when its token still matches. */
 export async function login(
   base: string,
-  options: { name?: string; scopes?: string },
+  options: { name?: string; scopes?: string; safetyCode?: string },
   saved: Saved,
   io: LoginIo,
 ): Promise<{ saved: Saved; reused: boolean }> {
@@ -94,7 +96,13 @@ export async function login(
     if (!response.ok) throw new Error(result.error_description || result.error || 'Login failed.');
     const human = new Herald({ url: base, apiKey: result.access_token, userAgent });
     try {
-      const keyed = await certificate(human, keys, String(device.user_code));
+      const keyed = await certificate(
+        human,
+        keys,
+        String(device.user_code),
+        io,
+        options.safetyCode,
+      );
       if (!keyed) io.log(encryptionLine());
       return await connect(human, name, chosen, saved, io, keyed);
     } finally {
@@ -104,11 +112,41 @@ export async function login(
   throw new Error('The login request expired. Run herald login again.');
 }
 type Keyed = { seed: string; fingerprint: string; certificate: e2ee.Certificate };
+/**
+ * The person anchors the account key: the safety code this login pins must match the one the
+ * approval page shows, confirmed in a terminal or passed as `--safety-code`. Nothing is stored
+ * otherwise.
+ */
+async function confirmSafetyCode(fingerprint: string, io: LoginIo, given?: string) {
+  if (given !== undefined) {
+    if (given.replace(/\s+/g, '') === fingerprint) return;
+    throw new Error('The safety code does not match this account. Nothing was stored.');
+  }
+  if (!io.ask)
+    throw new Error(
+      'This account uses end-to-end encryption. Run herald login --safety-code "<code>" with the safety code shown on the approval page or in Settings.',
+    );
+  io.log(`Account safety code: ${safetyGroups(fingerprint)}`);
+  const answer = await io.ask('Does this match the safety code on the approval page? [y/N] ');
+  if (!/^y(es)?$/i.test(answer.trim()))
+    throw new Error('The safety code was not confirmed. Nothing was stored.');
+}
 /** For an enrolled account: the owner's certificate for this login's keys, checked locally. */
-async function certificate(human: Herald, keys: e2ee.KeySet, userCode: string) {
+async function certificate(
+  human: Herald,
+  keys: e2ee.KeySet,
+  userCode: string,
+  io: LoginIo,
+  safetyCode?: string,
+) {
   const directory = await human.keys();
-  if (!directory.account) return undefined;
+  if (!directory.account) {
+    if (safetyCode !== undefined)
+      throw new Error('This account has no end-to-end encryption keys. Nothing was stored.');
+    return undefined;
+  }
   const fingerprint = await e2ee.fingerprint(directory.account.statement.identity);
+  await confirmSafetyCode(fingerprint, io, safetyCode);
   const account = await e2ee.verifyAccount(directory.account, fingerprint);
   const cert = await human.deviceCertificate(userCode).catch(() => {
     throw new Error(

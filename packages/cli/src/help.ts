@@ -6,9 +6,9 @@ const message = ['input', 'title', 'body', 'file', 'reply-to', 'deadline', 'key'
 export const commands: Record<string, Spec> = {
   login: {
     summary: 'Connect this device in the browser and store a token',
-    options: ['name', 'scopes', 'no-browser'],
+    options: ['name', 'scopes', 'no-browser', 'safety-code'],
     detail:
-      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.\nOn accounts with end-to-end encryption, the approval also certifies a key stored with the token.',
+      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.\nOn accounts with end-to-end encryption, the approval also certifies a key stored with the token. Confirm that the safety code matches the approval page, or pass it with --safety-code when not in a terminal.',
   },
   logout: { summary: 'Revoke the stored token and delete it locally' },
   whoami: { summary: 'Show the token, its scopes, the account and end-to-end encryption' },
@@ -86,6 +86,7 @@ const describe: Record<string, string> = {
   name: '--name NAME        Connection name (default: Herald CLI (<host>))',
   scopes: '--scopes LIST      all, or comma-separated scopes',
   'no-browser': '--no-browser       Print the approval link only',
+  'safety-code': '--safety-code CODE Expected account safety code (end-to-end encryption)',
   search: '--search TEXT',
   status: '--status STATUS    pending, answered, expired, cancelled, ...',
   direction: '--direction DIR    inbound or outbound',

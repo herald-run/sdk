@@ -162,8 +162,9 @@ it('certifies the key from the approval link on enrolled accounts', async () => 
     keys: { account, certificates: [] },
     certificate: () => certify(key()[0], key()[1]),
   });
-  const { saved } = await login('https://herald.test', {}, {}, { ...io(), open });
   const fingerprint = await e2ee.fingerprint(account.statement.identity);
+  const safetyCode = fingerprint.match(/.{1,4}/g)!.join(' ');
+  const { saved } = await login('https://herald.test', { safetyCode }, {}, { ...io(), open });
   expect(saved).toMatchObject({ token: 'hdr_new', fingerprint });
   expect((await e2ee.keySet(saved.seed)).signPub).toBe(key()[0]);
   const [sign, box] = key();
@@ -176,7 +177,47 @@ it('certifies the key from the approval link on enrolled accounts', async () => 
     keys: { account, certificates: [] },
     certificate: async () => certify(key()[1], key()[0]),
   });
-  await expect(login('https://herald.test', {}, {}, { ...io(), open })).rejects.toThrow(
+  await expect(login('https://herald.test', { safetyCode }, {}, { ...io(), open })).rejects.toThrow(
     'different key',
   );
+});
+it('stores a key only after the person confirms the safety code', async () => {
+  const keyring = e2ee.createKeyring('acct');
+  const account = await e2ee.accountStatement(keyring);
+  const fingerprint = await e2ee.fingerprint(account.statement.identity);
+  let link = '';
+  const open = (url: string) => !!(link = url);
+  const enrolled = () => {
+    const key = () => link.split('#k=')[1].split('.');
+    return server({
+      integrations: [],
+      keys: { account, certificates: [] },
+      certificate: () => e2ee.certify(keyring, { sign: key()[0], box: key()[1] }),
+    });
+  };
+  const fails = async (options: object, extra: object, error: string) => {
+    const { created } = enrolled();
+    await expect(
+      login('https://herald.test', options, {}, { ...io(), open, ...extra }),
+    ).rejects.toThrow(error);
+    expect(created).toEqual([]);
+  };
+  await fails({}, {}, '--safety-code');
+  await fails({ safetyCode: 'AAAA' }, {}, 'does not match');
+  await fails({}, { ask: async () => 'n' }, 'not confirmed');
+  const log = vi.fn();
+  const ask = vi.fn(async () => 'y');
+  enrolled();
+  const { saved } = await login('https://herald.test', {}, {}, { ...io(), log, open, ask });
+  expect(saved.fingerprint).toBe(fingerprint);
+  expect(log).toHaveBeenCalledWith(
+    `Account safety code: ${fingerprint.match(/.{1,4}/g)!.join(' ')}`,
+  );
+  expect(ask).toHaveBeenCalledWith('Does this match the safety code on the approval page? [y/N] ');
+  // An expected code with no account keys is a downgrade, never a plaintext login.
+  const { created } = server({ integrations: [] });
+  await expect(
+    login('https://herald.test', { safetyCode: fingerprint }, {}, { ...io(), open }),
+  ).rejects.toThrow('no end-to-end encryption keys');
+  expect(created).toEqual([]);
 });
