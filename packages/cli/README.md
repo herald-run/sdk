@@ -38,7 +38,7 @@ Answers to secret and file fields go to new private files (`--out`, mode 0600) a
 
 ## Claude Code and Codex
 
-Register the [`@herald-run/mcp`](https://www.npmjs.com/package/@herald-run/mcp) server with the client's own command, such as `claude mcp add herald -- npx -y @herald-run/mcp`. Agent skills that use Herald are at [herald.run/skills](https://herald.run/skills).
+Install the agent skills from [herald.run/skills](https://herald.run/skills); they run this CLI, so `herald login` is the only setup. Other MCP clients can use the [`@herald-run/mcp`](https://www.npmjs.com/package/@herald-run/mcp) server.
 
 ## Output
 

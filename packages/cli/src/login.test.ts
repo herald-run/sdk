@@ -15,6 +15,8 @@ type Server = {
   destinations?: Array<{ id: string; integrationId: string }>;
   keys?: unknown;
   certificate?: () => Promise<unknown>;
+  /** Device-token answers served before the pending one and the approval. */
+  polls?: Response[];
 };
 function server(state: Server) {
   const calls: string[] = [];
@@ -30,13 +32,16 @@ function server(state: Server) {
         device_code: 'd',
         user_code: 'U',
         verification_uri: 'https://herald.test/device',
-        expires_in: 60,
+        expires_in: 600,
         interval: 1,
       });
     if (path === '/api/auth/device/token')
-      return polls++
-        ? Response.json({ access_token: 'human' })
-        : Response.json({ error: 'authorization_pending' }, { status: 400 });
+      return (
+        state.polls?.shift() ||
+        (polls++
+          ? Response.json({ access_token: 'human' })
+          : Response.json({ error: 'authorization_pending' }, { status: 400 }))
+      );
     if (path === '/api/v1/integrations' && method === 'GET')
       return Response.json(state.integrations);
     if (path === '/api/v1/integrations') {
@@ -113,6 +118,44 @@ it.each([
   expect(calls.filter((c) => c.startsWith('DELETE'))).toEqual(deletes);
   if (ask) expect(ask).toHaveBeenCalledWith(expect.stringContaining('Revoke 1 older'));
   if (!deletes.length) expect(log.log).toHaveBeenCalledWith(expect.stringContaining('2 older'));
+});
+const answer = (status: number, body?: object, headers: Record<string, string> = {}) =>
+  new Response(body ? JSON.stringify(body) : 'Bad gateway', {
+    status,
+    headers: body ? { 'Content-Type': 'application/json', ...headers } : headers,
+  });
+it('waits out rate limits and bodiless server errors while polling', async () => {
+  const polls = [
+    answer(429, { message: 'Too many requests.' }, { 'X-Retry-After': '7' }),
+    answer(429, { message: 'Too many requests.' }, { 'Retry-After': '99999' }),
+    answer(502),
+  ];
+  server({ integrations: [], polls });
+  const pause = vi.fn<(ms: number) => Promise<void>>(async () => {});
+  const result = await login(
+    'https://herald.test',
+    { name: device, safetyCode },
+    {},
+    {
+      ...io(),
+      pause,
+    },
+  );
+  expect(result.saved.token).toBe('hdr_new');
+  expect(pause.mock.calls.map(([ms]) => ms)).toEqual([1000, 7000, 60000, 1000, 1000]);
+});
+it.each([
+  [answer(400, { error: 'access_denied' }), 'access_denied'],
+  [answer(400, { error: 'expired_token', error_description: 'Code expired.' }), 'Code expired.'],
+  [answer(500, { error: 'server_error', error_description: 'Bad state.' }), 'Bad state.'],
+  [answer(403, { message: 'Herald is invite-only.' }), 'Herald is invite-only.'],
+])('ends the login on a final poll answer (%#)', async (poll, message) => {
+  server({ integrations: [], polls: [poll] });
+  const pause = vi.fn(async () => {});
+  await expect(
+    login('https://herald.test', { name: device, safetyCode }, {}, { ...io(), pause }),
+  ).rejects.toThrow(message);
+  expect(pause).toHaveBeenCalledTimes(1);
 });
 it('requests the default scopes without asking and rejects unknown scopes before login', async () => {
   const { created } = server({ integrations: [] });

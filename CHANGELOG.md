@@ -2,6 +2,11 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
+## Unreleased
+
+- CLI: `herald login` waits out rate limits (which a login pending a few minutes reached) and bodiless server errors, honouring `Retry-After`, instead of failing with "Login failed."; other failures show the server's message.
+- CLI: the README points Claude Code and Codex at the skills, which run the CLI.
+
 ## 0.3.0-beta.5
 
 - CLI: `send`, `ask` and `register` reach every capability through flags, merged onto `-i` input: `--body-file`, `--kind`, `--field ID[?]:TYPE[:LABEL[:CHOICES]]` (including `secret` and `secret-file`), `--action`, `--block TYPE=PATH` (code, diff, json, table from CSV, image), `--review`, and for `register` `--target`, `--webhook`, `--description`, `--type`. In `-i` input, image blocks may give a local `file`.
