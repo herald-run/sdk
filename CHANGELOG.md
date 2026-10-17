@@ -4,7 +4,7 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 ## Unreleased
 
-- CLI: `herald login` keeps polling through rate limits (several logins from one address) and server errors, honouring `Retry-After`, instead of failing with "Login failed."
+- CLI: `herald login` waits out rate limits (which a login pending a few minutes reached) and bodiless server errors, honouring `Retry-After`, instead of failing with "Login failed."; other failures show the server's message.
 - CLI: the README points Claude Code and Codex at the skills, which run the CLI.
 
 ## 0.3.0-beta.5

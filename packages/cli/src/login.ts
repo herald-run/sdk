@@ -80,24 +80,33 @@ export async function login(
   );
   const deadline = Date.now() + device.expires_in * 1000;
   let delay = (device.interval || 5) * 1000,
-    retry = 0;
+    wait = delay;
   while (Date.now() < deadline) {
-    await pause(Math.max(delay, retry));
-    retry = 0;
+    await pause(Math.min(wait, Math.max(0, deadline - Date.now())));
+    wait = delay;
     const { response, data: result } = await post(base, '/api/auth/device/token', {
       grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
       device_code: device.device_code,
       client_id: 'herald-cli',
     });
     if (result.error === 'authorization_pending') continue;
-    // Rate limits (several logins from one address) and server errors pass: slow down, poll again.
-    if (result.error === 'slow_down' || response.status === 429 || response.status >= 500) {
-      const after = response.headers.get('Retry-After') ?? response.headers.get('X-Retry-After');
-      retry = (Number(after) || 0) * 1000;
-      delay += 5000;
+    if (result.error === 'slow_down') {
+      wait = delay += 5000;
       continue;
     }
-    if (!response.ok) throw new Error(result.error_description || result.error || 'Login failed.');
+    // The auth rate limit counts every poll, so a login pending a few minutes gets 429s, and proxies
+    // fail briefly without a body: wait those out. Errors the server explains still end the login.
+    if (response.status === 429 || (response.status >= 500 && !result.error && !result.message)) {
+      const after = Number(
+        response.headers.get('Retry-After') ?? response.headers.get('X-Retry-After'),
+      );
+      wait = Math.max(delay, Math.min(after > 0 ? after * 1000 : 0, 60_000));
+      continue;
+    }
+    if (!response.ok)
+      throw new Error(
+        result.error_description || result.message || result.error || 'Login failed.',
+      );
     const human = new Herald({ url: base, apiKey: result.access_token, userAgent });
     try {
       const keyed = await certificate(
