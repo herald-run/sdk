@@ -19,5 +19,5 @@ stage(
     description: 'Command line client for Herald, the human-in-the-loop inbox for agents',
     bin: { herald: 'herald.js' },
   },
-  ['dist/herald.js', 'skills'],
+  ['dist/herald.js'],
 );

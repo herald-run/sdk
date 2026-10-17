@@ -16,11 +16,12 @@ const types: Record<string, string> = {
   '.html': 'text/html',
   '.zip': 'application/zip',
 };
+export const fileType = (path: string) =>
+  types[extname(path).toLowerCase()] || 'application/octet-stream';
 /** Streams a local file to Herald (≤100 MB); the type comes from its extension. */
 export async function uploadPath(client: Herald, path: string): Promise<Attachment> {
   const info = await stat(path);
   if (!info.isFile()) throw new Error(`${path} is not a file.`);
   if (info.size > 100_000_000) throw new Error('Files must be 100 MB or smaller.');
-  const type = types[extname(path).toLowerCase()] || 'application/octet-stream';
-  return client.upload(basename(path), createReadStream(path), type, { size: info.size });
+  return client.upload(basename(path), createReadStream(path), fileType(path), { size: info.size });
 }

@@ -50,7 +50,6 @@ jobs:
           node --input-type=module -e "import { Herald, version } from '@herald-run/sdk'; import { messageInputSchema } from '@herald-run/sdk/schema'; import { seal } from '@herald-run/sdk/crypto'; new Herald({ apiKey: 'x' }); console.log(version, typeof messageInputSchema.parse, typeof seal)"
           npx herald --version
           npx herald help send > /dev/null
-          npx herald integrate claude-code --scope project --dry-run > integrate.txt && grep -q herald-ask integrate.txt
           npx herald-mcp --version
       - name: Build and test the wheel
         run: |

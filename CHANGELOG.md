@@ -2,6 +2,13 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
+## 0.3.0-beta.5
+
+- CLI: `send`, `ask` and `register` reach every capability through flags, merged onto `-i` input: `--body-file`, `--kind`, `--field ID[?]:TYPE[:LABEL[:CHOICES]]` (including `secret` and `secret-file`), `--action`, `--block TYPE=PATH` (code, diff, json, table from CSV, image), `--review`, and for `register` `--target`, `--webhook`, `--description`, `--type`. In `-i` input, image blocks may give a local `file`.
+- CLI: `ask`, `send --wait` and `wait` take `--out [FIELD=]PATH` to write secret and file answers to new private files without printing them; `send --secret-file PATH` offers a secret. `request-secret`, `request-file`, `send-secret` and `upload` are removed.
+- CLI: `integrate` and the bundled skills are removed. Skills are at https://herald.run/skills; register the MCP server with the client's own command, e.g. `claude mcp add herald -- npx -y @herald-run/mcp`.
+- CLI: `account` shows the account holder and a separate `connection` line; `whoami` shows one `account` line.
+
 ## 0.3.0-beta.4
 
 - Content is always end-to-end encrypted; tokens without a key are refused. Connection tokens have the form `hdr_<auth>.<seed>.<fingerprint>` (from `herald login` or Settings → Connections); the SDKs encrypt what they send and decrypt what they read: messages, forms, answers, tasks, logs, results, files, secrets and secret offers. Only `hdr_<auth>` is sent to the server. If the account's keys are missing or do not match the token, content calls fail; nothing falls back to plaintext.

@@ -2,7 +2,22 @@
 export type Spec = { args?: string; summary: string; options?: string[]; detail?: string };
 const searchNote =
   'Content is end-to-end encrypted, so the server cannot search it: the newest five pages are decrypted and filtered locally.';
-const message = ['input', 'title', 'body', 'file', 'reply-to', 'deadline', 'key'];
+const message = ['input', 'title', 'body', 'body-file', 'kind', 'field', 'action', 'block'].concat([
+  'file',
+  'review',
+  'reply-to',
+  'deadline',
+  'key',
+]);
+const compose = `Fields: ID[?]:TYPE[:LABEL[:CHOICES]], required unless ID ends with ?. TYPE: text, textarea,
+number, boolean, select, multiselect, date, secret, file or secret-file (one file for this
+connection only). LABEL (no colons) defaults to the ID; select and multiselect need CHOICES: a,b or
+a=Label,b. Actions: ID[:LABEL] answers in one tap; every field must be optional, none secret or file.
+Blocks: code, diff, json and table (CSV) read PATH (- for stdin); image attaches the file.
+--out [FIELD=]PATH writes a secret or file answer to a new 0600 file (several files: a 0700
+directory); every secret needs one, and values are never printed. PATH alone fits a single field.
+With -i, flags win for title, body and kind and add fields, actions, blocks and files; an image
+block there may give "file": PATH instead of attachmentId.`;
 export const commands: Record<string, Spec> = {
   login: {
     summary: 'Connect this device in the browser and store a token',
@@ -15,10 +30,22 @@ export const commands: Record<string, Spec> = {
   status: { summary: 'Check the server and the stored token' },
   send: {
     summary: 'Send a message; --wait waits for an answer',
-    options: [...message, 'wait', 'timeout'],
+    options: [...message, 'wait', 'timeout', 'out', 'secret-file'],
+    detail:
+      compose +
+      '\n--secret-file offers a secret from a private file (≤16,000 bytes) and waits for its delivery.',
   },
-  ask: { summary: 'Send a request and wait for the answer', options: [...message, 'timeout'] },
-  wait: { args: '<message-id>', summary: 'Wait for a request to finish', options: ['timeout'] },
+  ask: {
+    summary: 'Send a request and wait for the answer',
+    options: [...message, 'timeout', 'out'],
+    detail: compose + '\nWithout fields or actions, it asks for a free-text reply.',
+  },
+  wait: {
+    args: '<message-id>',
+    summary: 'Wait for a request to finish',
+    options: ['timeout', 'out'],
+    detail: 'Secret answers are shown as not collected unless --out FIELD=PATH stores them.',
+  },
   cancel: { args: '<message-id>', summary: 'Cancel a pending request' },
   messages: {
     summary: 'List messages, newest first',
@@ -34,7 +61,6 @@ export const commands: Record<string, Spec> = {
   show: { args: '<message-id>', summary: 'Show a message with its answer and logs' },
   thread: { args: '<message-id>', summary: 'List a thread, oldest first' },
   logs: { args: '<task-id>', summary: 'Print task logs', options: ['after'] },
-  upload: { args: '<file>', summary: 'Upload a file and print its attachment' },
   download: {
     args: '<file-id>',
     summary: 'Download an attachment (--out - writes stdout)',
@@ -46,35 +72,19 @@ export const commands: Record<string, Spec> = {
     summary: "Manage this connection's destinations",
     options: ['input'],
   },
-  register: { summary: 'Register or update a destination by key', options: ['input'] },
+  register: {
+    summary: 'Register or update a destination by key',
+    options: ['input', 'target', 'webhook', 'description', 'type', 'field'],
+    detail:
+      'Each --field (no secret or file types) belongs to the --type before it. Tasks are pulled with herald listen unless --webhook is set. Session types need -i.',
+  },
   listen: {
     summary: 'Run tasks for a pull destination',
     options: ['target', 'config', 'concurrency'],
     detail: 'The runner config may omit destinationId; --target then names the destination key.',
   },
   watch: { summary: 'Print messages as they change', options: ['after'] },
-  'request-secret': {
-    summary: 'Request a secret into a new private file',
-    options: ['out', 'label', 'title', 'reply-to', 'deadline', 'timeout'],
-  },
-  'request-file': {
-    summary: 'Request a file into a new private file',
-    options: ['out', 'label', 'title', 'body', 'reply-to', 'deadline', 'timeout'],
-    detail:
-      'Only this connection can decrypt the file; Herald deletes it 15 minutes after the answer.',
-  },
-  'send-secret': {
-    summary: 'Offer a secret from a private file',
-    options: ['input', 'title', 'reply-to', 'deadline', 'timeout'],
-  },
-  account: { summary: 'Show plan and usage' },
-  integrate: {
-    args: 'claude-code|codex',
-    summary: 'Install Herald skills and register the MCP server for Claude Code or Codex',
-    options: ['scope', 'dry-run'],
-    detail:
-      'User scope writes ~/.claude/skills or ~/.codex/skills and runs claude/codex mcp add; project scope writes .claude/skills + .mcp.json or .agents/skills + .codex/config.toml. Safe to rerun.',
-  },
+  account: { summary: 'Show the account holder, this connection, plan and usage' },
   completion: { args: 'bash|zsh|fish', summary: 'Print a shell completion script' },
   help: { args: '[command]', summary: 'Show help for a command' },
 };
@@ -82,7 +92,14 @@ export const aliases: Record<string, string> = { get: 'show' };
 const describe: Record<string, string> = {
   input: '-i, --input FILE   JSON input (message, form or destination)',
   title: '--title TEXT',
-  body: '--body TEXT',
+  body: '--body TEXT        Markdown body',
+  'body-file': '--body-file PATH   Markdown body from a file (- for stdin)',
+  kind: '--kind KIND        message (default), report or files; form with fields or waiting',
+  field: '--field SPEC       Add a form field; repeatable (see above)',
+  action: '--action ID[:LABEL] Add a one-tap answer; repeatable',
+  block: '--block TYPE=PATH  Add a code, diff, json, table or image block; repeatable',
+  review: '--review           Mark the request as needing review',
+  'secret-file': '--secret-file PATH Offer the secret in a private file instead',
   file: '--file PATH        Attach a file; repeatable',
   'reply-to': '--reply-to ID      Reply in a thread',
   deadline: '--deadline 10m     Server deadline for the request',
@@ -98,14 +115,15 @@ const describe: Record<string, string> = {
   direction: '--direction DIR    inbound or outbound',
   before: '--before CURSOR    Older page: createdAt|id',
   after: '--after N          Revision or log sequence to start after',
-  out: '-o, --out PATH     Output file (must not exist)',
+  out: '-o, --out [FIELD=]PATH New output file (must not exist); repeatable for answers',
   target: '--target KEY       Destination key',
+  webhook: '--webhook URL      Deliver tasks to a webhook instead of herald listen',
+  description: '--description TEXT',
+  type: '--type ID[:LABEL]  Add a request type; repeatable',
   config: '--config FILE      Runner config',
   concurrency: '--concurrency N    Tasks at once (1-16)',
   label: '--label TEXT',
   message: '--message ID       Message with the attachment (decrypts it)',
-  scope: '--scope SCOPE      user (default) or project (current directory)',
-  'dry-run': '--dry-run          Print the changes without making them',
 };
 const globals = `Global options:
   --json             Machine-readable JSON output
