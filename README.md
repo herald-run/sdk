@@ -5,7 +5,7 @@ Clients for [Herald](https://herald.run), the human-in-the-loop inbox for agents
 | Package                        | Install                        | Source                               |
 | ------------------------------ | ------------------------------ | ------------------------------------ |
 | TypeScript SDK and API schemas | `npm install @herald-run/sdk`  | [`packages/sdk`](packages/sdk)       |
-| CLI and agent skills           | `npx @herald-run/cli --help`   | [`packages/cli`](packages/cli)       |
+| CLI                            | `npx @herald-run/cli --help`   | [`packages/cli`](packages/cli)       |
 | MCP server                     | `npx @herald-run/mcp`          | [`packages/mcp`](packages/mcp)       |
 | Python SDK                     | `pip install --pre herald-run` | [`packages/python`](packages/python) |
 

@@ -33,7 +33,11 @@ function server(routes: Record<string, (seen: Seen) => Response | Promise<Respon
   });
   return seen;
 }
-async function run(argv: string[], env: Record<string, string> = { HERALD_TOKEN: sealed.token }) {
+async function run(
+  argv: string[],
+  env: Record<string, string> = { HERALD_TOKEN: sealed.token },
+  stdin?: string,
+) {
   const out: string[] = [],
     err: string[] = [],
     raw: string[] = [];
@@ -44,6 +48,7 @@ async function run(argv: string[], env: Record<string, string> = { HERALD_TOKEN:
     env: { HERALD_URL: 'https://herald.test', ...env },
     home,
     open: () => false,
+    stdin: stdin === undefined ? undefined : async () => stdin,
   };
   const code = await main(argv, io);
   return { code, out: out.join('\n'), err: err.join('\n'), raw: raw.join('') };
@@ -192,7 +197,7 @@ it('shows token, account and server status', async () => {
   });
   const whoami = await run(['whoami']);
   expect(whoami.out).toContain('Laptop (t1)');
-  expect(whoami.out).toContain('Me <me@example.com>');
+  expect(whoami.out.match(/^account .*$/gm)).toEqual(['account  Me <me@example.com>']);
   const code = e2ee.safetyCode(e2ee.parseToken(sealed.token).fingerprint!);
   expect(whoami.out).toContain(`End-to-end encryption: on (safety code ${code})`);
   expect(JSON.parse((await run(['whoami', '--json'])).out)).toEqual({
@@ -204,7 +209,11 @@ it('shows token, account and server status', async () => {
   expect(status).toMatchObject({ code: 0, out: expect.stringContaining('1.2.3 (staging)') });
   expect(seen.some((s) => s.url.pathname === '/api/ping')).toBe(true);
   expect((await run(['status'], {})).code).toBe(1);
-  expect((await run(['account'])).out).toContain('resets   2026-11-01');
+  // For token callers the account record's name is the connection's.
+  const shown = (await run(['account'])).out;
+  expect(shown).toMatch(/^account +Me <me@example.com>$/m);
+  expect(shown).toMatch(/^connection +Me$/m);
+  expect(shown).toMatch(/^resets +2026-11-01$/m);
 });
 it('keeps tokens per profile and server, reading the original config for the default', async () => {
   const directory = join(home, '.config', 'herald');
@@ -215,13 +224,17 @@ it('keeps tokens per profile and server, reading the original config for the def
     join(directory, 'profiles.json'),
     JSON.stringify({ work: { url: 'https://work.test' } }),
   );
-  const seen = server({ 'GET /api/v1/account': () => Response.json({ plan: 'free' }) });
+  const seen = server({
+    'GET /api/v1/account': () => Response.json({ plan: 'free' }),
+    'GET /api/v1/token': () => Response.json({ account: { email: 'me@example.com' } }),
+  });
   await run(['account'], {});
   await run(['account', '--profile', 'work'], { HERALD_URL: '' });
   await run(['account'], { HERALD_PROFILE: 'work', HERALD_URL: '' });
   await writeFile(join(directory, 'herald.test.json'), JSON.stringify({ token: 'hdr_old' }));
   expect((await run(['account'], {})).err).toContain('Run herald login again');
-  expect(seen.map((s) => [s.url.host, s.headers.get('Authorization')])).toEqual([
+  const accounts = seen.filter((s) => s.url.pathname === '/api/v1/account');
+  expect(accounts.map((s) => [s.url.host, s.headers.get('Authorization')])).toEqual([
     ['herald.test', 'Bearer hdr_default'],
     ['work.test', 'Bearer hdr_work'],
     ['work.test', 'Bearer hdr_work'],
@@ -311,7 +324,7 @@ it('manages destinations', async () => {
   expect((await run(['destinations', 'explode'])).code).toBe(2);
 });
 it('keeps secret command failures to the fixed message', async () => {
-  const result = await run(['send-secret', '--input', '/nonexistent', '--body', 'leak']);
+  const result = await run(['send', '--secret-file', '/nonexistent', '--field', 'leak:text']);
   expect(result).toMatchObject({ code: 2, err: expect.stringContaining('Secret transfer failed') });
   expect(result.err).not.toContain('leak');
 });
@@ -335,17 +348,258 @@ it('uses a stored keyed login: safety code, local search and encrypted secrets',
     'POST /api/v1/messages': () => Response.json(form),
     [`POST /api/v1/messages/${form.id}/secrets`]: () => Response.json(body('collect-secrets')),
   });
-  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue({ ...form, status: 'answered' } as never);
+  const fields = [{ id: 'secret', label: 'Token', type: 'secret', required: true }];
+  const response = { values: {}, secretFields: ['secret'], createdAt: form.createdAt };
+  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue({
+    ...form,
+    fields,
+    response,
+    status: 'answered',
+  } as never);
   expect((await run(['whoami'], {})).out).toContain(
     `End-to-end encryption: on (safety code ${e2ee.safetyCode(fingerprint)})`,
   );
   const found = JSON.parse((await run(['search', 'deploy v2', '--json'], {})).out);
   expect(found.map((m: { title: string }) => m.title)).toEqual(['Deploy v2?']);
   const out = join(home, 'secret.txt');
-  expect((await run(['request-secret', '--out', out], {})).code).toBe(0);
+  const asked = await run(['ask', '--field', 'secret:secret:Token', '--out', out], {});
+  expect(asked).toMatchObject({ code: 0, out: `secret  stored ${out}` });
   expect(await readFile(out, 'utf8')).toBe('test-only-token');
   const sent = seen.find((s) => s.method === 'POST' && s.url.pathname === '/api/v1/messages');
   expect(sent?.body).not.toHaveProperty('publicKey');
   expect(seen.every((s) => s.headers.get('Authorization') === `Bearer ${auth}`)).toBe(true);
   expect(seen.some((s) => s.url.search.includes('search'))).toBe(false);
+});
+it('removes the shortcut commands', async () => {
+  for (const command of ['request-secret', 'request-file', 'send-secret', 'upload', 'integrate'])
+    expect(await run([command])).toMatchObject({
+      code: 2,
+      err: expect.stringContaining('Unknown'),
+    });
+  expect((await run(['help'])).out).not.toContain('request-secret');
+  expect((await run(['help', 'send'])).out).toContain('ID[?]:TYPE[:LABEL[:CHOICES]]');
+});
+it('composes forms, actions, blocks and review from flags, merged onto -i', async () => {
+  const record = await message();
+  const seen = server({ 'POST /api/v1/messages': () => Response.json(record, { status: 201 }) });
+  const input = join(home, 'in.json');
+  await writeFile(
+    input,
+    JSON.stringify({
+      title: 'From file',
+      body: 'old',
+      fields: [{ id: 'note', label: 'Note', type: 'text' }],
+      blocks: [{ type: 'diff', text: '-a\n+b' }],
+    }),
+  );
+  const [code, csv] = [join(home, 'deploy.ts'), join(home, 't.csv')];
+  await writeFile(code, 'let x = 1;');
+  await writeFile(csv, 'name,"note, quoted"\napi,"say ""hi"""\n');
+  const args = ['send', '-i', input, '--title', 'Deploy?', '--body-file', '-', '--review'];
+  const fields = ['--field', 'env?:select:Environment:staging,prod=Production'];
+  const blocks = ['--block', `code=${code}`, '--block', `table=${csv}`];
+  const result = await run(
+    [...args, ...fields, '--action', 'ship:Ship it', ...blocks],
+    undefined,
+    'Hi',
+  );
+  expect(result.code).toBe(0);
+  expect(await sent(seen)).toMatchObject({
+    title: 'Deploy?',
+    body: 'Hi',
+    kind: 'form',
+    requiresReview: true,
+    fields: [
+      { id: 'note' },
+      {
+        id: 'env',
+        type: 'select',
+        label: 'Environment',
+        required: false,
+        options: [
+          { value: 'staging', label: 'staging' },
+          { value: 'prod', label: 'Production' },
+        ],
+      },
+    ],
+    actions: [{ id: 'ship', label: 'Ship it', values: {} }],
+    blocks: [
+      { type: 'diff', text: '-a\n+b' },
+      { type: 'code', title: 'deploy.ts', language: 'typescript', text: 'let x = 1;' },
+      {
+        type: 'table',
+        title: 't.csv',
+        columns: ['name', 'note, quoted'],
+        rows: [['api', 'say "hi"']],
+      },
+    ],
+  });
+});
+it('refuses bad specs before sending, with usage exit codes', async () => {
+  const seen = server({});
+  const cases: [string[], string][] = [
+    [['send', '--field', 'x:bogus'], 'TYPE one of'],
+    [['send', '--block', 'video=x'], 'TYPE=PATH'],
+    [['send', '--body', 'a', '--body-file', 'f'], 'not both'],
+    [['ask', '--body-file', '-', '--block', 'code=-'], 'stdin'],
+    [['ask', '--field', 't:secret'], 'Secret fields need --out: t'],
+    [['send', '--field', 't:secret', '--action', 'go'], 'Actions must completely answer'],
+    [['send', '--field', 't:secret', '--out', 'x'], '--out needs --wait'],
+    [['send', '--kind', 'secret'], '--kind is'],
+  ];
+  for (const [argv, text] of cases)
+    expect(await run(argv)).toMatchObject({ code: 2, err: expect.stringContaining(text) });
+  expect(seen.some((s) => s.method === 'POST')).toBe(false);
+});
+it('uploads image block files once and points the blocks at them', async () => {
+  const [shot, other] = [join(home, 'shot.png'), join(home, 'b.png')];
+  await writeFile(shot, 'png');
+  await writeFile(other, 'png2');
+  const input = join(home, 'in.json');
+  await writeFile(
+    input,
+    JSON.stringify({ title: 'Look', blocks: [{ type: 'image', file: shot }] }),
+  );
+  const ids = [crypto.randomUUID(), crypto.randomUUID()];
+  let n = 0;
+  const record = await message();
+  const seen = server({
+    'POST /api/v1/files': ({ body }) =>
+      Response.json({ id: ids[n++], ...(body as object) }, { status: 201 }),
+    [`PUT /api/v1/files/${ids[0]}`]: () => Response.json({ ok: true }),
+    [`PUT /api/v1/files/${ids[1]}`]: () => Response.json({ ok: true }),
+    'POST /api/v1/messages': () => Response.json(record, { status: 201 }),
+  });
+  const result = await run(['send', '-i', input, '--file', shot, '--block', `image=${other}`]);
+  expect(result.code).toBe(0);
+  expect(seen.filter((s) => s.url.pathname === '/api/v1/files')).toHaveLength(2);
+  const content = await sent(seen);
+  expect((content.attachments as { id: string }[]).map((a) => a.id)).toEqual(ids);
+  expect(content.blocks).toEqual([
+    { type: 'image', attachmentId: ids[0], alt: 'shot.png' },
+    { type: 'image', attachmentId: ids[1], alt: 'b.png' },
+  ]);
+});
+it('deletes outputs and cancels the request when collecting fails', async () => {
+  const record = await message();
+  const seen = server({
+    'POST /api/v1/messages': () => Response.json(record, { status: 201 }),
+    [`POST /api/v1/messages/${M1}/cancel`]: () => Response.json(record),
+  });
+  vi.spyOn(Herald.prototype, 'wait').mockRejectedValue(new Error('untrusted-detail'));
+  const out = join(home, 'token');
+  const result = await run(['ask', '--field', 'token:secret', '--out', out]);
+  expect(result).toMatchObject({ code: 1, err: expect.stringContaining('Secret transfer failed') });
+  expect(result.err).not.toContain('untrusted-detail');
+  await expect(stat(out)).rejects.toThrow();
+  expect(seen.some((s) => s.url.pathname.endsWith('/cancel'))).toBe(true);
+  // An existing output fails before anything is sent.
+  await writeFile(out, 'keep');
+  const sends = seen.length;
+  expect((await run(['ask', '--field', 'token:secret', '--out', out])).code).toBe(1);
+  expect(seen.slice(sends).some((s) => s.method === 'POST')).toBe(false);
+  expect(await readFile(out, 'utf8')).toBe('keep');
+});
+it('waits into a directory for several files and never shows uncollected secrets', async () => {
+  const files = ['a.txt', '../a.txt'].map((name) => ({
+    id: crypto.randomUUID(),
+    name,
+    type: 'text/plain',
+    size: 1,
+    key: e2ee.fileKey(),
+  }));
+  const fields = [
+    { id: 'logs', label: 'Logs', type: 'file', required: true },
+    { id: 'tok', label: 'Token', type: 'secret', required: false },
+  ];
+  const asked = await message({}, { fields });
+  const answered = await sealed.sealedAnswer(
+    asked,
+    { logs: files.map((f) => f.id) },
+    { attachments: files, secretFields: ['tok'] },
+  );
+  const routes: Record<string, () => Response | Promise<Response>> = {
+    [`GET /api/v1/messages/${M1}`]: () => Response.json(answered),
+    [`POST /api/v1/messages/${M1}/secrets`]: async () =>
+      Response.json({ tok: await sealed.sealedSecret(M1, 'tok', 'test-only-value') }),
+  };
+  for (const file of files)
+    routes[`GET /api/v1/files/${file.id}`] = async () =>
+      new Response(
+        await new Response(
+          e2ee.sealFile(file.key, new TextEncoder().encode(file.name)),
+        ).arrayBuffer(),
+      );
+  const seen = server(routes);
+  vi.spyOn(Herald.prototype, 'wait').mockImplementation(function (this: Herald, id: string) {
+    return this.get(id);
+  });
+  const shown = await run(['wait', M1]);
+  expect(shown.out).toMatch(/^tok +not collected$/m);
+  expect(seen.some((s) => s.url.pathname.endsWith('/secrets'))).toBe(false);
+  const dir = join(home, 'logs');
+  expect((await run(['wait', M1, '--out', `logs=${dir}`])).code).toBe(2);
+  const tok = join(home, 'tok');
+  const result = await run(['wait', M1, '--out', `logs=${dir}`, '--out', `tok=${tok}`, '--json']);
+  expect(result.code).toBe(0);
+  expect(JSON.parse(result.out).response.values).toEqual({
+    logs: { stored: dir },
+    tok: { stored: tok },
+  });
+  expect((await stat(dir)).mode & 0o777).toBe(0o700);
+  expect(await readFile(join(dir, 'a.txt'), 'utf8')).toBe('a.txt');
+  expect(await readFile(join(dir, '.._a.txt'), 'utf8')).toBe('../a.txt');
+  expect(await readFile(tok, 'utf8')).toBe('test-only-value');
+  expect((await stat(tok)).mode & 0o777).toBe(0o600);
+  expect(result.out + result.err).not.toContain('test-only-value');
+});
+it('registers destinations from flags, each --field under the --type before it', async () => {
+  const seen = server({
+    'POST /api/v1/destinations': ({ body }) =>
+      Response.json({ id: 'd1', name: 'Runner', integrationId: 'i', ...(body as object) }),
+  });
+  const result = await run([
+    'register',
+    '--target',
+    'laptop',
+    '--webhook',
+    'https://hooks.test/h',
+    '--description',
+    'Runs deploys',
+    '--type',
+    'deploy:Deploy app',
+    '--field',
+    'env:select:Env:staging,prod',
+    '--field',
+    'note?:textarea',
+    '--type',
+    'ping',
+  ]);
+  expect(result).toMatchObject({ code: 0, out: 'd1  laptop  webhook  Runner' });
+  expect(seen.at(-1)!.body).toMatchObject({
+    key: 'laptop',
+    transport: { kind: 'webhook', url: 'https://hooks.test/h' },
+    description: 'Runs deploys',
+    types: [
+      {
+        id: 'deploy',
+        label: 'Deploy app',
+        fields: [
+          { id: 'env', type: 'select', required: true },
+          { id: 'note', type: 'textarea', required: false },
+        ],
+      },
+      { id: 'ping', label: 'Ping', fields: [] },
+    ],
+  });
+  const input = join(home, 'destination.json');
+  await writeFile(input, JSON.stringify({ key: 'old', types: [{ id: 'a', label: 'A' }] }));
+  await run(['register', '-i', input, '--target', 'new', '--type', 'b']);
+  expect(seen.at(-1)!.body).toMatchObject({ key: 'new', types: [{ id: 'a' }, { id: 'b' }] });
+  for (const argv of [
+    ['register'],
+    ['register', '--field', 'x:text', '--type', 'a'],
+    ['register', '--type', 'a', '--field', 'k:secret'],
+  ])
+    expect((await run(argv)).code).toBe(2);
 });

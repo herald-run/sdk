@@ -3,17 +3,19 @@
 [MCP](https://modelcontextprotocol.io) server for [Herald](https://herald.run), the human-in-the-loop inbox for agents. It lets Claude Code, Codex and other MCP clients message you, ask for approvals and input, move files and exchange secrets. Node.js 20 or later; stdio transport.
 
 ```sh
-npx @herald-run/cli login                 # stores a token this server reuses
-npx @herald-run/cli integrate claude-code # or codex: registers this server and installs skills
+npx @herald-run/cli login                      # stores a token this server reuses
+claude mcp add herald -- npx -y @herald-run/mcp
 ```
 
-Or register it by hand: `claude mcp add herald -- npx -y @herald-run/mcp`, or in `~/.codex/config.toml`:
+For Codex, add it to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.herald]
 command = "npx"
 args = ["-y", "@herald-run/mcp"]
 ```
+
+Agent skills that use these tools are at [herald.run/skills](https://herald.run/skills).
 
 ## Authentication
 

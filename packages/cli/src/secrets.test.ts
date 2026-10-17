@@ -18,7 +18,7 @@ let incoming: string[] = [],
   failure = false;
 let receiver: Awaited<ReturnType<typeof createKeys>>;
 let request: Message;
-/** `request-file` answers: through a secret envelope, or as an older app's plain attachment. */
+/** Secret-file answers: through a secret envelope, or as an older app's plain attachment. */
 let fileAnswer: 'secret' | 'plain' | undefined;
 const fileId = crypto.randomUUID();
 const fileBytes = new TextEncoder().encode(canary);
@@ -91,30 +91,32 @@ it('requests directly into a new owner-only file without stdout/stderr/history p
   incoming = [];
   const path = join(folder, 'received');
   const parent = crypto.randomUUID();
-  const result = await cli('request-secret', '--json', '--out', path, '--reply-to', parent);
+  const args = ['ask', '--json', '--field', 'secret:secret:Token', '--out', path];
+  const result = await cli(...args, '--reply-to', parent);
   expect(JSON.parse(incoming.find(Boolean)!).replyTo).toBe(parent);
   expect(await readFile(path, 'utf8')).toBe(canary);
   expect((await stat(path)).mode & 0o777).toBe(0o600);
-  expect(JSON.parse(result.stdout).status).toBe('stored');
+  expect(JSON.parse(result.stdout).response.values).toEqual({ secret: { stored: path } });
   expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
 });
 it('requests a secret file into a new owner-only file without printing it', async () => {
   incoming = [];
   fileAnswer = 'secret';
   const path = join(folder, 'requested');
-  const result = await cli('request-file', '--json', '--out', path, '--label', 'Kubeconfig');
+  const field = 'file:secret-file:Kubeconfig';
+  const result = await cli('ask', '--field', field, '--out', `file=${path}`);
   const sent = JSON.parse(incoming.find(Boolean)!);
   expect(await sealed.opened(sent.sealed)).toMatchObject({
     fields: [{ id: 'file', type: 'file', secret: true, maxItems: 1, label: 'Kubeconfig' }],
   });
   expect(await readFile(path, 'utf8')).toBe(canary);
   expect((await stat(path)).mode & 0o777).toBe(0o600);
-  expect(JSON.parse(result.stdout).status).toBe('stored');
+  expect(result.stdout.trim()).toBe(`file  stored ${path}`);
   expect(result.stdout + result.stderr + incoming.join('')).not.toContain(canary.split('\n')[0]);
   // An older app's plain attachment stays in history, so it is refused.
   fileAnswer = 'plain';
   const plain = join(folder, 'requested-plain');
-  const refused = await cli('request-file', '--out', plain).catch((error) => error);
+  const refused = await cli('ask', '--field', field, '--out', plain).catch((error) => error);
   expect(refused.stderr).toContain('File transfer failed');
   expect(await stat(plain).catch(() => null)).toBeNull();
   fileAnswer = undefined;
@@ -124,7 +126,7 @@ it('sends a file exactly as encrypted ciphertext without printing its value', as
   const path = join(folder, 'source');
   await writeFile(path, canary, { mode: 0o600 });
   const parent = crypto.randomUUID();
-  const result = await cli('send-secret', '--json', '--input', path, '--reply-to', parent);
+  const result = await cli('send', '--json', '--secret-file', path, '--reply-to', parent);
   expect(JSON.parse(incoming.find(Boolean)!).replyTo).toBe(parent);
   expect(await unseal(delivered!, receiver.privateKey)).toBe(canary);
   expect(JSON.parse(result.stdout).status).toBe('delivered');
@@ -136,8 +138,8 @@ it('does not overwrite existing files or follow output symlinks', async () => {
   const link = join(folder, 'link');
   await symlink(target, link);
   for (const path of [target, link]) {
-    await expect(cli('request-secret', '--out', path)).rejects.toMatchObject({ code: 1 });
-    await expect(cli('request-file', '--out', path)).rejects.toMatchObject({ code: 1 });
+    for (const field of ['s:secret', 'f:secret-file'])
+      await expect(cli('ask', '--field', field, '--out', path)).rejects.toMatchObject({ code: 1 });
     expect(await readFile(target, 'utf8')).toBe('keep');
   }
 });
@@ -145,7 +147,7 @@ it('redacts errors from the server and rejects value arguments without echoing t
   failure = true;
   const path = join(folder, 'failed-output');
   try {
-    await cli('request-secret', '--out', path);
+    await cli('ask', '--field', 'secret:secret', '--out', path);
     throw new Error('Expected failure');
   } catch (error) {
     const result = error as { stdout: string; stderr: string };
@@ -153,14 +155,16 @@ it('redacts errors from the server and rejects value arguments without echoing t
     expect(result.stderr).toContain('Secret transfer failed');
   }
   expect(await stat(path).catch(() => null)).toBeNull();
-  const fileError = await cli('request-file', '--out', path).catch((error) => error);
+  const fileError = await cli('ask', '--field', 'file:secret-file', '--out', path).catch(
+    (error) => error,
+  );
   expect(fileError.stderr).toContain('File transfer failed');
   expect(fileError.stdout + fileError.stderr).not.toContain(canary.split('\n')[0]);
   expect(await stat(path).catch(() => null)).toBeNull();
   failure = false;
-  await expect(cli('send-secret', '--secret-value', canary)).rejects.toMatchObject({ code: 2 });
+  await expect(cli('send', '--secret-value', canary)).rejects.toMatchObject({ code: 2 });
   try {
-    await cli('send-secret', '--secret-value', canary);
+    await cli('send', '--secret-value', canary);
   } catch (error) {
     expect((error as { stderr: string }).stderr).not.toContain(canary.split('\n')[0]);
   }
@@ -168,7 +172,7 @@ it('redacts errors from the server and rejects value arguments without echoing t
 
 it('does not echo malformed credential-bearing server URLs during secret commands', async () => {
   try {
-    await execute(process.execPath, [bundle, 'send-secret', '--input', 'unused'], {
+    await execute(process.execPath, [bundle, 'send', '--secret-file', 'unused'], {
       env: {
         ...process.env,
         HERALD_URL: 'invalid-test-only-secret-url',

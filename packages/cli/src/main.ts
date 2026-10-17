@@ -4,25 +4,17 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { parseArgs } from 'node:util';
 import * as e2ee from '@herald-run/sdk/e2ee';
-import {
-  Herald,
-  HeraldError,
-  duration,
-  version,
-  type Attachment,
-  type Message,
-  type MessageRequest,
-} from '@herald-run/sdk';
+import { Herald, HeraldError, duration, version, type Message } from '@herald-run/sdk';
 import { configDirectory, defaultUrl, profileName, readProfiles, readSaved } from './config';
 import { savedToken } from './config';
 import { removeLogin, saveLogin, tokenPath } from './config';
-import { uploadPath } from './files';
+import { composeDestination, composeMessage, outputs, UsageError } from './compose';
 import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
-import { integrate, type Run } from './integrate';
 import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
-import { fileFailure, requestFile, requestSecret, sendSecret, secretFailure } from './secrets';
+import { collect, fileFailure, isSecret, sendSecret, secretFailure } from './secrets';
+import type { Field } from '@herald-run/sdk/schema';
 
 /** The token's verified account safety code. */
 async function safetyCode(client: Herald) {
@@ -60,13 +52,11 @@ export type Io = {
   /** Interactive prompt; absent when stdin is not a terminal. */
   ask?: (question: string) => Promise<string>;
   open: (url: string) => boolean;
-  /** For `integrate`: the working directory and a shell-free program runner. */
-  cwd?: string;
-  run?: Run;
+  /** All of stdin, for `-` paths. */
+  stdin?: () => Promise<string>;
   /** Ends `watch` and `listen`; SIGINT otherwise. */
   signal?: AbortSignal;
 };
-class UsageError extends Error {}
 /** Request outcomes as exit codes. */
 const outcome: Record<string, number> = { answered: 0, expired: 3, cancelled: 4 };
 const options = {
@@ -76,8 +66,18 @@ const options = {
   profile: { type: 'string' },
   url: { type: 'string' },
   input: { type: 'string', short: 'i' },
-  out: { type: 'string', short: 'o' },
+  out: { type: 'string', short: 'o', multiple: true },
   file: { type: 'string', multiple: true },
+  'body-file': { type: 'string' },
+  kind: { type: 'string' },
+  field: { type: 'string', multiple: true },
+  action: { type: 'string', multiple: true },
+  block: { type: 'string', multiple: true },
+  review: { type: 'boolean' },
+  'secret-file': { type: 'string' },
+  webhook: { type: 'string' },
+  description: { type: 'string' },
+  type: { type: 'string', multiple: true },
   label: { type: 'string' },
   title: { type: 'string' },
   body: { type: 'string' },
@@ -99,8 +99,6 @@ const options = {
   scopes: { type: 'string' },
   'no-browser': { type: 'boolean' },
   'safety-code': { type: 'string' },
-  scope: { type: 'string' },
-  'dry-run': { type: 'boolean' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url'];
 const integer = (value: string | undefined, name: string) => {
@@ -109,18 +107,32 @@ const integer = (value: string | undefined, name: string) => {
   return Number(value);
 };
 
+/** The answer as JSON: stored fields name their path instead of a value. */
+function shown(message: Message, stored: Record<string, string>) {
+  if (!message.response || !Object.keys(stored).length) return message;
+  const values: Record<string, unknown> = { ...message.response.values };
+  for (const [field, path] of Object.entries(stored)) values[field] = { stored: path };
+  return { ...message, response: { ...message.response, values } };
+}
+/** Fixed failure text once secrets are involved: errors may carry untrusted values. */
+const failureFor = (fields: Field[]) =>
+  fields.some((f) => f.type === 'secret')
+    ? secretFailure
+    : fields.some(isSecret)
+      ? fileFailure
+      : undefined;
 /** Runs one CLI invocation and returns its exit code. */
 export async function main(argv: string[], io: Io): Promise<number> {
   // Secret transfers print fixed failures only: errors may carry untrusted values.
-  const quiet = argv.some((value) => ['request-secret', 'send-secret'].includes(value))
+  let quiet = argv.some((v) => v === '--secret-file' || v.startsWith('--secret-file='))
     ? secretFailure
-    : argv.includes('request-file')
-      ? fileFailure
-      : undefined;
+    : undefined;
   let values: ReturnType<typeof parse>['values'], positionals: string[];
-  const parse = () => parseArgs({ args: argv, allowPositionals: true, options, strict: true });
+  let tokens: ReturnType<typeof parse>['tokens'];
+  const parse = () =>
+    parseArgs({ args: argv, allowPositionals: true, options, strict: true, tokens: true });
   try {
-    ({ values, positionals } = parse());
+    ({ values, positionals, tokens } = parse());
   } catch (error) {
     io.err(quiet ?? (error as Error).message + ' Run herald help.');
     return 2;
@@ -183,39 +195,15 @@ export async function main(argv: string[], io: Io): Promise<number> {
     if (positionals.length > (spec.args?.split(' ').length ?? 0) + 1)
       throw new UsageError(`Too many arguments. Usage: herald ${command} ${spec.args || ''}`);
     const readInput = async () => JSON.parse(await readFile(values.input!, 'utf8'));
-    const waitFor = async (id: string, timeout = duration(values.timeout || 3600)) => {
-      const message = await client.wait(id, { waitTimeout: timeout });
-      if (values.json) io.out(JSON.stringify(message));
-      else if (message.status === 'answered') io.out(format.answer(message) || 'Answered.');
+    const timeout = duration(values.timeout || 3600);
+    const report = (message: Message, stored: Record<string, string> = {}) => {
+      if (values.json) io.out(JSON.stringify(shown(message, stored)));
+      else if (message.status === 'answered') io.out(format.answer(message, stored) || 'Answered.');
       else io.err(`Request ${message.status}. Message ID: ${message.id}`);
       return outcome[message.status] ?? 1;
     };
+    const waitFor = async (id: string) => report(await client.wait(id, { waitTimeout: timeout }));
     switch (command) {
-      case 'request-secret':
-      case 'request-file':
-      case 'send-secret': {
-        if (
-          positionals.length !== 1 ||
-          !(command === 'send-secret' ? values.input : values.out && !values.input)
-        )
-          throw new UsageError(quiet);
-        const settings = {
-          title: values.title,
-          body: values.body,
-          replyTo: values['reply-to'],
-          label: values.label,
-          deadline: duration(values.deadline || values.timeout || 3600),
-          timeout: duration(values.timeout || 3600),
-        };
-        const result =
-          command === 'request-secret'
-            ? await requestSecret(client, values.out!, settings)
-            : command === 'request-file'
-              ? await requestFile(client, values.out!, settings)
-              : await sendSecret(client, values.input!, settings);
-        print(`${result.id}  ${result.status}`, result);
-        return 0;
-      }
       case 'login': {
         const options = {
           name: values.name,
@@ -261,8 +249,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
           client.account(),
           safetyCode(client),
         ]);
-        const lines = [format.tokenSummary(info), format.accountSummary(account)];
-        print([...lines, encryptionLine(fingerprint)].join('\n'), {
+        print([format.tokenSummary(info, account), encryptionLine(fingerprint)].join('\n'), {
           token: info,
           account,
           e2ee: { enabled: true, safetyCode: e2ee.safetyCode(fingerprint) },
@@ -295,40 +282,66 @@ export async function main(argv: string[], io: Io): Promise<number> {
       }
       case 'send':
       case 'ask': {
-        const input: MessageRequest & Record<string, unknown> = values.input
-          ? await readInput()
-          : {
-              title: values.title || 'A message for you',
-              body: values.body || '',
-              kind: 'message',
-              fields: [],
-            };
+        if (values['secret-file']) {
+          const used = ['input', 'body-file', 'kind', 'field', 'action', 'block', 'file']
+            .concat(['review', 'key', 'wait', 'out'])
+            .find((name) => values[name as keyof typeof values] !== undefined);
+          if (used) throw new UsageError(`--secret-file does not take --${used}.`);
+          const result = await sendSecret(client, values['secret-file'], {
+            title: values.title,
+            body: values.body,
+            replyTo: values['reply-to'],
+            deadline: duration(values.deadline || values.timeout || 3600),
+            timeout,
+          });
+          print(`${result.id}  ${result.status}`, result);
+          return 0;
+        }
         const waiting = command === 'ask' || !!values.wait;
-        if (waiting) {
-          input.kind = 'form';
-          if (!values.input)
-            input.fields = [{ id: 'reply', type: 'textarea', label: 'Your reply', required: true }];
-        }
-        if (values['reply-to']) input.replyTo = values['reply-to'];
-        if (values.deadline) {
-          if (input.expiresAt || input.expiresIn)
-            throw new UsageError('Use --deadline or expiresAt, not both.');
-          input.expiresIn = duration(values.deadline);
-        }
-        const timeout = duration(values.timeout || 3600);
-        const files: Attachment[] = [];
-        for (const path of values.file || []) files.push(await uploadPath(client, path));
-        if (files.length) input.attachments = [...(input.attachments || []), ...files];
-        const message = await client.send(input, { idempotencyKey: values.key });
+        const stdin = io.stdin || (() => Promise.reject(new UsageError('stdin is unavailable.')));
+        const base = values.input ? await readInput() : undefined;
+        const draft = await composeMessage(values, base, waiting, stdin);
+        if (values.out && !waiting) throw new UsageError('--out needs --wait.');
+        const outs = outputs(values.out || [], draft.fields, waiting);
+        quiet = failureFor(draft.fields);
+        const send = async () => {
+          await draft.attach(client);
+          const message = await client.send(draft.input, { idempotencyKey: values.key });
+          if (waiting) io.err(`Waiting for an answer to ${message.id}…`);
+          return message;
+        };
         if (!waiting) {
+          const message = await send();
           print(message.id, message);
           return 0;
         }
-        io.err(`Waiting for an answer to ${message.id}…`);
-        return await waitFor(message.id, timeout);
+        if (!outs.length) return await waitFor((await send()).id);
+        const start = async () => (await send()).id;
+        const { message, stored } = await collect(
+          client,
+          outs,
+          start,
+          timeout,
+          quiet ?? fileFailure,
+        );
+        return report(message, stored);
       }
-      case 'wait':
-        return await waitFor(arg(1, '<message-id>'));
+      case 'wait': {
+        const id = arg(1, '<message-id>');
+        if (!values.out) return await waitFor(id);
+        const fields = (await client.get(id)).fields;
+        const outs = outputs(values.out, fields, true);
+        quiet = failureFor(fields);
+        const start = async () => id;
+        const { message, stored } = await collect(
+          client,
+          outs,
+          start,
+          timeout,
+          quiet ?? fileFailure,
+        );
+        return report(message, stored);
+      }
       case 'cancel': {
         const message = await client.cancel(arg(1, '<message-id>'));
         print(format.messageLine(message), message);
@@ -375,12 +388,6 @@ export async function main(argv: string[], io: Io): Promise<number> {
         else for (const log of logs) io.write(log.text);
         return 0;
       }
-      case 'upload': {
-        const file = await uploadPath(client, arg(1, '<file>'));
-        const result = { id: file.id, name: file.name, size: file.size, type: file.type };
-        print(`${file.id}  ${file.name}`, result);
-        return 0;
-      }
       case 'download': {
         const id = arg(1, '<file-id>');
         if (!values.message)
@@ -392,7 +399,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
           .filter((c) => c >= ' ' && c !== '\x7f')
           .join('')
           .trim();
-        const path = values.out || (['', '.', '..'].includes(name) ? id : name);
+        if ((values.out?.length ?? 0) > 1) throw new UsageError('download takes one --out.');
+        const path = values.out?.[0] || (['', '.', '..'].includes(name) ? id : name);
         const body = Readable.fromWeb(file.body as import('node:stream/web').ReadableStream);
         if (path === '-') {
           for await (const chunk of body) io.write(chunk);
@@ -430,8 +438,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
         return 0;
       }
       case 'register': {
-        if (!values.input) throw new UsageError('Usage: herald register -i destination.json');
-        const destination = await client.register(await readInput());
+        const base = values.input ? await readInput() : undefined;
+        const destination = await client.register(composeDestination(base, values, tokens));
         print(
           format.destinationLine(destination) +
             (destination.signingSecret ? '\nsigning secret  ' + destination.signingSecret : ''),
@@ -470,20 +478,10 @@ export async function main(argv: string[], io: Io): Promise<number> {
         return 0;
       }
       case 'account': {
-        const account = await client.account();
-        print(format.accountSummary(account), account);
+        const [account, info] = await Promise.all([client.account(), client.token()]);
+        print(format.accountSummary(account, info.account), account);
         return 0;
       }
-      case 'integrate':
-        return await integrate(
-          arg(1, 'claude-code|codex'),
-          { scope: values.scope, dryRun: values['dry-run'], profile, url: values.url },
-          {
-            ...io,
-            cwd: io.cwd || process.cwd(),
-            run: io.run || (async () => ({ code: 127, stdout: '' })),
-          },
-        );
       case 'completion': {
         const script = completion(arg(1, 'bash|zsh|fish'));
         if (!script) throw new UsageError('Usage: herald completion bash|zsh|fish');

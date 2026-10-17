@@ -21,9 +21,24 @@ herald ask --title 'Deploy?' --timeout 10m && ./deploy.sh
 herald messages --search deploy
 ```
 
+## Forms, secrets and files
+
+`send`, `ask` and `register` build everything from flags; `-i FILE` takes JSON input, and flags merge onto it. `herald help send` lists the grammar.
+
+```sh
+herald ask --title 'Release?' --field 'env:select:Environment:staging,prod' --action 'ship:Ship it'
+herald send --title 'Review' --block code=src/app.ts --block table=results.csv --block image=shot.png --review
+herald ask --field 'token:secret:GitHub token' --out ~/.config/gh/token
+herald ask --field 'kubeconfig:secret-file:Staging kubeconfig' --out ~/.kube/staging
+herald send --secret-file ./api-key --title 'Staging API key'
+herald register --target laptop --type 'deploy:Deploy' --field 'env:select:Env:staging,prod'
+```
+
+Answers to secret and file fields go to new private files (`--out`, mode 0600) and are never printed; secret files reach this connection only and Herald deletes them 15 minutes after the answer.
+
 ## Claude Code and Codex
 
-`herald integrate claude-code` (or `codex`) installs Herald skills (send a report, ask for approval, request or share a secret through a file, request a file) and registers the [`@herald-run/mcp`](https://www.npmjs.com/package/@herald-run/mcp) server. `--scope project` writes into the current directory instead of your user config; `--dry-run` previews the changes. Rerunning is safe.
+Register the [`@herald-run/mcp`](https://www.npmjs.com/package/@herald-run/mcp) server with the client's own command, such as `claude mcp add herald -- npx -y @herald-run/mcp`. Agent skills that use Herald are at [herald.run/skills](https://herald.run/skills).
 
 ## Output
 

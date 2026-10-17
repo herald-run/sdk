@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { exitWhenDrained } from './exit';
@@ -32,16 +32,6 @@ function open(url: string) {
 }
 // A reader that closes early (`| head`) ends the command quietly.
 process.stdout.on('error', () => process.exit());
-/** Runs a program without a shell; 127 when it is missing. */
-const run = (command: string, args: string[]) =>
-  new Promise<{ code: number; stdout: string }>((resolve) =>
-    execFile(command, args, { shell: false, timeout: 60_000 }, (error, stdout) =>
-      resolve({
-        code: !error ? 0 : (error as NodeJS.ErrnoException).code === 'ENOENT' ? 127 : 1,
-        stdout: String(stdout),
-      }),
-    ),
-  );
 process.exitCode = await main(process.argv.slice(2), {
   out: (line) => console.log(line),
   err: (line) => console.error(line),
@@ -50,7 +40,10 @@ process.exitCode = await main(process.argv.slice(2), {
   home: homedir(),
   ask: process.stdin.isTTY ? ask : undefined,
   open,
-  cwd: process.cwd(),
-  run,
+  stdin: async () => {
+    let text = '';
+    for await (const chunk of process.stdin) text += chunk;
+    return text;
+  },
 });
 await exitWhenDrained();

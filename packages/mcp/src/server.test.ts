@@ -36,7 +36,7 @@ const server = http(async (req, res) => {
       answer.status === 'answered'
         ? await sealed.sealedAnswer(request, answer.values || {}, {
             actionId: answer.actionId,
-            secretFields: request.kind === 'form' && !answer.values ? ['secret'] : [],
+            secretFields: answer.values ? [] : ['secret'],
           })
         : { ...request, status: answer.status };
   else if (req.url?.startsWith('/api/v1/messages?'))
