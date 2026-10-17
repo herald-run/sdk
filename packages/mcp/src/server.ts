@@ -12,7 +12,7 @@ import {
   type Message,
   type MessageRequest,
 } from '@herald-run/sdk';
-import { questionAnswers, questionsSchema, type Answers } from '@herald-run/sdk/schema';
+import { fieldAnswers, questionsSchema, type Answers } from '@herald-run/sdk/schema';
 import { uploadPath } from '@herald-run/cli/files';
 import {
   fileFailure,
@@ -35,6 +35,12 @@ const id = z.string().min(1).max(100);
 const files = z.array(z.string()).max(10).describe('Local file paths to attach (each ≤100 MB)');
 const replyTo = id.optional().describe('Message ID to reply to, keeping a thread');
 
+/** Answers by question text when the request came from `questions`. */
+const answers = (m: Message) =>
+  m.response?.values && m.fields?.length
+    ? fieldAnswers(m.fields, m.response.values as Answers)
+    : undefined;
+
 /** What an agent needs from a record; omits connection internals and keeps answers. */
 function summary(m: Message) {
   return {
@@ -48,6 +54,7 @@ function summary(m: Message) {
     threadId: m.threadId,
     replyTo: m.replyTo,
     ...(m.response ? { actionId: m.response.actionId, values: m.response.values } : {}),
+    answers: answers(m),
     ...(m.attachments?.length
       ? { attachments: m.attachments.map(({ id, name, size, type }) => ({ id, name, size, type })) }
       : {}),
@@ -191,15 +198,13 @@ export function createServer(client: () => Promise<Herald>) {
       if (approval && result.status === 'answered') result.approved = result.actionId === 'approve';
       if (choices && typeof result.actionId === 'string')
         result.choice = choices[Number(result.actionId.slice(6)) - 1];
-      if (questions && result.values)
-        result.answers = questionAnswers(questions, result.values as Answers);
       return json(result);
     },
   );
 
   tool(
     'wait',
-    'Wait for a pending Herald request to be answered, expire or be cancelled. Returns its status and answer; status "pending" means wait elapsed first.',
+    'Wait for a pending Herald request to be answered, expire or be cancelled. Returns its status and answer (with answers by question text for questions); status "pending" means wait elapsed first.',
     { id, wait: time.optional().describe('How long to block (default 10m)') },
     async (input, herald) => json(await settle(herald, input.id, duration(input.wait || '10m'))),
     true,
@@ -214,9 +219,12 @@ export function createServer(client: () => Promise<Herald>) {
 
   tool(
     'get_message',
-    'Get one Herald message or task with its answer, attachments, blocks and task result.',
+    'Get one Herald message or task with its answer (and answers by question text for questions), attachments, blocks and task result.',
     { id },
-    async (input, herald) => json(await herald.get(input.id)),
+    async (input, herald) => {
+      const message = await herald.get(input.id);
+      return json({ ...message, answers: answers(message) });
+    },
     true,
   );
 

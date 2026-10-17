@@ -94,7 +94,15 @@ class QuestionTests(unittest.TestCase):
         self.assertEqual((len(long["label"]), long["help"]), (120, "a" * 200))
         text = {"id": "a", "label": "A", "type": "text"}
         self.assertEqual(forms.check_fields([{**text, "header": "Short"}])[0]["header"], "Short")
+        self.assertEqual(forms.validate_answers(forms.check_fields([{**text, "maxLength": 2}]), {"a": "\U0001f600" * 2}), {})
+        choice = {**text, "type": "select", "options": [{"value": "x", "label": "X"}]}
+        for bad in fx["invalid"]:
+            with self.assertRaises(HeraldError):
+                forms.question_fields(bad)
         for bad in [{"fields": [{**text, "other": True}]}, {"fields": [{**text, "header": "h" * 25}]}, {"questions": []},
+                    {"fields": [{**choice, "other": "yes"}]}, {"fields": [{**text, "label": "\U0001f600" * 121}]},
+                    {"fields": [{**choice, "options": [{"value": "x", "label": "X", "description": "d" * 301}]}]},
+                    {"fields": [{**choice, "options": [{"value": "x", "label": "X", "preview": 1}]}]},
                     {"questions": [{"question": "Q", "options": [{"label": "x"}, {"label": "x"}]}]},
                     {"questions": fx["questions"], "fields": [text]}, {"questions": fx["questions"], "schema": {"type": "object"}}]:
             with self.assertRaises(HeraldError):

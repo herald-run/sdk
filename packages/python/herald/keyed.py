@@ -33,6 +33,19 @@ def _number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+# What JavaScript's trim() removes; Python's strip() differs (keeps U+FEFF, drops \x1c-\x1f and U+0085).
+JS_SPACE = "".join(map(chr, (*range(9, 14), 32, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF)))
+
+
+def _trim(value):
+    return value.strip(JS_SPACE)
+
+
+def _fits(value, most):
+    # Lengths are code points, as zod 4.6 counts them, not JavaScript's UTF-16 units.
+    return isinstance(value, str) and len(value) <= most
+
+
 def check_fields(fields):
     """Form fields with defaults filled, as the TypeScript SDK's `fieldsSchema` reads them."""
     if not isinstance(fields, list) or len(fields) > 30:
@@ -43,6 +56,16 @@ def check_fields(fields):
             _invalid("Fields need an id and a known type.")
         if not isinstance(field.get("label"), str) or not 0 < len(field["label"]) <= 120:
             _invalid("Field labels hold 1 to 120 characters.")
+        if not _fits(field.get("help", ""), 300) or not _fits(field.get("placeholder", ""), 120):
+            _invalid("Help holds up to 300 characters and placeholders 120.")
+        options = field.get("options") or []
+        if not isinstance(options, list) or len(options) > 50 or not all(
+            isinstance(o, dict) and _fits(o.get("value"), 100) and _fits(o.get("label"), 120) and _fits(o.get("description", ""), 300) and _fits(o.get("preview", ""), 4000)
+            for o in options
+        ):
+            _invalid("Use up to 50 options with a value and label; descriptions hold up to 300 characters and previews 4,000.")
+        if not isinstance(field.get("other", False), bool):
+            _invalid("Other is true or false.")
         if field["type"] in ("select", "multiselect") and not field.get("options"):
             _invalid(f"{field['label']} needs choices.")
         if field.get("secret") and (field["type"] != "file" or "default" in field):
@@ -115,9 +138,9 @@ def json_schema_fields(schema):
 
 
 def _text(value, most, name):
-    if not isinstance(value, str) or not 0 < len(value.strip()) <= most:
+    if not isinstance(value, str) or not 0 < len(_trim(value)) <= most:
         _invalid(f"{name} hold 1 to {most} characters.")
-    return value.strip()
+    return _trim(value)
 
 
 def question_fields(questions):
@@ -133,7 +156,7 @@ def question_fields(questions):
         labels = [_text(o.get("label"), 100, "Option labels") for o in options]
         if len(set(labels)) != len(labels):
             _invalid("Option labels must be unique.")
-        if any(not isinstance(o.get(k, ""), str) or len(o.get(k, "")) > n for o in options for k, n in (("description", 300), ("preview", 4000))):
+        if any(not _fits(o.get(k, ""), n) for o in options for k, n in (("description", 300), ("preview", 4000))):
             _invalid("Option descriptions hold up to 300 characters and previews 4,000.")
         fields.append({
             "id": f"q{i}", "label": text if len(text) <= 120 else text[:119] + "…", **({"help": text} if len(text) > 120 else {}),
@@ -141,6 +164,8 @@ def question_fields(questions):
             "type": "multiselect" if multi else "select", "required": True, "other": True,
             "options": [{"value": label, "label": label, **{k: o[k] for k in ("description", "preview") if o.get(k)}} for label, o in zip(labels, options)],
         })
+    if len({f.get("help", f["label"]) for f in fields}) != len(fields):
+        _invalid("Each question must be unique.")
     return fields
 
 
@@ -149,7 +174,7 @@ def question_answers(questions, values):
     out = {}
     for i, q in enumerate(questions, 1):
         v = values.get(f"q{i}")
-        out[q["question"].strip()] = ", ".join(v) if isinstance(v, list) else "" if v is None else str(v)
+        out[_trim(q["question"])] = ", ".join(v) if isinstance(v, list) else "" if v is None else str(v)
     return out
 
 
@@ -236,9 +261,9 @@ def validate_answers(fields, values, secret_ids=()):
         elif kind == "multiselect":
             # Other adds at most one non-blank free-text item.
             custom = [x for x in v if x not in options] if isinstance(v, list) else []
-            bad |= not isinstance(v, list) or len(custom) > (1 if f.get("other") else 0) or any(not str(x).strip() for x in custom)
+            bad |= not isinstance(v, list) or len(custom) > (1 if f.get("other") else 0) or any(not _trim(str(x)) for x in custom)
         elif kind == "select":
-            bad |= v not in options and not (f.get("other") and isinstance(v, str) and v.strip())
+            bad |= v not in options and not (f.get("other") and isinstance(v, str) and _trim(v))
         elif kind in ("text", "textarea", "date", "secret"):
             bad |= not isinstance(v, str)
             if kind == "date" and not bad:

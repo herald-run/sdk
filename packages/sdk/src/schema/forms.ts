@@ -138,8 +138,9 @@ export function validateAnswers(
       errors[f.id] = 'Number is outside the allowed range.';
     if (
       typeof v === 'string' &&
-      ((f.minLength !== undefined && v.length < f.minLength) ||
-        (f.maxLength !== undefined && v.length > f.maxLength))
+      // Code points, as zod and JSON Schema count them.
+      ((f.minLength !== undefined && [...v].length < f.minLength) ||
+        (f.maxLength !== undefined && [...v].length > f.maxLength))
     )
       errors[f.id] = 'Text length is outside the allowed range.';
     if (Array.isArray(v) && f.uniqueItems && new Set(v).size !== v.length)

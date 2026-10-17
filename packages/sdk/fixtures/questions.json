@@ -12,6 +12,15 @@
       "question": "Which checks should run?",
       "options": [{ "label": "Lint" }, { "label": "Types" }],
       "multiSelect": true
+    },
+    {
+      "question": "\ufeffPick one: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀 ok?",
+      "header": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "options": [
+        {
+          "label": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+        }
+      ]
     }
   ],
   "fields": [
@@ -41,15 +50,70 @@
         { "value": "Lint", "label": "Lint" },
         { "value": "Types", "label": "Types" }
       ]
+    },
+    {
+      "id": "q3",
+      "label": "Pick one: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀…",
+      "help": "Pick one: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀 ok?",
+      "header": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "type": "select",
+      "required": true,
+      "other": true,
+      "options": [
+        {
+          "value": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀",
+          "label": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+        }
+      ]
     }
   ],
-  "values": { "q1": "MySQL 8", "q2": ["Lint", "Types", "e2e"] },
-  "answers": { "Which database?": "MySQL 8", "Which checks should run?": "Lint, Types, e2e" },
+  "values": { "q1": "MySQL 8", "q2": ["Lint", "Types", "e2e"], "q3": "🙂 other" },
+  "answers": {
+    "Which database?": "MySQL 8",
+    "Which checks should run?": "Lint, Types, e2e",
+    "Pick one: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀 ok?": "🙂 other"
+  },
   "rejected": [
-    { "q1": " ", "q2": ["Lint"] },
-    { "q1": "SQLite", "q2": ["Lint", "a", "b"] },
-    { "q1": "SQLite", "q2": ["Lint", " "] },
-    { "q1": "SQLite", "q2": [] },
-    { "q1": 1, "q2": ["Lint"] }
+    { "q1": " ", "q2": ["Lint"], "q3": "🙂" },
+    { "q1": "SQLite", "q2": ["Lint", "a", "b"], "q3": "🙂" },
+    { "q1": "SQLite", "q2": ["Lint", " "], "q3": "🙂" },
+    { "q1": "SQLite", "q2": [], "q3": "🙂" },
+    { "q1": 1, "q2": ["Lint"], "q3": "🙂" },
+    { "q1": "SQLite", "q2": ["Lint"], "q3": "\ufeff" }
+  ],
+  "invalid": [
+    [{ "question": "\ufeff", "options": [{ "label": "x" }] }],
+    [
+      {
+        "question": "Q",
+        "header": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "options": [{ "label": "x" }]
+      }
+    ],
+    [
+      {
+        "question": "Q",
+        "options": [
+          {
+            "label": "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀"
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "question": "Q",
+        "options": [
+          {
+            "label": "x",
+            "description": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+          }
+        ]
+      }
+    ],
+    [
+      { "question": "Q", "options": [{ "label": "x" }] },
+      { "question": " Q ", "options": [{ "label": "y" }] }
+    ]
   ]
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import example from '../../fixtures/questions.json';
 import {
+  fieldAnswers,
   fieldsSchema,
   isOption,
   messageInputSchema,
@@ -142,6 +143,9 @@ describe('questions and Other answers', () => {
     expect(questionFields(questions)).toEqual(fields);
     expect(validateAnswers(fields, example.values as Answers)).toEqual({});
     expect(questionAnswers(questions, example.values as Answers)).toEqual(example.answers);
+    expect(fieldAnswers(fields, example.values as Answers)).toEqual(example.answers);
+    for (const other of [fields.slice(1), [{ ...fields[0], other: false }]])
+      expect(fieldAnswers(other, example.values as Answers)).toBeUndefined();
     for (const values of example.rejected as Answers[])
       expect(Object.keys(validateAnswers(fields, values)).length).toBe(1);
     const long = questionFields(
@@ -153,6 +157,7 @@ describe('questions and Other answers', () => {
       [{ question: 'Q', options: [] }],
       [{ question: ' ', options: [{ label: 'x' }] }],
       [{ question: 'Q', options: [{ label: 'x' }, { label: 'x' }] }],
+      ...example.invalid,
       [{ question: 'Q', header: 'h'.repeat(25), options: [{ label: 'x' }] }],
     ])
       expect(questionsSchema.safeParse(bad).success).toBe(false);
@@ -169,6 +174,9 @@ describe('questions and Other answers', () => {
     expect(validateAnswers([multi], { q2: ['Lint', ''] })).toEqual({ q2: 'Enter your answer.' });
     expect(isOption(select, 'SQLite') && !isOption(select, 'MySQL')).toBe(true);
     const field = { id: 'a', label: 'A', type: 'text' };
+    expect(
+      validateAnswers([{ ...field, maxLength: 2 } as Field], { a: '\u{1F600}\u{1F600}' }),
+    ).toEqual({});
     expect(fieldsSchema.safeParse([{ ...field, header: 'Short' }]).success).toBe(true);
     for (const bad of [{ other: true }, { header: '' }, { header: 'h'.repeat(25) }])
       expect(fieldsSchema.safeParse([{ ...field, ...bad }]).success).toBe(false);
@@ -185,7 +193,7 @@ describe('questions and Other answers', () => {
       { kind: 'secret' },
     ])
       expect(valid({ questions: example.questions, ...extra })).toBe(false);
-    const values = { q1: 'Postgres', q2: ['Lint'] };
+    const values = { q1: 'Postgres', q2: ['Lint'], q3: 'Any' };
     expect(valid({ questions: example.questions, actions: [{ ...action, values }] })).toBe(true);
   });
 });

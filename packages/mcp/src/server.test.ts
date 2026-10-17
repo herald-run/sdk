@@ -154,6 +154,14 @@ it('asks multiple-choice questions and returns answers by question', async () =>
     { id: 'q2', type: 'multiselect', other: true },
   ]);
   expect((await call('ask', { title: 'x', questions, approval: true })).error).toBe(true);
+  // A later wait, as after a pending ask, rebuilds answers from the request's fields.
+  const long = 'a'.repeat(130);
+  answer = { status: 'answered', values: { q1: 'x' } };
+  await call('ask', { title: 'Long', questions: [{ question: long, options: [{ label: 'x' }] }] });
+  expect((await call('wait', { id: request.id })).data.answers).toEqual({ [long]: 'x' });
+  answer = { status: 'answered', values: { q1: 'x' } };
+  await call('ask', { title: 'Form', fields: [{ id: 'q1', label: 'Q', type: 'text' }] });
+  expect((await call('wait', { id: request.id })).data).not.toHaveProperty('answers');
 });
 
 it('reports expired requests and lists summaries', async () => {
