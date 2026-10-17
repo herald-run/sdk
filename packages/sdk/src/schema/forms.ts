@@ -2,9 +2,20 @@ import { z } from 'zod';
 // No eval-compiled parsers: the app CSP forbids eval, and the probe would log a violation.
 z.config({ jitless: true });
 const key = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/);
+export const optionSchema = z.object({
+  value: z.string().max(100),
+  label: z.string().max(120),
+  /** Shown under the label. */
+  description: z.string().max(300).optional(),
+  /** Markdown shown while the option is selected, such as a mockup or code to compare. */
+  preview: z.string().max(4000).optional(),
+});
+export type FieldOption = z.infer<typeof optionSchema>;
 export const fieldSchema = z.object({
   id: key,
   label: z.string().min(1).max(120),
+  /** Short name for the question in a request card's pager. */
+  header: z.string().min(1).max(24).optional(),
   type: z.enum([
     'text',
     'textarea',
@@ -41,10 +52,9 @@ export const fieldSchema = z.object({
   secret: z.boolean().optional(),
   help: z.string().max(300).optional(),
   placeholder: z.string().max(120).optional(),
-  options: z
-    .array(z.object({ value: z.string().max(100), label: z.string().max(120) }))
-    .max(50)
-    .optional(),
+  options: z.array(optionSchema).max(50).optional(),
+  /** Select and multiselect only: an Other choice answered with free text. */
+  other: z.boolean().optional(),
 });
 export type Field = z.infer<typeof fieldSchema>;
 export const fieldsSchema = z
@@ -75,6 +85,8 @@ export const fieldsSchema = z
         ctx.addIssue({ code: 'custom', message: 'Only file fields can be secret.' });
       if (['select', 'multiselect'].includes(f.type) && !f.options?.length)
         ctx.addIssue({ code: 'custom', message: `${f.label} needs choices.` });
+      if (f.other && !['select', 'multiselect'].includes(f.type))
+        ctx.addIssue({ code: 'custom', message: 'Only choice fields can offer Other.' });
       if (
         f.default !== undefined &&
         Object.keys(validateAnswers([f], { [f.id]: f.default })).length
@@ -126,8 +138,9 @@ export function validateAnswers(
       errors[f.id] = 'Number is outside the allowed range.';
     if (
       typeof v === 'string' &&
-      ((f.minLength !== undefined && v.length < f.minLength) ||
-        (f.maxLength !== undefined && v.length > f.maxLength))
+      // Code points, as zod and JSON Schema count them.
+      ((f.minLength !== undefined && [...v].length < f.minLength) ||
+        (f.maxLength !== undefined && [...v].length > f.maxLength))
     )
       errors[f.id] = 'Text length is outside the allowed range.';
     if (Array.isArray(v) && f.uniqueItems && new Set(v).size !== v.length)
@@ -148,14 +161,16 @@ export function validateAnswers(
     if (f.type === 'number' && (typeof v !== 'number' || !Number.isFinite(v)))
       errors[f.id] = 'Enter a number.';
     else if (f.type === 'boolean' && typeof v !== 'boolean') errors[f.id] = 'Choose yes or no.';
-    else if (
-      f.type === 'multiselect' &&
-      (!Array.isArray(v) || v.some((x) => !f.options?.some((o) => o.value === x)))
-    )
-      errors[f.id] = 'Choose from the available options.';
-    else if (f.type === 'select' && !f.options?.some((o) => o.value === v))
-      errors[f.id] = 'Choose an available option.';
-    else if (['text', 'textarea', 'date', 'secret'].includes(f.type) && typeof v !== 'string')
+    else if (f.type === 'multiselect') {
+      // Other adds at most one free-text item.
+      const custom = Array.isArray(v) ? v.filter((x) => !isOption(f, x)) : [];
+      if (!Array.isArray(v) || custom.length > (f.other ? 1 : 0))
+        errors[f.id] = 'Choose from the available options.';
+      else if (custom.length && !custom[0].trim()) errors[f.id] = 'Enter your answer.';
+    } else if (f.type === 'select' && !isOption(f, v)) {
+      if (!f.other || typeof v !== 'string') errors[f.id] = 'Choose an available option.';
+      else if (!v.trim()) errors[f.id] = 'Enter your answer.';
+    } else if (['text', 'textarea', 'date', 'secret'].includes(f.type) && typeof v !== 'string')
       errors[f.id] = 'Enter text.';
     else if (f.type === 'date') {
       const date = new Date(String(v));
@@ -168,6 +183,11 @@ export function validateAnswers(
     }
   }
   return errors;
+}
+
+/** Whether `value` is one of the field's choices rather than Other text. */
+export function isOption(field: Field, value: unknown): boolean {
+  return !!field.options?.some((o) => o.value === value);
 }
 
 export function defaultAnswers(fields: Field[]): Answers {

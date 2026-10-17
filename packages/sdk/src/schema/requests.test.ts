@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import example from '../../fixtures/questions.json';
 import {
+  fieldAnswers,
+  fieldsSchema,
+  isOption,
   messageInputSchema,
   matchesAction,
+  optionSchema,
+  questionAnswers,
+  questionFields,
+  questionsSchema,
   responseSchema,
   reviewImageTypes,
+  validateAnswers,
   type Answers,
+  type Field,
 } from './index';
 const action = { id: 'resume', label: 'Resume run', values: {} };
 const attachment = {
@@ -124,5 +134,66 @@ describe('structured review contracts', () => {
       { ...image, alt: 'a'.repeat(501) },
     ])
       expect(valid({ attachments: [attachment], blocks: [block] })).toBe(false);
+  });
+});
+describe('questions and Other answers', () => {
+  const fields = example.fields as Field[];
+  it('converts agent questions into required choice fields and answers', () => {
+    const questions = questionsSchema.parse(example.questions);
+    expect(questionFields(questions)).toEqual(fields);
+    expect(validateAnswers(fields, example.values as Answers)).toEqual({});
+    expect(questionAnswers(questions, example.values as Answers)).toEqual(example.answers);
+    expect(fieldAnswers(fields, example.values as Answers)).toEqual(example.answers);
+    for (const other of [fields.slice(1), [{ ...fields[0], other: false }]])
+      expect(fieldAnswers(other, example.values as Answers)).toBeUndefined();
+    for (const values of example.rejected as Answers[])
+      expect(Object.keys(validateAnswers(fields, values)).length).toBe(1);
+    const long = questionFields(
+      questionsSchema.parse([{ question: 'a'.repeat(200), options: [{ label: 'x' }] }]),
+    )[0];
+    expect([long.label.length, long.help, long.type]).toEqual([120, 'a'.repeat(200), 'select']);
+    for (const bad of [
+      [],
+      [{ question: 'Q', options: [] }],
+      [{ question: ' ', options: [{ label: 'x' }] }],
+      [{ question: 'Q', options: [{ label: 'x' }, { label: 'x' }] }],
+      ...example.invalid,
+      [{ question: 'Q', header: 'h'.repeat(25), options: [{ label: 'x' }] }],
+    ])
+      expect(questionsSchema.safeParse(bad).success).toBe(false);
+  });
+  it('validates Other text and the new field keys', () => {
+    const [select, multi] = fields;
+    expect(validateAnswers([select], { q1: '' })).toEqual({ q1: 'Enter your answer.' });
+    expect(validateAnswers([{ ...select, other: false }], { q1: 'MySQL' })).toEqual({
+      q1: 'Choose an available option.',
+    });
+    expect(validateAnswers([multi], { q2: ['a', 'b'] })).toEqual({
+      q2: 'Choose from the available options.',
+    });
+    expect(validateAnswers([multi], { q2: ['Lint', ''] })).toEqual({ q2: 'Enter your answer.' });
+    expect(isOption(select, 'SQLite') && !isOption(select, 'MySQL')).toBe(true);
+    const field = { id: 'a', label: 'A', type: 'text' };
+    expect(
+      validateAnswers([{ ...field, maxLength: 2 } as Field], { a: '\u{1F600}\u{1F600}' }),
+    ).toEqual({});
+    expect(fieldsSchema.safeParse([{ ...field, header: 'Short' }]).success).toBe(true);
+    for (const bad of [{ other: true }, { header: '' }, { header: 'h'.repeat(25) }])
+      expect(fieldsSchema.safeParse([{ ...field, ...bad }]).success).toBe(false);
+    const option = { value: 'x', label: 'X' };
+    for (const extra of [{ description: 'd'.repeat(301) }, { preview: 'p'.repeat(4001) }])
+      expect(optionSchema.safeParse({ ...option, ...extra }).success).toBe(false);
+  });
+  it('accepts questions as message input instead of fields or schema', () => {
+    const parsed = messageInputSchema.parse({ title: 'Q', questions: example.questions });
+    expect(parsed.kind !== 'secret' && parsed.fields).toEqual(fields);
+    for (const extra of [
+      { fields: [{ id: 'a', label: 'A', type: 'text' }] },
+      { schema: { type: 'object', properties: {} } },
+      { kind: 'secret' },
+    ])
+      expect(valid({ questions: example.questions, ...extra })).toBe(false);
+    const values = { q1: 'Postgres', q2: ['Lint'], q3: 'Any' };
+    expect(valid({ questions: example.questions, actions: [{ ...action, values }] })).toBe(true);
   });
 });

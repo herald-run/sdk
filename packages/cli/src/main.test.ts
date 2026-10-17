@@ -164,6 +164,25 @@ it.each([
   else expect(result.err).toContain(`Request ${status}`);
   expect((await run(['wait', M1])).code).toBe(code);
 });
+it('asks -i questions and prints chosen and Other answers', async () => {
+  const record = await message();
+  const seen = server({ 'POST /api/v1/messages': () => Response.json(record, { status: 201 }) });
+  const values = { q1: 'MySQL 8', q2: 'Sidebar', q3: ['Lint', 'e2e'] };
+  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue({
+    ...record,
+    status: 'answered',
+    response: { values, secretFields: [], createdAt: record.createdAt },
+  } as never);
+  const input = new URL('../../../examples/questions.json', import.meta.url).pathname;
+  const result = await run(['ask', '-i', input]);
+  expect(result).toMatchObject({ code: 0, out: 'q1  MySQL 8\nq2  Sidebar\nq3  Lint, e2e' });
+  const { fields } = (await sent(seen)) as { fields: { id: string; other?: boolean }[] };
+  expect(fields.map((f) => f.id + (f.other ? '+other' : ''))).toEqual([
+    'q1+other',
+    'q2+other',
+    'q3+other',
+  ]);
+});
 it('exits 1 with the server error and message ID', async () => {
   server({ 'POST /api/v1/messages': () => Response.json({ error: 'Nope.' }, { status: 403 }) });
   expect(await run(['send', '--title', 'x'])).toMatchObject({ code: 1, err: 'Nope.' });

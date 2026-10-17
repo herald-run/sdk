@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { fieldsSchema, validateAnswers, type Answers, type Field } from './forms';
 import { jsonSchemaFields } from './json-schema';
+import { questionFields, questionsSchema } from './questions';
 import { actionSchema, type RequestAction } from './actions';
 import { reviewBlockSchema, reviewImageTypes, type ReviewBlock } from './review';
 import type { SessionInput, SessionRequest } from './session';
@@ -40,6 +41,7 @@ const contentInputSchema = z.object({
   kind: z.enum(['message', 'form', 'report', 'files']).default('message'),
   fields: fieldsSchema.default([]),
   schema: z.record(z.string(), z.unknown()).optional(),
+  questions: questionsSchema.optional(),
   blocks: z.array(reviewBlockSchema).max(10).optional(),
   actions: z.array(actionSchema).min(1).max(8).optional(),
   attachments: z.array(attachmentSchema).max(10).default([]),
@@ -59,6 +61,7 @@ const secretInputSchema = z.object({
   fields: none,
   attachments: none,
   schema: absent,
+  questions: absent,
   blocks: none.transform(() => undefined),
   actions: absent,
   publicKey: absent,
@@ -67,6 +70,13 @@ const secretInputSchema = z.object({
 export const messageInputSchema = z
   .discriminatedUnion('kind', [contentInputSchema, secretInputSchema])
   .transform((m, ctx) => {
+    if (m.kind !== 'secret' && m.questions) {
+      if (m.fields.length || m.schema) {
+        ctx.addIssue({ code: 'custom', message: 'Use questions, schema or fields, not several.' });
+        return z.NEVER;
+      }
+      m.fields = questionFields(m.questions);
+    }
     if (m.kind !== 'secret' && m.schema) {
       if (m.fields.length) {
         ctx.addIssue({ code: 'custom', message: 'Use schema or fields, not both.' });
@@ -172,7 +182,7 @@ export interface TaskResult {
   /** End-to-end encrypted error (`ctx.t = "result"`). */
   sealed?: SealedEnvelope;
 }
-/** Stored content. Input-only fields (`schema`, `expiresIn`, `taskId`) are never stored. */
+/** Stored content. Input-only fields (`schema`, `questions`, `expiresIn`, `taskId`) are never stored. */
 interface StoredContent {
   title: string;
   body: string;

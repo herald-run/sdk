@@ -1,6 +1,12 @@
 import type { Account, Destination, Message, TokenInfo } from '@herald-run/sdk';
 // Human-readable output; `--json` prints the API records instead.
-const value = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v));
+// Choice lists read as "A, B", including an Other answer.
+const value = (v: unknown) =>
+  typeof v === 'string'
+    ? v
+    : Array.isArray(v) && v.length && v.every((x) => typeof x === 'string')
+      ? v.join(', ')
+      : JSON.stringify(v);
 const pairs = (rows: [string, unknown][]) => {
   const shown = rows.filter(([, v]) => v !== undefined && v !== null && v !== '');
   const width = Math.max(0, ...shown.map(([k]) => k.length));

@@ -17,7 +17,9 @@ Blocks: code, diff, json and table (CSV) read PATH (- for stdin); image attaches
 --out [FIELD=]PATH writes a secret or file answer to a new 0600 file (several files: a 0700
 directory); every secret needs one, and values are never printed. PATH alone fits a single field.
 With -i, flags win for title, body and kind and add fields, actions, blocks and files; an image
-block there may give "file": PATH instead of attachmentId.`;
+block there may give "file": PATH instead of attachmentId. Instead of fields, -i input may give
+"questions": [{question, header?, options: [{label, description?, preview?}], multiSelect?}],
+answered as q1, q2… (each also accepts Other text).`;
 export const commands: Record<string, Spec> = {
   login: {
     summary: 'Connect this device in the browser and store a token',

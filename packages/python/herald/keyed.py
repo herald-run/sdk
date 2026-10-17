@@ -13,7 +13,7 @@ NO_ENTRY = "No recipient entry for these keys."
 CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group")
 ENVELOPE_LIMIT = 20000
 FIELD_TYPES = ("text", "textarea", "number", "select", "multiselect", "boolean", "date", "secret", "file")
-FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "secret", "help", "placeholder", "options")
+FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "secret", "help", "placeholder", "options", "header", "other")
 FIELD_ID = re.compile(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}")
 FILE_KEY = re.compile(r"[A-Za-z0-9_-]{43}")
 
@@ -33,6 +33,19 @@ def _number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+# What JavaScript's trim() removes; Python's strip() differs (keeps U+FEFF, drops \x1c-\x1f and U+0085).
+JS_SPACE = "".join(map(chr, (*range(9, 14), 32, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF)))
+
+
+def _trim(value):
+    return value.strip(JS_SPACE)
+
+
+def _fits(value, most):
+    # Lengths are code points, as zod 4.6 counts them, not JavaScript's UTF-16 units.
+    return isinstance(value, str) and len(value) <= most
+
+
 def check_fields(fields):
     """Form fields with defaults filled, as the TypeScript SDK's `fieldsSchema` reads them."""
     if not isinstance(fields, list) or len(fields) > 30:
@@ -43,10 +56,24 @@ def check_fields(fields):
             _invalid("Fields need an id and a known type.")
         if not isinstance(field.get("label"), str) or not 0 < len(field["label"]) <= 120:
             _invalid("Field labels hold 1 to 120 characters.")
+        if not _fits(field.get("help", ""), 300) or not _fits(field.get("placeholder", ""), 120):
+            _invalid("Help holds up to 300 characters and placeholders 120.")
+        options = field.get("options") or []
+        if not isinstance(options, list) or len(options) > 50 or not all(
+            isinstance(o, dict) and _fits(o.get("value"), 100) and _fits(o.get("label"), 120) and _fits(o.get("description", ""), 300) and _fits(o.get("preview", ""), 4000)
+            for o in options
+        ):
+            _invalid("Use up to 50 options with a value and label; descriptions hold up to 300 characters and previews 4,000.")
+        if not isinstance(field.get("other", False), bool):
+            _invalid("Other is true or false.")
         if field["type"] in ("select", "multiselect") and not field.get("options"):
             _invalid(f"{field['label']} needs choices.")
         if field.get("secret") and (field["type"] != "file" or "default" in field):
             _invalid("Only file fields without defaults can be secret.")
+        if field.get("other") and field["type"] not in ("select", "multiselect"):
+            _invalid("Only choice fields can offer Other.")
+        if "header" in field and not (isinstance(field["header"], str) and 0 < len(field["header"]) <= 24):
+            _invalid("Field headers hold 1 to 24 characters.")
         out.append({"required": False, **{k: v for k, v in field.items() if k in FIELD_KEYS and v is not None}})
     if len({f["id"] for f in out}) != len(out):
         _invalid("Field IDs must be unique.")
@@ -110,6 +137,47 @@ def json_schema_fields(schema):
     return check_fields(fields)
 
 
+def _text(value, most, name):
+    if not isinstance(value, str) or not 0 < len(_trim(value)) <= most:
+        _invalid(f"{name} hold 1 to {most} characters.")
+    return _trim(value)
+
+
+def question_fields(questions):
+    """Required choice fields `q1`…`qN` with Other for agent-style questions, like the TypeScript SDK."""
+    if not isinstance(questions, list) or not 0 < len(questions) <= 30:
+        _invalid("Ask 1 to 30 questions.")
+    fields = []
+    for i, q in enumerate(questions, 1):
+        q = q if isinstance(q, dict) else {}
+        text, options, multi = _text(q.get("question"), 300, "Questions"), q.get("options"), q.get("multiSelect", False)
+        if not isinstance(options, list) or not 0 < len(options) <= 50 or not all(isinstance(o, dict) for o in options) or not isinstance(multi, bool):
+            _invalid("Questions have 1 to 50 options.")
+        labels = [_text(o.get("label"), 100, "Option labels") for o in options]
+        if len(set(labels)) != len(labels):
+            _invalid("Option labels must be unique.")
+        if any(not _fits(o.get(k, ""), n) for o in options for k, n in (("description", 300), ("preview", 4000))):
+            _invalid("Option descriptions hold up to 300 characters and previews 4,000.")
+        fields.append({
+            "id": f"q{i}", "label": text if len(text) <= 120 else text[:119] + "…", **({"help": text} if len(text) > 120 else {}),
+            **({"header": _text(q["header"], 24, "Headers")} if "header" in q else {}),
+            "type": "multiselect" if multi else "select", "required": True, "other": True,
+            "options": [{"value": label, "label": label, **{k: o[k] for k in ("description", "preview") if o.get(k)}} for label, o in zip(labels, options)],
+        })
+    if len({f.get("help", f["label"]) for f in fields}) != len(fields):
+        _invalid("Each question must be unique.")
+    return fields
+
+
+def question_answers(questions, values):
+    """Answers keyed by question text: chosen labels joined by ", ", or the Other text."""
+    out = {}
+    for i, q in enumerate(questions, 1):
+        v = values.get(f"q{i}")
+        out[_trim(q["question"])] = ", ".join(v) if isinstance(v, list) else "" if v is None else str(v)
+    return out
+
+
 def check_input(message):
     """A content message as the server would store it; keyed clients validate before sealing."""
     m = {k: v for k, v in message.items() if v is not None}
@@ -119,6 +187,10 @@ def check_input(message):
         _invalid("Bodies hold at most 50,000 characters.")
     if m.setdefault("kind", "message") not in ("message", "form", "report", "files"):
         _invalid("Unknown message kind.")
+    if "questions" in m:
+        if m.get("fields") or "schema" in m:
+            _invalid("Use questions, schema or fields, not several.")
+        m["fields"] = question_fields(m.pop("questions"))
     if "schema" in m:
         if m.get("fields"):
             _invalid("Use schema or fields, not both.")
@@ -143,7 +215,7 @@ def check_secret_offer(message):
         _invalid("Titles hold 1 to 180 characters.")
     if not isinstance(m.setdefault("body", ""), str) or len(m["body"]) > 50000:
         _invalid("Bodies hold at most 50,000 characters.")
-    if any(m.get(k) for k in ("fields", "attachments", "blocks", "actions", "schema", "publicKey")):
+    if any(m.get(k) for k in ("fields", "attachments", "blocks", "actions", "schema", "questions", "publicKey")):
         _invalid("Secret deliveries contain metadata only; use the encrypted delivery endpoint.")
     if "expiresAt" in m and "expiresIn" in m:
         _invalid("Use expiresAt or expiresIn, not both.")
@@ -179,7 +251,7 @@ def validate_answers(fields, values, secret_ids=()):
         if isinstance(v, str):
             bad |= not f.get("minLength", 0) <= len(v) <= f.get("maxLength", len(v))
         if isinstance(v, list):
-            bad |= not f.get("minItems", 0) <= len(v) <= f.get("maxItems", len(v)) or (f.get("uniqueItems") and len(set(v)) != len(v))
+            bad |= not f.get("minItems", 0) <= len(v) <= f.get("maxItems", len(v)) or (bool(f.get("uniqueItems")) and len(set(v)) != len(v))
         if kind == "file":
             bad |= not isinstance(v, list) or len(v) > 10 or not all(_uuid(x) for x in v)
         elif kind == "number":
@@ -187,9 +259,11 @@ def validate_answers(fields, values, secret_ids=()):
         elif kind == "boolean":
             bad |= not isinstance(v, bool)
         elif kind == "multiselect":
-            bad |= not isinstance(v, list) or any(x not in options for x in v)
+            # Other adds at most one non-blank free-text item.
+            custom = [x for x in v if x not in options] if isinstance(v, list) else []
+            bad |= not isinstance(v, list) or len(custom) > (1 if f.get("other") else 0) or any(not _trim(str(x)) for x in custom)
         elif kind == "select":
-            bad |= v not in options
+            bad |= v not in options and not (f.get("other") and isinstance(v, str) and _trim(v))
         elif kind in ("text", "textarea", "date", "secret"):
             bad |= not isinstance(v, str)
             if kind == "date" and not bad:

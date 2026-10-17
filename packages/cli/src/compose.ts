@@ -191,14 +191,16 @@ export async function composeMessage(
   }
   const fields = [...((input.fields as Field[]) || []), ...(flags.field || []).map(fieldSpec)];
   const actions = [...((input.actions as Json[]) || []), ...(flags.action || []).map(actionSpec)];
-  if (waiting && !fields.length && !actions.length && !input.schema)
+  if (waiting && !fields.length && !actions.length && !input.schema && !input.questions)
     fields.push({ id: 'reply', type: 'textarea', label: 'Your reply', required: true });
-  // Flag actions answer with no values, so they cannot complete a required field.
-  if (flags.action?.length && fields.some((f) => f.required))
-    throw new UsageError('--action needs every field optional (ID?) and none secret or file.');
+  // Flag actions answer with no values, so they cannot complete a required field or question.
+  if (flags.action?.length && (input.questions || fields.some((f) => f.required)))
+    throw new UsageError(
+      '--action needs every field optional (ID?), none secret or file, and no questions.',
+    );
   if (fields.length) input.fields = fields;
   if (actions.length) input.actions = actions;
-  if (fields.length || actions.length || waiting) input.kind = 'form';
+  if (fields.length || actions.length || input.questions || waiting) input.kind = 'form';
   // In -i input, an image block may name a local `file` to upload, relative to the input file.
   const from = flags.input ? dirname(resolve(flags.input)) : '.';
   const images: { block: Json; path: string }[] = [];

@@ -32,6 +32,6 @@ console.log(answer.actionId);
 
 ## Schemas
 
-`@herald-run/sdk/schema` exports the API's Zod schemas and types (messages, forms, sessions, destinations) without the client, so it also runs in browsers. `@herald-run/sdk/crypto` exports `createKeys`, `seal` and `unseal` for secret envelopes.
+`@herald-run/sdk/schema` exports the API's Zod schemas and types (messages, forms, sessions, destinations) without the client, so it also runs in browsers. Message input may give `questions` (Claude Code's AskUserQuestion shape) instead of `fields`; `questionAnswers` maps the answer back by question text. `@herald-run/sdk/crypto` exports `createKeys`, `seal` and `unseal` for secret envelopes.
 
 Failures throw `HeraldError` with `status`, `code` (from the server, when sent), `messageId` and `retryAfter`. Documentation: [herald.run/docs/sdk](https://herald.run/docs/sdk/); API reference: [herald.run/docs/api](https://herald.run/docs/api/). MIT licensed.
