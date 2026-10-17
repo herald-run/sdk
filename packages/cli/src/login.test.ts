@@ -15,6 +15,8 @@ type Server = {
   destinations?: Array<{ id: string; integrationId: string }>;
   keys?: unknown;
   certificate?: () => Promise<unknown>;
+  /** Device-token answers served before the pending one and the approval. */
+  polls?: Response[];
 };
 function server(state: Server) {
   const calls: string[] = [];
@@ -34,9 +36,12 @@ function server(state: Server) {
         interval: 1,
       });
     if (path === '/api/auth/device/token')
-      return polls++
-        ? Response.json({ access_token: 'human' })
-        : Response.json({ error: 'authorization_pending' }, { status: 400 });
+      return (
+        state.polls?.shift() ||
+        (polls++
+          ? Response.json({ access_token: 'human' })
+          : Response.json({ error: 'authorization_pending' }, { status: 400 }))
+      );
     if (path === '/api/v1/integrations' && method === 'GET')
       return Response.json(state.integrations);
     if (path === '/api/v1/integrations') {
@@ -113,6 +118,25 @@ it.each([
   expect(calls.filter((c) => c.startsWith('DELETE'))).toEqual(deletes);
   if (ask) expect(ask).toHaveBeenCalledWith(expect.stringContaining('Revoke 1 older'));
   if (!deletes.length) expect(log.log).toHaveBeenCalledWith(expect.stringContaining('2 older'));
+});
+it('backs off on rate-limited and failed polls instead of failing the login', async () => {
+  const limited = new Response(JSON.stringify({ message: 'Too many requests.' }), {
+    status: 429,
+    headers: { 'Content-Type': 'application/json', 'X-Retry-After': '7' },
+  });
+  server({ integrations: [], polls: [limited, new Response('', { status: 503 })] });
+  const pause = vi.fn<(ms: number) => Promise<void>>(async () => {});
+  const result = await login(
+    'https://herald.test',
+    { name: device, safetyCode },
+    {},
+    {
+      ...io(),
+      pause,
+    },
+  );
+  expect(result.saved.token).toBe('hdr_new');
+  expect(pause.mock.calls.map(([ms]) => ms)).toEqual([1000, 7000, 11000, 11000]);
 });
 it('requests the default scopes without asking and rejects unknown scopes before login', async () => {
   const { created } = server({ integrations: [] });

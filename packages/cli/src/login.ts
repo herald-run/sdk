@@ -67,7 +67,8 @@ export async function login(
   const { response: started, data: device } = await post(base, '/api/auth/device/code', {
     client_id: 'herald-cli',
   });
-  if (!started.ok) throw new Error(device.error_description || 'Could not start login.');
+  if (!started.ok)
+    throw new Error(device.error_description || device.message || 'Could not start login.');
   // The fragment never reaches the server; the approval page certifies these keys.
   const keys = await e2ee.keySet();
   const page = `${device.verification_uri_complete || device.verification_uri}#k=${keys.signPub}.${keys.boxPub}`;
@@ -78,16 +79,21 @@ export async function login(
       : `Open ${page} and approve code ${device.user_code}.`,
   );
   const deadline = Date.now() + device.expires_in * 1000;
-  let delay = (device.interval || 5) * 1000;
+  let delay = (device.interval || 5) * 1000,
+    retry = 0;
   while (Date.now() < deadline) {
-    await pause(delay);
+    await pause(Math.max(delay, retry));
+    retry = 0;
     const { response, data: result } = await post(base, '/api/auth/device/token', {
       grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
       device_code: device.device_code,
       client_id: 'herald-cli',
     });
     if (result.error === 'authorization_pending') continue;
-    if (result.error === 'slow_down') {
+    // Rate limits (several logins from one address) and server errors pass: slow down, poll again.
+    if (result.error === 'slow_down' || response.status === 429 || response.status >= 500) {
+      const after = response.headers.get('Retry-After') ?? response.headers.get('X-Retry-After');
+      retry = (Number(after) || 0) * 1000;
       delay += 5000;
       continue;
     }
