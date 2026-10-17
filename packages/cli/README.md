@@ -26,7 +26,7 @@ herald messages --search deploy
 `send`, `ask` and `register` build everything from flags; `-i FILE` takes JSON input, and flags merge onto it. `herald help send` lists the grammar.
 
 ```sh
-herald ask --title 'Release?' --field 'env:select:Environment:staging,prod' --action 'ship:Ship it'
+herald ask --title 'Release?' --field 'env?:select:Environment:staging,prod' --action 'ship:Ship it'
 herald send --title 'Review' --block code=src/app.ts --block table=results.csv --block image=shot.png --review
 herald ask --field 'token:secret:GitHub token' --out ~/.config/gh/token
 herald ask --field 'kubeconfig:secret-file:Staging kubeconfig' --out ~/.kube/staging

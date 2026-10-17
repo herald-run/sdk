@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import type { ReadableStream } from 'node:stream/web';
 import { setTimeout as pause } from 'node:timers/promises';
-import { Herald, type FileAttachment, type Message, type MessageRequest } from '@herald-run/sdk';
+import {
+  Herald,
+  HeraldError,
+  type FileAttachment,
+  type Message,
+  type MessageRequest,
+} from '@herald-run/sdk';
 import { seal } from '@herald-run/sdk/crypto';
 import { publicKeySchema, type Field } from '@herald-run/sdk/schema';
 
@@ -50,7 +56,8 @@ async function save(client: Herald, file: Upload, output: FileHandle) {
 /**
  * Opens every output with `wx` (0600) before `start` sends or names the request, waits for the
  * answer and writes each field to its path: text for secrets, a file for one upload, a 0700
- * directory for several. Any failure deletes the outputs and cancels the request.
+ * directory for several. Any failure deletes the outputs and cancels the request, except a wait
+ * timeout when `resume` names an existing request, which stays pending.
  */
 export async function collect(
   client: Herald,
@@ -58,6 +65,7 @@ export async function collect(
   start: () => Promise<string>,
   timeout: number,
   failure: string,
+  resume = false,
 ): Promise<{ message: Message; stored: Record<string, string> }> {
   const handles = new Map<string, FileHandle>();
   const made: string[] = [];
@@ -71,7 +79,10 @@ export async function collect(
       await handle.chmod(0o600);
     }
     id = await start();
-    const message = await client.wait(id, { waitTimeout: timeout });
+    const message = await client.wait(id, { waitTimeout: timeout }).catch((error) => {
+      if (resume && error instanceof HeraldError && error.status === 408) id = undefined;
+      throw error;
+    });
     const response = message.response;
     if (message.status !== 'answered' || !response) return { message, stored: {} };
     const fields = outputs.map((o) => {

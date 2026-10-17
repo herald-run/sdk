@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { basename, extname, resolve } from 'node:path';
+import { basename, dirname, extname, resolve } from 'node:path';
 import { duration, type Attachment, type Herald, type MessageRequest } from '@herald-run/sdk';
 import {
   actionSchema,
@@ -20,6 +20,7 @@ export class UsageError extends Error {}
 export type Flags = {
   title?: string;
   body?: string;
+  input?: string;
   'body-file'?: string;
   kind?: string;
   field?: string[];
@@ -61,7 +62,8 @@ export function fieldSpec(spec: string): Field {
     throw bad(`use ID[?]:TYPE[:LABEL[:CHOICES]], TYPE one of ${fieldTypes.join(', ')}.`);
   const select = type === 'select' || type === 'multiselect';
   if (select && !choices) throw bad(`${type} needs CHOICES.`);
-  if (!select && choices) throw bad('only select and multiselect take CHOICES.');
+  if (!select && choices)
+    throw bad('only select and multiselect take CHOICES; LABEL cannot hold ":".');
   const id = raw.replace(/\?$/, '');
   const parsed = fieldSchema.safeParse({
     id,
@@ -191,16 +193,20 @@ export async function composeMessage(
   const actions = [...((input.actions as Json[]) || []), ...(flags.action || []).map(actionSpec)];
   if (waiting && !fields.length && !actions.length && !input.schema)
     fields.push({ id: 'reply', type: 'textarea', label: 'Your reply', required: true });
+  // Flag actions answer with no values, so they cannot complete a required field.
+  if (flags.action?.length && fields.some((f) => f.required))
+    throw new UsageError('--action needs every field optional (ID?) and none secret or file.');
   if (fields.length) input.fields = fields;
   if (actions.length) input.actions = actions;
   if (fields.length || actions.length || waiting) input.kind = 'form';
-  // In -i input, an image block may name a local `file` to upload.
+  // In -i input, an image block may name a local `file` to upload, relative to the input file.
+  const from = flags.input ? dirname(resolve(flags.input)) : '.';
   const images: { block: Json; path: string }[] = [];
   const blocks = ((input.blocks as Json[]) || []).map((block) => {
     if (block.type !== 'image' || typeof block.file !== 'string') return block;
     const { file, ...rest } = block;
     const copy = { alt: basename(file as string), ...rest };
-    images.push({ block: copy, path: file as string });
+    images.push({ block: copy, path: resolve(from, file as string) });
     return copy;
   });
   for (const spec of flags.block || []) {

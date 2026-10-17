@@ -11,8 +11,8 @@ const message = ['input', 'title', 'body', 'body-file', 'kind', 'field', 'action
 ]);
 const compose = `Fields: ID[?]:TYPE[:LABEL[:CHOICES]], required unless ID ends with ?. TYPE: text, textarea,
 number, boolean, select, multiselect, date, secret, file or secret-file (one file for this
-connection only). LABEL defaults to the ID; select and multiselect need CHOICES: a,b or a=Label,b.
-Actions: ID[:LABEL] answers in one tap; not with secret or file fields.
+connection only). LABEL (no colons) defaults to the ID; select and multiselect need CHOICES: a,b or
+a=Label,b. Actions: ID[:LABEL] answers in one tap; every field must be optional, none secret or file.
 Blocks: code, diff, json and table (CSV) read PATH (- for stdin); image attaches the file.
 --out [FIELD=]PATH writes a secret or file answer to a new 0600 file (several files: a 0700
 directory); every secret needs one, and values are never printed. PATH alone fits a single field.

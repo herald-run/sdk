@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Herald, version, type Message } from '@herald-run/sdk';
+import { Herald, HeraldError, version, type Message } from '@herald-run/sdk';
 import * as e2ee from '@herald-run/sdk/e2ee';
 import contracts from '@herald-run/sdk/fixtures/contracts.json';
 import * as sealed from '../../sdk/fixtures/sealed';
@@ -443,7 +443,7 @@ it('refuses bad specs before sending, with usage exit codes', async () => {
     [['send', '--body', 'a', '--body-file', 'f'], 'not both'],
     [['ask', '--body-file', '-', '--block', 'code=-'], 'stdin'],
     [['ask', '--field', 't:secret'], 'Secret fields need --out: t'],
-    [['send', '--field', 't:secret', '--action', 'go'], 'Actions must completely answer'],
+    [['send', '--field', 't:secret', '--action', 'go'], 'every field optional'],
     [['send', '--field', 't:secret', '--out', 'x'], '--out needs --wait'],
     [['send', '--kind', 'secret'], '--kind is'],
   ];
@@ -499,6 +499,19 @@ it('deletes outputs and cancels the request when collecting fails', async () => 
   expect((await run(['ask', '--field', 'token:secret', '--out', out])).code).toBe(1);
   expect(seen.slice(sends).some((s) => s.method === 'POST')).toBe(false);
   expect(await readFile(out, 'utf8')).toBe('keep');
+});
+it('keeps a resumed request pending when wait --out times out', async () => {
+  const asked = await message(
+    {},
+    { fields: [{ id: 'token', label: 'T', type: 'secret', required: true }] },
+  );
+  const seen = server({ [`GET /api/v1/messages/${M1}`]: () => Response.json(asked) });
+  vi.spyOn(Herald.prototype, 'wait').mockRejectedValue(new HeraldError('Wait timed out', 408, M1));
+  const out = join(home, 'token');
+  const result = await run(['wait', M1, '--out', out]);
+  expect(result).toMatchObject({ code: 1, err: `Timed out; ${M1} is still pending.` });
+  await expect(stat(out)).rejects.toThrow();
+  expect(seen.some((s) => s.url.pathname.endsWith('/cancel'))).toBe(false);
 });
 it('waits into a directory for several files and never shows uncollected secrets', async () => {
   const files = ['a.txt', '../a.txt'].map((name) => ({

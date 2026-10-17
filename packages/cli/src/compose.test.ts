@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { actionSpec, fieldSpec, outputs, parseCsv, titleCase } from './compose';
+import { actionSpec, composeMessage, fieldSpec, outputs, parseCsv, titleCase } from './compose';
 
 it('parses CSV with quotes, doubled quotes, CRLF and embedded newlines', () => {
   expect(parseCsv('a,"b, c"\r\n"say ""hi""","two\nlines"\n\n')).toEqual([
@@ -45,4 +45,18 @@ it('maps --out to secret and file fields', () => {
   expect(() => outputs(['logs=/tmp/l'], two, true)).toThrow('Secret fields need --out: token');
   expect(() => outputs(['token=/a', 'token=/b'], two, true)).toThrow('one --out');
   expect(outputs(['logs=/tmp/l', 'token=/tmp/t'], two, true)).toHaveLength(2);
+});
+it('refuses flag actions with a required field', async () => {
+  const stdin = async () => '';
+  const flags = { field: ['env:select:Env:a,b'], action: ['ship'] };
+  await expect(composeMessage(flags, undefined, true, stdin)).rejects.toThrow(
+    'every field optional',
+  );
+  const ok = await composeMessage(
+    { ...flags, field: ['env?:select:Env:a,b'] },
+    undefined,
+    true,
+    stdin,
+  );
+  expect(ok.input.actions).toHaveLength(1);
 });

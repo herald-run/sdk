@@ -339,7 +339,12 @@ export async function main(argv: string[], io: Io): Promise<number> {
           start,
           timeout,
           quiet ?? fileFailure,
-        );
+          true,
+        ).catch((error) => {
+          if (error instanceof HeraldError && error.status === 408)
+            quiet = `Timed out; ${id} is still pending.`;
+          throw error;
+        });
         return report(message, stored);
       }
       case 'cancel': {
