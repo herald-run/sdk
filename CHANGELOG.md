@@ -2,7 +2,7 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
-## Unreleased
+## 0.3.0-beta.6
 
 - CLI: `herald login` waits out rate limits (which a login pending a few minutes reached) and bodiless server errors, honouring `Retry-After`, instead of failing with "Login failed."; other failures show the server's message.
 - CLI: the README points Claude Code and Codex at the skills, which run the CLI.
