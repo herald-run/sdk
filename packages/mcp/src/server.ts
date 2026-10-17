@@ -12,6 +12,7 @@ import {
   type Message,
   type MessageRequest,
 } from '@herald-run/sdk';
+import { questionAnswers, questionsSchema, type Answers } from '@herald-run/sdk/schema';
 import { uploadPath } from '@herald-run/cli/files';
 import {
   fileFailure,
@@ -122,7 +123,7 @@ export function createServer(client: () => Promise<Herald>) {
 
   tool(
     'ask',
-    'Ask the human a question in Herald and wait for the answer. Use approval for yes/no, choices for one of a few options, fields or schema (JSON Schema) for a form, or nothing for a free-text reply. Returns {status, values, actionId}; if wait elapses first it returns status "pending" with the id for the wait tool.',
+    'Ask the human a question in Herald and wait for the answer. Use approval for yes/no, choices for one of a few options, questions for multiple-choice questions (each with an Other answer), fields or schema (JSON Schema) for a form, or nothing for a free-text reply. Returns {status, values, actionId}, plus answers by question text for questions; if wait elapses first it returns status "pending" with the id for the wait tool.',
     {
       title: z.string().min(1).max(180),
       body: z.string().max(50_000).optional().describe('Markdown context for the decision'),
@@ -144,14 +145,21 @@ export function createServer(client: () => Promise<Herald>) {
         .record(z.string(), z.unknown())
         .optional()
         .describe('Flat JSON Schema object for the form, instead of fields'),
+      questions: questionsSchema
+        .optional()
+        .describe(
+          'Multiple-choice questions: [{question, header?, options: [{label, description?, preview? (Markdown)}], multiSelect?}]',
+        ),
       files: files.optional(),
       replyTo,
       deadline: time.optional().describe('When the request expires for the human (default 1h)'),
       wait: time.optional().describe('How long this call blocks (default 10m)'),
     },
     async (input, herald) => {
-      const modes = [input.approval, input.choices, input.fields || input.schema].filter(Boolean);
-      if (modes.length > 1) return failure('Use one of approval, choices, or fields/schema.');
+      const { approval, choices, questions } = input;
+      const modes = [approval, choices, questions, input.fields || input.schema].filter(Boolean);
+      if (modes.length > 1)
+        return failure('Use one of approval, choices, questions, or fields/schema.');
       const deadline = duration(input.deadline || '1h');
       const request: MessageRequest = {
         title: input.title,
@@ -161,14 +169,14 @@ export function createServer(client: () => Promise<Herald>) {
         expiresIn: deadline,
         attachments: await attach(herald, input.files),
       };
-      const choices = input.choices;
-      if (input.approval)
+      if (approval)
         request.actions = [
           { id: 'approve', label: 'Approve', values: {} },
           { id: 'reject', label: 'Reject', values: {} },
         ];
       else if (choices)
         request.actions = choices.map((label, i) => ({ id: `choice${i + 1}`, label, values: {} }));
+      else if (questions) request.questions = questions;
       else if (input.schema) request.schema = input.schema;
       else
         request.fields = (input.fields as MessageRequest['fields']) || [
@@ -180,10 +188,11 @@ export function createServer(client: () => Promise<Herald>) {
         message.id,
         Math.min(duration(input.wait || '10m'), deadline),
       );
-      if (input.approval && result.status === 'answered')
-        result.approved = result.actionId === 'approve';
+      if (approval && result.status === 'answered') result.approved = result.actionId === 'approve';
       if (choices && typeof result.actionId === 'string')
         result.choice = choices[Number(result.actionId.slice(6)) - 1];
+      if (questions && result.values)
+        result.answers = questionAnswers(questions, result.values as Answers);
       return json(result);
     },
   );

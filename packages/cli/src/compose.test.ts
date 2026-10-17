@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, it } from 'vitest';
 import { actionSpec, composeMessage, fieldSpec, outputs, parseCsv, titleCase } from './compose';
 
@@ -59,4 +60,23 @@ it('refuses flag actions with a required field', async () => {
     stdin,
   );
   expect(ok.input.actions).toHaveLength(1);
+});
+it('composes questions input without a reply field or flag actions', async () => {
+  const stdin = async () => '';
+  const path = new URL('../../../examples/questions.json', import.meta.url);
+  const base = JSON.parse(await readFile(path, 'utf8'));
+  const draft = await composeMessage({}, base, true, stdin);
+  expect(draft.input.kind).toBe('form');
+  expect(draft.input.fields).toBeUndefined();
+  expect(draft.fields.map((f) => [f.id, f.type, f.other])).toEqual([
+    ['q1', 'select', true],
+    ['q2', 'select', true],
+    ['q3', 'multiselect', true],
+  ]);
+  await expect(composeMessage({ action: ['ship'] }, base, true, stdin)).rejects.toThrow(
+    'no questions',
+  );
+  await expect(composeMessage({ field: ['x:text'] }, base, true, stdin)).rejects.toThrow(
+    'not several',
+  );
 });

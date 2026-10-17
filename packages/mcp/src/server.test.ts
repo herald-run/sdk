@@ -140,6 +140,22 @@ it('asks approval, choice and free-text questions', async () => {
   expect((await call('ask', { title: 'x', approval: true, choices: ['a', 'b'] })).error).toBe(true);
 });
 
+it('asks multiple-choice questions and returns answers by question', async () => {
+  const questions = [
+    { question: 'Which DB?', header: 'DB', options: [{ label: 'Postgres', preview: '`pg`' }] },
+    { question: 'Checks?', options: [{ label: 'Lint' }, { label: 'Types' }], multiSelect: true },
+  ];
+  answer = { status: 'answered', values: { q1: 'MySQL', q2: ['Lint', 'Types'] } };
+  const result = await call('ask', { title: 'Setup', questions });
+  expect(result.data.answers).toEqual({ 'Which DB?': 'MySQL', 'Checks?': 'Lint, Types' });
+  const { fields } = (await posted()) as { fields: object[] };
+  expect(fields).toMatchObject([
+    { id: 'q1', header: 'DB', type: 'select', other: true },
+    { id: 'q2', type: 'multiselect', other: true },
+  ]);
+  expect((await call('ask', { title: 'x', questions, approval: true })).error).toBe(true);
+});
+
 it('reports expired requests and lists summaries', async () => {
   await call('send', { title: 'Q' });
   answer = { status: 'expired' };

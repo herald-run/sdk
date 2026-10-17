@@ -1,0 +1,28 @@
+{
+  "title": "Set up the project",
+  "body": "A few choices before I scaffold it.",
+  "questions": [
+    {
+      "question": "Which database should the app use?",
+      "header": "Database",
+      "options": [
+        { "label": "Postgres", "description": "Managed, with daily backups." },
+        { "label": "SQLite", "description": "One file, no server." }
+      ]
+    },
+    {
+      "question": "Which layout fits best?",
+      "header": "Layout",
+      "options": [
+        { "label": "Sidebar", "preview": "```\n| nav | content      |\n```" },
+        { "label": "Top bar", "preview": "```\n| nav               |\n| content           |\n```" }
+      ]
+    },
+    {
+      "question": "Which checks should CI run?",
+      "header": "Checks",
+      "options": [{ "label": "Lint" }, { "label": "Types" }, { "label": "Tests" }],
+      "multiSelect": true
+    }
+  ]
+}

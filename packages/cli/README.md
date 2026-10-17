@@ -23,7 +23,7 @@ herald messages --search deploy
 
 ## Forms, secrets and files
 
-`send`, `ask` and `register` build everything from flags; `-i FILE` takes JSON input, and flags merge onto it. `herald help send` lists the grammar.
+`send`, `ask` and `register` build everything from flags; `-i FILE` takes JSON input, and flags merge onto it. `herald help send` lists the grammar. In `-i` input, `questions` asks multiple-choice questions, each with an Other answer (see [`examples/questions.json`](../../examples/questions.json)).
 
 ```sh
 herald ask --title 'Release?' --field 'env?:select:Environment:staging,prod' --action 'ship:Ship it'

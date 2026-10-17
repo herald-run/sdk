@@ -8,9 +8,11 @@ from pathlib import Path
 
 import httpx
 from herald import Herald, HeraldError, SyncHerald, __version__, create_keys, seal, unseal, verify_webhook
+from herald import keyed as forms
 from fixtures import keyed
 
 VECTORS = json.loads((Path(__file__).parents[2] / "sdk/fixtures/crypto-vectors.json").read_text())
+QUESTIONS = json.loads((Path(__file__).parents[2] / "sdk/fixtures/questions.json").read_text())
 
 
 def mock(handle, cls=Herald):
@@ -78,6 +80,27 @@ class EndpointTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await client.token()).account.email, "a@example.com")
             await client.revoke_token()
         self.assertIn(("DELETE", "/api/v1/token", None), seen)
+
+
+class QuestionTests(unittest.TestCase):
+    def test_questions_and_other_answers_match_typescript(self):
+        fx, fields = QUESTIONS, QUESTIONS["fields"]
+        self.assertEqual(forms.check_input({"title": "Q", "questions": fx["questions"]})["fields"], forms.check_fields(fields))
+        self.assertEqual(forms.validate_answers(fields, fx["values"]), {})
+        self.assertEqual(forms.question_answers(fx["questions"], fx["values"]), fx["answers"])
+        for values in fx["rejected"]:
+            self.assertEqual(len(forms.validate_answers(fields, values)), 1)
+        long = forms.question_fields([{"question": "a" * 200, "options": [{"label": "x"}]}])[0]
+        self.assertEqual((len(long["label"]), long["help"]), (120, "a" * 200))
+        text = {"id": "a", "label": "A", "type": "text"}
+        self.assertEqual(forms.check_fields([{**text, "header": "Short"}])[0]["header"], "Short")
+        for bad in [{"fields": [{**text, "other": True}]}, {"fields": [{**text, "header": "h" * 25}]}, {"questions": []},
+                    {"questions": [{"question": "Q", "options": [{"label": "x"}, {"label": "x"}]}]},
+                    {"questions": fx["questions"], "fields": [text]}, {"questions": fx["questions"], "schema": {"type": "object"}}]:
+            with self.assertRaises(HeraldError):
+                forms.check_input({"title": "Q", **bad})
+        with self.assertRaises(HeraldError):
+            forms.check_secret_offer({"title": "Key", "questions": fx["questions"]})
 
 
 class SyncTests(unittest.TestCase):

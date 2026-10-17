@@ -6,6 +6,8 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 - CLI: `herald login` waits out rate limits (which a login pending a few minutes reached) and bodiless server errors, honouring `Retry-After`, instead of failing with "Login failed."; other failures show the server's message.
 - CLI: the README points Claude Code and Codex at the skills, which run the CLI.
+- Forms: `questions` input (the shape of Claude Code's AskUserQuestion) becomes required choice fields `q1`…`qN`; `questionAnswers` maps answers back by question text. Fields gain `header` and `other` (free text instead of a choice); options gain `description` and Markdown `preview`.
+- MCP `ask` takes `questions` and returns `answers`; CLI `-i` input takes `questions` (see `examples/questions.json`); Python keyed clients validate them alike.
 
 ## 0.3.0-beta.5
 
