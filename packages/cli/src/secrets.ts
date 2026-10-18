@@ -16,6 +16,7 @@ import { publicKeySchema, type Field } from '@herald-run/sdk/schema';
 
 type Options = {
   replyTo?: string;
+  team?: string;
   title?: string;
   body?: string;
   label?: string;
@@ -243,6 +244,7 @@ export async function sendSecretValue(client: Herald, value: string, options: Op
     title: options.title || 'Secret Available',
     body: options.body,
     replyTo: options.replyTo,
+    team: options.team,
     kind: 'secret',
     expiresIn: Math.min(options.deadline, options.timeout),
   });

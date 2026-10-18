@@ -12,6 +12,9 @@ export type Saved = {
   name?: string;
   seed?: string;
   fingerprint?: string;
+  /** A team workspace login: its id and the newest verified chain head and roster. */
+  workspace?: string;
+  pin?: e2ee.WorkspacePin;
 };
 export const encryptionLine = (fingerprint: string) =>
   `End-to-end encryption: on (safety code ${e2ee.safetyCode(fingerprint)})`;
@@ -57,7 +60,7 @@ async function post(base: string, path: string, body: unknown, token?: string) {
 /** Browser-approved device login; reuses this device's connection when its token still matches. */
 export async function login(
   base: string,
-  options: { name?: string; scopes?: string; safetyCode?: string },
+  options: { name?: string; scopes?: string; safetyCode?: string; workspace?: string },
   saved: Saved,
   io: LoginIo,
 ): Promise<{ saved: Saved; reused: boolean }> {
@@ -71,7 +74,8 @@ export async function login(
     throw new Error(device.error_description || device.message || 'Could not start login.');
   // The fragment never reaches the server; the approval page certifies these keys.
   const keys = await e2ee.keySet();
-  const page = `${device.verification_uri_complete || device.verification_uri}#k=${keys.signPub}.${keys.boxPub}`;
+  const workspace = options.workspace ? `&w=${encodeURIComponent(options.workspace)}` : '';
+  const page = `${device.verification_uri_complete || device.verification_uri}#k=${keys.signPub}.${keys.boxPub}${workspace}`;
   const opened = /^https?:\/\//.test(page) && !!io.open?.(page);
   io.log(
     opened
@@ -107,15 +111,17 @@ export async function login(
       throw new Error(
         result.error_description || result.message || result.error || 'Login failed.',
       );
-    const human = new Herald({ url: base, apiKey: result.access_token, userAgent });
+    const human = new Herald({
+      url: base,
+      apiKey: result.access_token,
+      userAgent,
+      workspace: options.workspace,
+    });
     try {
-      const keyed = await certificate(
-        human,
-        keys,
-        String(device.user_code),
-        io,
-        options.safetyCode,
-      );
+      const code = String(device.user_code);
+      const keyed = options.workspace
+        ? await workspaceCertificate(human, keys, code, io, options.safetyCode, saved.pin)
+        : await certificate(human, keys, code, io, options.safetyCode);
       return await connect(human, name, chosen, saved, io, keyed);
     } finally {
       await post(base, '/api/auth/sign-out', {}, result.access_token).catch(() => {});
@@ -123,7 +129,13 @@ export async function login(
   }
   throw new Error('The login request expired. Run herald login again.');
 }
-type Keyed = { seed: string; fingerprint: string; certificate: e2ee.Certificate };
+type Keyed = {
+  seed: string;
+  fingerprint: string;
+  certificate: e2ee.Certificate;
+  workspace?: string;
+  pin?: e2ee.WorkspacePin;
+};
 /**
  * The person anchors the account key: the safety code this login pins must match the one the
  * approval page shows, confirmed in a terminal or passed as `--safety-code`. Nothing is stored
@@ -175,6 +187,35 @@ async function certificate(
     throw new Error('The approval certified a different key. Run herald login again.');
   return { seed: keys.seed, fingerprint, certificate: cert };
 }
+/** The workspace's certificate for this login's keys, checked against its verified chain and roster. */
+async function workspaceCertificate(
+  human: Herald,
+  keys: e2ee.KeySet,
+  userCode: string,
+  io: LoginIo,
+  safetyCode?: string,
+  pin?: e2ee.WorkspacePin,
+): Promise<Keyed> {
+  const directory = await human.keys();
+  const root = directory.workspace?.chain?.[0]?.statement?.identity;
+  if (!root) throw new Error('This workspace has not set up encryption yet. Nothing was stored.');
+  // The safety code is the workspace's root identity, shown on the approval page.
+  const fingerprint = await e2ee.fingerprint(root);
+  await confirmSafetyCode(fingerprint, io, safetyCode);
+  // A stored pin for the same workspace still refuses a rolled-back chain or roster.
+  const id = directory.workspace!.chain[0].statement.workspace;
+  const ws = await e2ee.verifyWorkspace(directory.workspace!, fingerprint, {
+    pin: pin?.workspace === id ? pin : undefined,
+  });
+  const cert = await human.deviceCertificate(userCode).catch(() => {
+    throw new Error('The approval did not certify this device for the workspace.');
+  });
+  const checked = await e2ee.verifyWorkspaceCertificate(cert, ws);
+  if (checked.sign !== keys.signPub || checked.box !== keys.boxPub)
+    throw new Error('The approval certified a different key. Run herald login again.');
+  if (!checked.teams.length) throw new Error('The approval granted no teams.');
+  return { seed: keys.seed, fingerprint, certificate: cert, workspace: ws.workspace, pin: ws.pin };
+}
 async function connect(
   human: Herald,
   name: string,
@@ -191,11 +232,12 @@ async function connect(
     current &&
     saved.seed &&
     saved.fingerprint === keyed.fingerprint &&
+    saved.workspace === keyed.workspace &&
     current.scopes.length === chosen.length &&
     chosen.every((s) => current.scopes.includes(s))
   ) {
     return {
-      saved: { ...saved, integrationId: current.id, name },
+      saved: { ...saved, integrationId: current.id, name, ...(keyed.pin && { pin: keyed.pin }) },
       reused: true,
     };
   }
@@ -212,6 +254,7 @@ async function connect(
       name,
       seed: keyed.seed,
       fingerprint: keyed.fingerprint,
+      ...(keyed.workspace && { workspace: keyed.workspace, pin: keyed.pin }),
     },
     reused: false,
   };

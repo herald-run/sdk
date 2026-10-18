@@ -29,6 +29,7 @@ export type Flags = {
   file?: string[];
   review?: boolean;
   'reply-to'?: string;
+  team?: string;
   deadline?: string;
 };
 type Json = Record<string, unknown>;
@@ -180,6 +181,7 @@ export async function composeMessage(
     ? { ...base }
     : { title: 'A message for you', body: '', kind: 'message' };
   if (flags.title !== undefined) input.title = flags.title;
+  if (flags.team) input.team = flags.team;
   if (flags.body !== undefined && flags['body-file'])
     throw new UsageError('Use --body or --body-file, not both.');
   if (flags.body !== undefined) input.body = flags.body;

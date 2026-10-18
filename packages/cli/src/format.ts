@@ -1,4 +1,4 @@
-import type { Account, Destination, Message, TokenInfo } from '@herald-run/sdk';
+import type { Account, Destination, Message, TokenInfo, WorkspaceInfo } from '@herald-run/sdk';
 // Human-readable output; `--json` prints the API records instead.
 // Choice lists read as "A, B", including an Other answer.
 const value = (v: unknown) =>
@@ -37,6 +37,9 @@ export function messageDetail(m: Message) {
       ['expires', m.expiresAt],
       ['reply to', m.replyTo],
       ['thread', m.threadId],
+      ['team', m.team],
+      ['assignee', m.assignee],
+      ['answered by', m.answeredBy],
       ['attachments', m.attachments?.map((a) => `${a.name} (${a.id})`).join(', ')],
       ['error', m.result?.error || m.execution?.error],
     ]),
@@ -61,6 +64,12 @@ const usage = (a: Account): [string, unknown][] => [
   ['resets', day(a.usageResetsAt || a.renewsAt)],
   ['channel', a.channel],
 ];
+/** The verified team workspace and the teams this connection may address, its default first. */
+export const workspaceSummary = (w: WorkspaceInfo) =>
+  pairs([
+    ['workspace', `${w.id} (roster epoch ${w.epoch})`],
+    ['teams', w.teams.map((t) => t.slug).join(', ')],
+  ]);
 /** The token and its account holder, with the account's plan and usage when given. */
 export const tokenSummary = (t: TokenInfo, a?: Account) =>
   pairs([

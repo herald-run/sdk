@@ -99,6 +99,8 @@ const options = {
   scopes: { type: 'string' },
   'no-browser': { type: 'boolean' },
   'safety-code': { type: 'string' },
+  workspace: { type: 'string' },
+  team: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url'];
 const integer = (value: string | undefined, name: string) => {
@@ -164,6 +166,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
     io.err(quiet ?? `herald ${command} does not take --${extra}. Run herald help ${command}.`);
     return 2;
   }
+  // A newer workspace pin being stored; awaited before exiting.
+  let saving: Promise<void> | undefined;
   const print = (human: string, json: unknown) => {
     if (values.json) io.out(JSON.stringify(json));
     else if (human) io.out(human);
@@ -186,7 +190,20 @@ export async function main(argv: string[], io: Io): Promise<number> {
     const keyless = ['login', 'logout'].includes(command);
     const env = io.env.HERALD_API_KEY || io.env.HERALD_TOKEN;
     const token = (keyless ? '' : env || savedToken(saved)) || '';
-    const client = new Herald({ url: base, apiKey: token, userAgent });
+    // A saved team workspace login keeps its pin current, so a server cannot roll it back.
+    const pinned = !keyless && !env && saved.workspace;
+    const client = new Herald({
+      url: base,
+      apiKey: token,
+      userAgent,
+      ...(pinned && {
+        workspace: saved.workspace,
+        pin: saved.pin,
+        onPin: (pin: e2ee.WorkspacePin) => {
+          saving = saveLogin(directory, profile, host, base, { ...saved, pin }).catch(() => {});
+        },
+      }),
+    });
     const arg = (index: number, name: string) => {
       const value = positionals[index];
       if (!value) throw new UsageError(`Usage: herald ${command} ${spec.args || name}`);
@@ -209,6 +226,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
           name: values.name,
           scopes: values.scopes,
           safetyCode: values['safety-code'],
+          workspace: values.workspace,
         };
         const result = await login(base, options, saved, {
           log: io.err,
@@ -244,14 +262,18 @@ export async function main(argv: string[], io: Io): Promise<number> {
         return 0;
       }
       case 'whoami': {
-        const [info, account, fingerprint] = await Promise.all([
+        const [info, account, fingerprint, workspace] = await Promise.all([
           client.token(),
           client.account(),
           safetyCode(client),
+          client.workspace(),
         ]);
-        print([format.tokenSummary(info, account), encryptionLine(fingerprint)].join('\n'), {
+        const lines = [format.tokenSummary(info, account), encryptionLine(fingerprint)];
+        if (workspace) lines.splice(1, 0, format.workspaceSummary(workspace));
+        print(lines.join('\n'), {
           token: info,
           account,
+          ...(workspace && { workspace }),
           e2ee: { enabled: true, safetyCode: e2ee.safetyCode(fingerprint) },
         });
         return 0;
@@ -291,6 +313,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             title: values.title,
             body: values.body,
             replyTo: values['reply-to'],
+            team: values.team,
             deadline: duration(values.deadline || values.timeout || 3600),
             timeout,
           });
@@ -503,5 +526,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
     io.err((error as Error).message);
     if (error instanceof HeraldError && error.messageId) io.err('Message ID: ' + error.messageId);
     return error instanceof UsageError ? 2 : 1;
+  } finally {
+    await saving;
   }
 }

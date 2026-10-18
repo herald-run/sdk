@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { WorkspaceDirectory } from '../e2ee/workspace';
 // Wire shapes for end-to-end encryption. The server stores these opaquely.
 const b64u = (max: number) =>
   z
@@ -46,6 +47,10 @@ export const certificateBodySchema = z
     sign: key32,
     box: key32,
     created: iso,
+    /** Team workspaces only: the teams it may address (default first), roster epoch, certifier. */
+    teams: z.array(z.string().min(1).max(200)).min(1).max(100).optional(),
+    epoch: z.number().int().nonnegative().optional(),
+    by: z.string().min(1).max(200).optional(),
   })
   .strict();
 export const certificateSchema = z
@@ -86,6 +91,8 @@ export const sealedMessageInputSchema = z
       .default([]),
     taskId: z.string().uuid().optional(),
     replyTo: z.string().uuid().optional(),
+    /** Team workspaces: the team id, bound as `ctx.team`. */
+    team: z.string().min(1).max(200).optional(),
     expiresAt: iso.optional(),
     expiresIn: z.number().positive().max(86400).optional(),
   })
@@ -118,6 +125,7 @@ export const sealedOutboxSchema = z
     files: z.array(z.string().uuid()).max(30).default([]),
     grants: z.array(grantSchema).max(500).default([]),
     replyTo: z.string().uuid().optional(),
+    team: z.string().min(1).max(200).optional(),
     expiresIn: z.number().positive().max(86400).optional(),
   })
   .strict();
@@ -139,10 +147,14 @@ export interface PendingDevice {
   transfer?: string;
   nonce?: string;
 }
-/** `GET /keys`. `account` is null until the owner enrols. */
+/**
+ * `GET /keys`. `account` is null until the owner enrols, and always in a team workspace, whose
+ * keys are its succession `chain` and signed `roster`.
+ */
 export interface KeyDirectory {
   account: AccountKeys | null;
   certificates: (Certificate & { integrationId: string })[];
+  workspace?: WorkspaceDirectory;
 }
 export interface KeyBackup {
   id: string;

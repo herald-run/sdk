@@ -46,7 +46,7 @@ def wire(value):
 
 
 class Herald:
-    def __init__(self, api_key=None, url=None, *, max_retry_after=60, transport=None, user_agent=None):
+    def __init__(self, api_key=None, url=None, *, max_retry_after=60, transport=None, user_agent=None, workspace=None, pin=None, on_pin=None):
         self.url = (url or os.getenv("HERALD_URL", "https://app.herald.run")).rstrip("/")
         origin = urlparse(self.url)
         if origin.scheme != "https" and not (origin.scheme == "http" and origin.hostname in ("localhost", "127.0.0.1")):
@@ -61,12 +61,15 @@ class Herald:
         if keyed and "seed" not in parsed:
             raise e2ee.E2eeError(UNKEYED)
         self.key = parsed["auth"]
-        self._keyed = KeyedSession(parsed["seed"], parsed["fingerprint"], lambda: self.request("/keys")) if "seed" in parsed else None
+        self._keyed = KeyedSession(parsed["seed"], parsed["fingerprint"], lambda: self.request("/keys"), pin, on_pin) if "seed" in parsed else None
         # Longest server Retry-After, in seconds, that a request waits out before failing.
         self.max_retry_after = max_retry_after
         # `transport` replaces the network, e.g. with `httpx.MockTransport` in tests.
         self.user_agent = user_agent or "herald-python/" + __version__
-        self.http = httpx.AsyncClient(timeout=15, follow_redirects=False, headers={"Authorization": "Bearer " + self.key, "User-Agent": self.user_agent}, transport=transport)
+        # `workspace` picks a team workspace for human session tokens (`Herald-Workspace`).
+        self.workspace_id = workspace
+        self._headers = {"Authorization": "Bearer " + self.key, "X-Herald-Client": "sdk/" + __version__, **({"Herald-Workspace": workspace} if workspace else {})}
+        self.http = httpx.AsyncClient(timeout=15, follow_redirects=False, headers={**self._headers, "User-Agent": self.user_agent}, transport=transport)
         # One socket shared by every wait() and watch() on this client.
         self.live = LiveSocket(self.socket)
 
@@ -151,8 +154,21 @@ class Herald:
     async def send(self, *, idempotency_key=None, **message):
         """Validates and seals the content, secret offers included."""
         idempotency_key = idempotency_key or str(uuid.uuid4())
-        body = await self._keys.seal_message(wire(message), idempotency_key)
-        return Message.model_validate(await self._open(await self.request("/messages", body, idempotency_key=idempotency_key)))
+        return Message.model_validate(await self._open(await self._sealed(lambda: self._keys.seal_message(wire(message), idempotency_key), lambda body: self.request("/messages", body, idempotency_key=idempotency_key))))
+
+    async def _sealed(self, seal, post):
+        """Posts a sealed body; a team key rotated meanwhile (409 E2EE_STALE_KEY) reloads keys and reseals once."""
+        try:
+            return await post(await seal())
+        except HeraldError as error:
+            if error.status != 409 or error.code != "E2EE_STALE_KEY":
+                raise
+            await self._keys.state("force")
+            return await post(await seal())
+
+    async def workspace(self):
+        """The verified team workspace of this connection, or None for a personal account."""
+        return await self._keys.workspace()
 
     async def get(self, message_id):
         return Message.model_validate(await self._open(await self.request("/messages/" + path(message_id))))
@@ -239,8 +255,10 @@ class Herald:
     async def update_task(self, task_id, *, lease=None, status=None, error=None, logs=None, idempotency_key=None, retry=True):
         """Reports logs and/or the outcome, both sealed; log batches retry safely."""
         update = {"lease": lease, "status": status, "error": error, "logs": logs}
-        body = await self._keys.seal_update(task_id, wire({key: value for key, value in update.items() if value is not None}))
-        return Message.model_validate(await self._open(await self.request(f"/tasks/{path(task_id)}/update", body, idempotency_key=idempotency_key, retry=retry), True))
+        record = lambda: self.request("/messages/" + path(task_id))  # noqa: E731
+        seal = lambda: self._keys.seal_update(task_id, wire({key: value for key, value in update.items() if value is not None}), record)  # noqa: E731
+        post = lambda body: self.request(f"/tasks/{path(task_id)}/update", body, idempotency_key=idempotency_key, retry=retry)  # noqa: E731
+        return Message.model_validate(await self._open(await self._sealed(seal, post), True))
 
     async def collect_secrets(self, message_id):
         """Consumes the encrypted envelopes of an answered request's secret fields."""
@@ -255,7 +273,7 @@ class Herald:
         for field, envelope in (await self.collect_secrets(message_id)).items():
             if not isinstance(envelope, dict):
                 raise e2ee.E2eeError("This secret is not end-to-end encrypted.")
-            values[field] = await keys.open_secret(message_id, field, envelope)
+            values[field] = await keys.open_secret(message_id, field, envelope, lambda: self.request("/messages/" + path(message_id)))
         return values
 
     async def secret_receiver(self, message_id):
@@ -263,7 +281,7 @@ class Herald:
         Only a key the account identity signed is accepted."""
         keys = self._keys
         receiver = await self.request(f"/messages/{path(message_id)}/secret-receiver")
-        return SecretReceiver.model_validate(await keys.check_receiver(message_id, receiver))
+        return SecretReceiver.model_validate(await keys.check_receiver(message_id, receiver, lambda: self.request("/messages/" + path(message_id))))
 
     async def deliver_secret(self, message_id, *, claim_id, envelope):
         """Deposits the value sealed to the claimed receiver's key; repeating the same deposit is safe."""
@@ -292,7 +310,7 @@ class Herald:
         await self.request("/integrations/" + path(integration_id), method="DELETE")
 
     def socket(self):
-        return OriginConnection(self.url.replace("http", "ws", 1) + "/ws", additional_headers={"Authorization": "Bearer " + self.key}, user_agent_header=self.user_agent, open_timeout=15)
+        return OriginConnection(self.url.replace("http", "ws", 1) + "/ws", additional_headers=self._headers, user_agent_header=self.user_agent, open_timeout=15)
 
     def _poll(self):
         return LIVE_POLL if self.live.connected else POLL

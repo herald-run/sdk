@@ -635,3 +635,59 @@ it('registers destinations from flags, each --field under the --type before it',
   ])
     expect((await run(argv)).code).toBe(2);
 });
+it('uses a team workspace login: --team, answered by, whoami teams and the stored pin', async () => {
+  const V = JSON.parse(
+    await readFile(new URL('../../sdk/fixtures/e2ee-vectors.json', import.meta.url), 'utf8'),
+  );
+  const W = V.workspace;
+  const integration = V.keySets.find((s: { name: string }) => s.name === 'integration');
+  const directory = join(home, '.config', 'herald');
+  await mkdir(directory, { recursive: true });
+  const file = join(directory, 'herald.test.json');
+  const stored = { token: 'hdr_ws', seed: integration.seed, fingerprint: W.fingerprint };
+  await writeFile(file, JSON.stringify({ ...stored, workspace: W.workspace }));
+  const [request, response] = W.envelopes;
+  const base = contracts.e2ee.steps.find((s) => s.name === 'send')!.response.body as Message;
+  const record = { ...base, id: request.ctx.id, team: 'team-ops', senderId: 'integration' };
+  const answered = {
+    ...record,
+    sealed: request.envelope,
+    status: 'answered',
+    kind: 'form',
+    answeredBy: 'user-ana',
+    response: {
+      values: {},
+      secretFields: [],
+      createdAt: base.createdAt,
+      sealed: response.envelope,
+    },
+  };
+  const certificates = W.certificates.map((c: { name: string; certificate: object }) => ({
+    ...c.certificate,
+    integrationId: c.name,
+  }));
+  const seen = server({
+    'GET /api/v1/keys': () =>
+      Response.json({
+        account: null,
+        certificates,
+        workspace: { chain: W.chain, roster: W.roster },
+      }),
+    'GET /api/v1/token': () => Response.json({ name: 'Laptop', scopes: [], account: {} }),
+    'GET /api/v1/account': () => Response.json({ name: 'Me', email: 'me@example.com' }),
+    'POST /api/v1/messages': () => Response.json(answered),
+    [`GET /api/v1/messages/${record.id}`]: () => Response.json(answered),
+  });
+  const who = await run(['whoami'], {});
+  expect(who.out).toMatch(/workspace\s+ws_vectors \(roster epoch 2\)/);
+  expect(who.out).toMatch(/teams\s+ops/);
+  expect(JSON.parse(await readFile(file, 'utf8')).pin).toEqual(W.pin);
+  expect((await run(['send', '--title', 'Restart?', '--team', 'ops'], {})).code).toBe(0);
+  const post = last(seen, (s) => s.method === 'POST')!;
+  expect(post.body).toMatchObject({ team: 'team-ops' });
+  expect(post.headers.get('Herald-Workspace')).toBe(W.workspace);
+  expect((await run(['show', record.id], {})).out).toMatch(/answered by\s+user-ana/);
+  expect((await run(['send', '--title', 'x', '--team', 'all'], {})).err).toContain(
+    'may not address team all',
+  );
+});

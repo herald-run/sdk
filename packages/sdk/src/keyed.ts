@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import * as e2ee from './e2ee/index.js';
-import { E2eeError, type KeySet, type RecipientKey, type SealedEnvelope } from './e2ee/index.js';
+import {
+  E2eeError,
+  type CheckedCertificate,
+  type KeySet,
+  type RecipientKey,
+  type SealedEnvelope,
+  type VerifiedWorkspace,
+  type WorkspacePin,
+} from './e2ee/index.js';
 import {
   answersSchema,
   matchesAction,
@@ -31,10 +39,31 @@ type State = {
   /** Certified integration kids → signing keys, and integration IDs → kids. */
   signers: Map<string, string>;
   kids: Map<string, string>;
+  /** Team workspaces: the verified chain and roster, certificates by kid, and this token's. */
+  ws?: VerifiedWorkspace;
+  certs: Map<string, CheckedCertificate>;
+  mine?: CheckedCertificate;
+};
+/** A team workspace as this token sees it. */
+export type WorkspaceInfo = {
+  id: string;
+  /** The workspace safety code's fingerprint (its root identity). */
+  fingerprint: string;
+  epoch: number;
+  /** Teams this connection may address, its default first. */
+  teams: { id: string; slug: string }[];
+  /** Every team in the workspace. */
+  allTeams: { id: string; slug: string }[];
+};
+export type KeyedOptions = {
+  /** The newest workspace chain head and roster this token verified; older ones are refused. */
+  pin?: WorkspacePin;
+  /** Called when a newer pin was verified, to store it with the token. */
+  onPin?: (pin: WorkspacePin) => void;
 };
 type Payload = Record<string, unknown>;
 /** Picks the one kid allowed to sign an envelope, from the verified directory. */
-type SignerOf = (s: State) => string | undefined;
+type SignerOf = (s: State, env?: SealedEnvelope) => string | undefined;
 const NO_ENTRY = 'No recipient entry for these keys.';
 const CONTENT = [
   'title',
@@ -85,14 +114,31 @@ export class KeyedSession {
   #directory: () => Promise<KeyDirectory>;
   #state?: Promise<State>;
   #loaded = 0;
-  constructor(seed: string, fingerprint: string, directory: () => Promise<KeyDirectory>) {
+  #options: KeyedOptions;
+  /** Record IDs → their team, from opened records. */
+  #teams = new Map<string, string>();
+  constructor(
+    seed: string,
+    fingerprint: string,
+    directory: () => Promise<KeyDirectory>,
+    options: KeyedOptions = {},
+  ) {
     this.seed = seed;
     this.fingerprint = fingerprint;
     this.#directory = directory;
+    this.#options = { ...options };
   }
-  /** The verified key directory, fetched once; `refresh` refetches at most every 10 s. */
-  state(refresh = false): Promise<State> {
-    if (!this.#state || (refresh && Date.now() - this.#loaded > 10_000)) {
+  /** The workspace pin this session holds, if its token belongs to a team workspace. */
+  get pin(): WorkspacePin | undefined {
+    return this.#options.pin;
+  }
+  /**
+   * The verified key directory, fetched once; `refresh` refetches at most every 10 s, `force`
+   * at once (after `409 E2EE_STALE_KEY`).
+   */
+  state(refresh: boolean | 'force' = false): Promise<State> {
+    const due = refresh === 'force' || (refresh && Date.now() - this.#loaded > 10_000);
+    if (!this.#state || due) {
       this.#loaded = Date.now();
       const next = this.#load();
       this.#state = next;
@@ -104,6 +150,9 @@ export class KeyedSession {
   }
   async #load(): Promise<State> {
     const [directory, me] = await Promise.all([this.#directory(), e2ee.keySet(this.seed)]);
+    if (directory.workspace) return this.#loadWorkspace(directory, me);
+    if (this.#options.pin)
+      fail('This token belongs to a team workspace, but the server sent none.');
     if (!directory.account)
       fail(
         'End-to-end encryption is not set up for this account yet. Open Herald on a signed-in device first.',
@@ -129,26 +178,112 @@ export class KeyedSession {
       inbox: { kid: info.inboxKid, box: info.inbox },
       signers,
       kids,
+      certs: new Map(),
     };
   }
-  #to = (s: State): RecipientKey[] => [s.inbox, { kid: s.me.kid, box: s.me.boxPub }];
+  /** A team workspace: chain and roster under the pinned root, member-certified integrations. */
+  async #loadWorkspace(directory: KeyDirectory, me: KeySet): Promise<State> {
+    const ws = await e2ee.verifyWorkspace(directory.workspace!, this.fingerprint, {
+      pin: this.#options.pin,
+    });
+    const signers = new Map<string, string>(),
+      kids = new Map<string, string>(),
+      certs = new Map<string, CheckedCertificate>();
+    for (const cert of directory.certificates) {
+      const checked = await e2ee.verifyWorkspaceCertificate(cert, ws).catch(() => {});
+      if (!checked) continue;
+      signers.set(checked.kid, checked.sign);
+      kids.set(cert.integrationId, checked.kid);
+      certs.set(checked.kid, checked);
+    }
+    // A certificate newer than the roster fails above, so a server cannot roll this token back.
+    const mine = certs.get(me.kid);
+    if (mine?.sign !== me.signPub) fail("This token's key is not certified for the workspace.");
+    const pin = this.#options.pin;
+    if (!pin || pin.epoch !== ws.pin.epoch || pin.n !== ws.pin.n) {
+      this.#options.pin = ws.pin;
+      this.#options.onPin?.(ws.pin);
+    }
+    return {
+      directory,
+      account: ws.workspace,
+      me,
+      identity: ws.head.identity,
+      identityKid: ws.head.signerKid,
+      inbox: { kid: ws.head.boxKid, box: ws.head.box },
+      signers,
+      kids,
+      ws,
+      certs,
+      mine,
+    };
+  }
+  /** The team workspace this token belongs to, or undefined for a personal account. */
+  async workspace(): Promise<WorkspaceInfo | undefined> {
+    const { ws, mine } = await this.state();
+    if (!ws || !mine) return undefined;
+    const team = (id: string) => ({ id, slug: ws.teams.get(id)!.slug });
+    return {
+      id: ws.workspace,
+      fingerprint: this.fingerprint,
+      epoch: ws.epoch,
+      teams: mine.teams.map(team),
+      allTeams: [...ws.teams.keys()].map(team),
+    };
+  }
+  /** A team id from an id or slug, among this connection's teams; its default when omitted. */
+  #team(s: State, wanted?: string): string | undefined {
+    if (!s.ws) return wanted === undefined ? undefined : fail('Teams need a team workspace token.');
+    if (wanted === undefined) return s.mine!.teams[0];
+    const id = s.ws.teams.has(wanted)
+      ? wanted
+      : [...s.ws.teams.values()].find((t) => t.slug === wanted)?.id;
+    if (!id) return fail(`Unknown team ${wanted}.`);
+    if (!s.mine!.teams.includes(id)) return fail(`This connection may not address team ${wanted}.`);
+    return id;
+  }
+  /** Team records seal to the team's current key; personal ones to the account inbox. */
+  #to = (s: State, team?: string): RecipientKey[] => {
+    const me = { kid: s.me.kid, box: s.me.boxPub };
+    if (!s.ws) return [s.inbox, me];
+    const t = (team && s.ws.teams.get(team)) || fail('Unknown team.');
+    return [{ kid: t.kid, box: t.box }, me];
+  };
+  /** A record's team; `record` loads it when this session has not opened it yet. */
+  async teamOf(id: string, record?: () => Promise<Message>): Promise<string | undefined> {
+    const s = await this.state();
+    if (!s.ws) return undefined;
+    if (!this.#teams.has(id) && record) await this.openRecord(await record());
+    return this.#teams.get(id) ?? fail('The record has no team.');
+  }
   /** Opens `env` if exactly the kid `signer` picks signed it; a new certificate triggers a refetch. */
   async #open<T extends Payload>(
     env: SealedEnvelope,
-    expect: Record<string, string | number> & { t: string },
+    expect: Record<string, string | number | undefined> & { t: string },
     signer: SignerOf,
   ): Promise<T> {
     let s = await this.state();
-    if (signer(s) !== env.from) s = await this.state(true);
-    const kid = signer(s);
-    const key = kid === s.identityKid ? s.identity : kid && s.signers.get(kid);
+    if (signer(s, env) !== env.from) s = await this.state(true);
+    const kid = signer(s, env);
+    const ws = s.ws;
+    if (ws && typeof expect.team !== 'string') fail('The record has no team.');
+    const key = ws
+      ? kid === env.from && kid
+        ? e2ee.workspaceSigner(ws, s.certs, env.ctx, kid)
+        : undefined
+      : kid === s.identityKid
+        ? s.identity
+        : kid && s.signers.get(kid);
+    if (!ws) delete expect.team;
     return e2ee.open<T>(env, {
       recipients: [s.me],
       signers: (from) => (from === kid && key) || undefined,
       expect: { ...expect, account: s.account },
     });
   }
-  static #identity: SignerOf = (s) => s.identityKid;
+  /** The account identity, or in a team workspace the member named by `ctx.member`. */
+  static #identity: SignerOf = (s, env) =>
+    s.ws ? s.ws.members.get(String(env?.ctx.member))?.kid : s.identityKid;
   static #integration =
     (id?: string): SignerOf =>
     (s) =>
@@ -165,13 +300,15 @@ export class KeyedSession {
     if (!parsed.success) throw new HeraldError(z.prettifyError(parsed.error), 400);
     const s = await this.state();
     const id = crypto.randomUUID();
+    const team = this.#team(s, parsed.data.team);
     const seal = async (payload: Payload) => ({
       id,
+      ...(team ? { team } : {}),
       sealed: await e2ee.seal({
         payload,
-        ctx: { t: 'message', account: s.account, id },
+        ctx: { t: 'message', account: s.account, id, ...(team ? { team } : {}) },
         signer: s.me,
-        to: this.#to(s),
+        to: this.#to(s, team),
       }),
       digest: await e2ee.idempotencyDigest(this.seed, payload, idempotencyKey),
       taskId: parsed.data.taskId,
@@ -214,8 +351,12 @@ export class KeyedSession {
    */
   async openRecord<M extends Message>(m: M, options: { task?: boolean } = {}): Promise<M> {
     if (!m || typeof m !== 'object') return m;
-    await this.state();
+    const { ws } = await this.state();
     const task = options.task || m.direction === 'outbound';
+    if (ws && m.team) this.#teams.set(m.id, m.team);
+    // `answeredBy` comes only from a verified answer.
+    m = { ...m, ...(m.response ? { response: omit(m.response, 'by') } : {}) };
+    delete m.answeredBy;
     try {
       if (task) {
         if (!m.input?.sealed) fail('This task is not end-to-end encrypted.');
@@ -234,7 +375,8 @@ export class KeyedSession {
         let error: unknown;
         if (env) {
           const runner = KeyedSession.#integration(m.recipientId);
-          ({ error } = await this.#open(env, { t: 'result', task: m.id }, runner));
+          const expect = { t: 'result', task: m.id, team: m.team };
+          ({ error } = await this.#open(env, expect, runner));
           if (error !== undefined && error !== null && typeof error !== 'string')
             fail('Malformed task result.');
         }
@@ -250,7 +392,7 @@ export class KeyedSession {
   #runners = new Map<string, string>();
   async #content<M extends Message>(out: M, env: SealedEnvelope): Promise<M> {
     const sender = KeyedSession.#integration(out.senderId);
-    const opened = await this.#open(env, { t: 'message', id: out.id }, sender);
+    const opened = await this.#open(env, { t: 'message', id: out.id, team: out.team }, sender);
     const { attachments, ...rest } = opened;
     const files = fileList.safeParse(attachments);
     const parsed = messageInputSchema.safeParse({ ...rest, attachments: files.data });
@@ -264,7 +406,13 @@ export class KeyedSession {
     return { ...omit(out, ...CONTENT), ...omit(content), attachments: files.data || [] } as M;
   }
   async #task<M extends Message>(out: M, env: SealedEnvelope): Promise<M> {
-    const expect = { t: 'task', id: out.id, destination: out.destinationId!, type: out.typeId! };
+    const expect = {
+      t: 'task',
+      id: out.id,
+      destination: out.destinationId!,
+      type: out.typeId!,
+      team: out.team,
+    };
     const opened = await this.#open(env, expect, KeyedSession.#identity);
     const { values = {}, session, attachments } = opened;
     const answers = answersSchema.safeParse(values);
@@ -286,7 +434,12 @@ export class KeyedSession {
     } as M;
   }
   async #response<M extends Message>(out: M, request: SealedEnvelope, env: SealedEnvelope) {
-    const expect = { t: 'response', message: out.id, request: await e2ee.envelopeDigest(request) };
+    const expect = {
+      t: 'response',
+      message: out.id,
+      request: await e2ee.envelopeDigest(request),
+      team: out.team,
+    };
     const { values, actionId, attachments } = await this.#open(env, expect, KeyedSession.#identity);
     const answers = answersSchema.safeParse(values);
     const files = fileList.safeParse(attachments);
@@ -304,9 +457,12 @@ export class KeyedSession {
     if (!valid) fail('The answer does not match the request.');
     this.#learn(files.data);
     const answer = (files.data || []).filter((f) => !out.attachments.some((a) => a.id === f.id));
+    // Verified: the signer is this member of the request's team.
+    const by = (await this.state()).ws ? (env.ctx.member as string) : undefined;
     return {
       ...out,
-      response: omit({ ...out.response!, values: answers.data, actionId: action }),
+      ...(by ? { answeredBy: by } : {}),
+      response: omit({ ...out.response!, values: answers.data, actionId: action, by }),
       attachments: [...out.attachments, ...answer],
     };
   }
@@ -322,7 +478,7 @@ export class KeyedSession {
       logs.map(async (log): Promise<OpenedLog> => {
         try {
           if (!log.sealed) fail('This log line is not end-to-end encrypted.');
-          const expect = { t: 'log', task: id, seq: log.sequence };
+          const expect = { t: 'log', task: id, seq: log.sequence, team: this.#teams.get(id) };
           const signer = KeyedSession.#integration(runner);
           const { text } = await this.#open(log.sealed!, expect, signer);
           return typeof text === 'string' ? { ...log, text, e2ee: true } : fail('Malformed log.');
@@ -339,15 +495,20 @@ export class KeyedSession {
     );
   }
   /** Seals log text (at most 4,096 characters per line) and the error of a task update. */
-  async sealUpdate(task: string, update: { error?: string; logs?: TaskLog[] } & Payload) {
+  async sealUpdate(
+    task: string,
+    update: { error?: string; logs?: TaskLog[] } & Payload,
+    record?: () => Promise<Message>,
+  ) {
     const s = await this.state();
+    const team = await this.teamOf(task, record);
     const { error, logs, ...rest } = update;
     const seal = async (payload: Payload, ctx: Record<string, string | number> & { t: string }) => {
       const env = await e2ee.seal({
         payload,
-        ctx: { ...ctx, account: s.account },
+        ctx: { ...ctx, account: s.account, ...(team ? { team } : {}) },
         signer: s.me,
-        to: this.#to(s),
+        to: this.#to(s, team),
       });
       return JSON.stringify(env).length > ENVELOPE_LIMIT
         ? fail('A sealed log line is too large.')
@@ -376,8 +537,9 @@ export class KeyedSession {
     message: string,
     field: string,
     env: SealedEnvelope,
+    record?: () => Promise<Message>,
   ): Promise<string | FileAttachment[]> {
-    const expect = { t: 'secret', message, field };
+    const expect = { t: 'secret', message, field, team: await this.teamOf(message, record) };
     const { value, files } = await this.#open(env, expect, KeyedSession.#identity);
     if (typeof value === 'string') return value;
     const list = fileList.safeParse(files);
@@ -386,15 +548,25 @@ export class KeyedSession {
     return list.data!;
   }
   /** Checks that the account identity signed a claimed secret receiver's one-time key. */
-  async checkReceiver<R extends { claimId?: string; publicKey?: unknown; sig?: string }>(
-    message: string,
-    receiver: R,
-  ): Promise<R> {
+  async checkReceiver<
+    R extends { claimId?: string; publicKey?: unknown; sig?: string; member?: string },
+  >(message: string, receiver: R, record?: () => Promise<Message>): Promise<R> {
     if (!receiver.claimId || !receiver.publicKey) return receiver;
     if (!receiver.sig) fail('The secret receiver is not signed by the account.');
-    const { identity } = await this.state();
-    const { claimId, publicKey } = receiver;
-    await e2ee.verifyReceiver(receiver.sig!, identity, { message, claimId, publicKey });
+    const { identity, ws } = await this.state();
+    const { claimId, publicKey, member } = receiver;
+    if (!ws) {
+      await e2ee.verifyReceiver(receiver.sig!, identity, { message, claimId, publicKey });
+      return receiver;
+    }
+    // A team member of the request's team claims it, signing with their personal identity.
+    const signer = e2ee.teamMember(ws, member, await this.teamOf(message, record));
+    await e2ee.verifyReceiver(receiver.sig!, signer.identity, {
+      message,
+      claimId,
+      publicKey,
+      member,
+    });
     return receiver;
   }
 }

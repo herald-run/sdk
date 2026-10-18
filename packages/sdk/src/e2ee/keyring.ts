@@ -124,21 +124,20 @@ export interface ReceiverClaim {
   message: string;
   claimId: string;
   publicKey: unknown;
+  /** Team workspaces: the claiming member, whose personal identity signs. */
+  member?: string;
 }
+const receiverInput = ({ message, claimId, publicKey, member }: ReceiverClaim) =>
+  H(
+    'receiver',
+    canon({ message, claimId, publicKey, ...(member === undefined ? {} : { member }) }),
+  );
 /** Signs a secret receiver's one-time public key with the account identity. */
 export async function signReceiver(keyring: Keyring, claim: ReceiverClaim): Promise<string> {
   const { identity } = await keyringKeys(keyring);
-  const { message, claimId, publicKey } = claim;
-  return sign(identity.signPriv, await H('receiver', canon({ message, claimId, publicKey })));
+  return sign(identity.signPriv, await receiverInput(claim));
 }
 export async function verifyReceiver(sig: string, identitySignPub: string, claim: ReceiverClaim) {
-  const { message, claimId, publicKey } = claim;
-  if (
-    !(await verify(
-      identitySignPub,
-      sig,
-      await H('receiver', canon({ message, claimId, publicKey })),
-    ))
-  )
+  if (!(await verify(identitySignPub, sig, await receiverInput(claim))))
     fail('Bad receiver signature.');
 }

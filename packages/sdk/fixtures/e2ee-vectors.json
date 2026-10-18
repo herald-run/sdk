@@ -1075,5 +1075,1223 @@
         "auth": "hdr_legacy-only"
       }
     }
-  ]
+  ],
+  "workspace": {
+    "workspace": "ws_vectors",
+    "fingerprint": "KCFXBv_Merss818ksjykTg",
+    "safetyCode": "75189 86549 61942 16368 72883 82542",
+    "seeds": {
+      "identity0": "TaCpdvEQpDq39M6oiOSGZWMIR2XyV7l1ELrnyuuXGgg",
+      "identity1": "n5b7xtX_msMk4w0LpRRHfgp4qyUyGi_JlFAFW9tIGFA",
+      "forked": "fxtqL-IGH4OajORy6Dsp5pEWFRidDFMpLqcJB1lQ5MU",
+      "recovery": "-0d4GCcAdLi6W7MNUxu42M181jOgWJUNiBhO18UqCtA",
+      "ops1": "ANcHFGuUQn6o0DRmkf4G34jTWC9EWGXAh8zuRtZskaA",
+      "ops2": "yv64SsGQcUVrbgLH82hIW2XwDZrxAQghU6ho4GE1xwQ",
+      "all1": "WqKpST2gej8mUT9fjiuKg2KTwElXtfxRaE9IOzZIaa0",
+      "forged": "Wz1J4jTQSsBl60sXAoWgKeD0mh9aW5Qsqlhj4qz7Bq4"
+    },
+    "keyrings": {
+      "ana": {
+        "v": 1,
+        "account": "user-ana",
+        "identity": "1NUYI7ru_BUS3NJTASMzMc_ZE2kwXYRy6ryPnSdtRMY",
+        "inbox": [
+          {
+            "seed": "In5s0aLQZWSC9YUFhDRx49v1d2tpF5ARM40o6xX2wbw",
+            "created": "2026-01-01T00:00:00.000Z"
+          }
+        ]
+      },
+      "ben": {
+        "v": 1,
+        "account": "user-ben",
+        "identity": "C2ID5TKrpoYFXz86mC6NCxy2DlQJJdxUd3r9je4OIBY",
+        "inbox": [
+          {
+            "seed": "yTJy8JProZ9pSiym4MluXKm8g3sAD0wqkTsHHO8uh3w",
+            "created": "2026-01-01T00:00:00.000Z"
+          }
+        ]
+      },
+      "eve": {
+        "v": 1,
+        "account": "user-eve",
+        "identity": "KeHDK6_1fc7_iUJOJMbn7-StlF---RMwgRa1wvqqumw",
+        "inbox": [
+          {
+            "seed": "IR9FU3wOPECpNPFWjmaQpnBIXC41CzaLoJObIoBPxrE",
+            "created": "2026-01-01T00:00:00.000Z"
+          }
+        ]
+      }
+    },
+    "identities": [
+      {
+        "seed": "TaCpdvEQpDq39M6oiOSGZWMIR2XyV7l1ELrnyuuXGgg",
+        "kid": "wohpxLRLJiNRWeLsTHcKSw",
+        "boxKid": "ildODMMz8YYJX75WTgrO-A",
+        "signPub": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+        "boxPub": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs"
+      },
+      {
+        "seed": "n5b7xtX_msMk4w0LpRRHfgp4qyUyGi_JlFAFW9tIGFA",
+        "kid": "JxZErH88KnHtvIKF5TrIAw",
+        "boxKid": "ppryfc02JqBX3urMYH6PVw",
+        "signPub": "twnsloDsGJ778iAEhHnnxe8CTvdQeEEmKCFaGuJIe18",
+        "boxPub": "Bv-6DkUj_7ypL4EKJB19JRPDX6Ne9H6UbSWROZaTtko"
+      }
+    ],
+    "recovery": {
+      "text": "ZD3Q-G617-01TB-HEJV-PC6N-66XR-V36Q-SNHK-M1C9-A3C8-317D-FH9A-1B80",
+      "kid": "XS0jPywTg5UczThfOFEJRA",
+      "boxPub": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs"
+    },
+    "teams": {
+      "ops": ["ixOe6iGIO18uHTEimi6khA", "5jIt2cK663D-M_yfgvOLvQ"],
+      "all": ["uJU1RNaFyLfuGdUzpGXYjg"]
+    },
+    "chain": [
+      {
+        "statement": {
+          "v": 1,
+          "workspace": "ws_vectors",
+          "n": 0,
+          "identity": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+          "box": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs",
+          "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+          "created": "2026-01-01T00:00:00.000Z"
+        },
+        "sig": "0fNdMKNGVGY2cZKQ9e8jtNLkRY1Y_p82n79pDGVY6gdL5OYNnU6l0SFj9SmplC130OxrelKVjZortWf2vhqvBw"
+      },
+      {
+        "statement": {
+          "v": 1,
+          "workspace": "ws_vectors",
+          "n": 1,
+          "identity": "twnsloDsGJ778iAEhHnnxe8CTvdQeEEmKCFaGuJIe18",
+          "box": "Bv-6DkUj_7ypL4EKJB19JRPDX6Ne9H6UbSWROZaTtko",
+          "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+          "prev": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+          "created": "2026-01-01T00:00:00.000Z"
+        },
+        "sig": "1bVjYpHTKtgIKgzSOx7rlBeqrsIgHKpe-PfOEM44TxwLiLB8B-kpk3vBWt-UsFu_iSgC1Aw7pBHQLFFOvrRCCA",
+        "prevSig": "Slsh7mbDTHPhkPih4x8mIogmGR7eukd-DR4Vv9qjd_iovN9xoKbpfeMRw-CbEjzdgdCC8y8mMUj1Y2YV-qjPDg"
+      }
+    ],
+    "roster": {
+      "roster": {
+        "v": 1,
+        "workspace": "ws_vectors",
+        "epoch": 2,
+        "n": 1,
+        "head": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+        "members": [
+          {
+            "user": "user-ana",
+            "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+            "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+            "caps": ["connect", "keys"],
+            "teams": ["team-ops", "team-all"]
+          },
+          {
+            "user": "user-ben",
+            "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+            "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+            "caps": [],
+            "teams": ["team-all"]
+          }
+        ],
+        "teams": [
+          {
+            "id": "team-ops",
+            "slug": "ops",
+            "keys": [
+              "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+              "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+            ]
+          },
+          {
+            "id": "team-all",
+            "slug": "all",
+            "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+          }
+        ],
+        "created": "2026-01-01T00:00:00.000Z"
+      },
+      "sig": "CtxiVUDDLtbEdKkkZibMIqPqxKKrOQQm6DtPh1QJ-HRAdJ1ajp4CAYtldiqfAANo2rdaPKVmieRQQnNbBE3FBg"
+    },
+    "pin": {
+      "workspace": "ws_vectors",
+      "n": 1,
+      "link": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+      "epoch": 2,
+      "roster": "5sfKxDnmfIkRDgkiEmsZMWdFHmBdkfH-XVtZhStn4Mo"
+    },
+    "certificates": [
+      {
+        "name": "integration",
+        "certificate": {
+          "certificate": {
+            "v": 1,
+            "account": "ws_vectors",
+            "kid": "zvBQxct5ooE560WWTP5tBA",
+            "sign": "HBpFs0EGLhEMU_6bqHi_5bIevIErkGoPaeQLHUMo62s",
+            "box": "xqxzOfUq74UMWaLUMFQ8Q_QZgUzmsMxbz9o1z5X0Jio",
+            "created": "2026-01-01T00:00:00.000Z",
+            "teams": ["team-ops"],
+            "epoch": 2,
+            "by": "user-ana"
+          },
+          "sig": "Y0JhyKlkzkELUZ8y21p_Pw3Y_hgLVrOyrl8i8zReOI5yvP0rYSHV0eTbd6Yx1ZIhh0ajEk5Gt055pZt9WUJ8AQ"
+        }
+      },
+      {
+        "name": "destination",
+        "certificate": {
+          "certificate": {
+            "v": 1,
+            "account": "ws_vectors",
+            "kid": "0v2usO2qinyR9omUpHrNLg",
+            "sign": "45wFMOCHkWZ3ytLzEcZ5hpoD4dLgJmpVQUegaR3Tjco",
+            "box": "qkpxmW94Cjw3bgY_EU-Ua0nbCmVoqwJjBEt8DiMGbVU",
+            "created": "2026-01-01T00:00:00.000Z",
+            "teams": ["team-all", "team-ops"],
+            "epoch": 2
+          },
+          "sig": "MGar52CzOJ7cAQy_h_5zJXBjkgAYbC2ZeS6TdB9hRUrcKebV_MqdskV2Ko2Kjx_9GJLz2k-Gzao6yQ6wy7mSDg"
+        }
+      }
+    ],
+    "wraps": [
+      {
+        "name": "teamkey",
+        "ctx": {
+          "team": "team-ops",
+          "kv": 2,
+          "member": "user-ana"
+        },
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "teamkey",
+            "account": "ws_vectors",
+            "team": "team-ops",
+            "kv": 2,
+            "member": "user-ana"
+          },
+          "from": "JxZErH88KnHtvIKF5TrIAw",
+          "to": [
+            {
+              "kid": "eaGsweu9W39LT2lzbwWnCA",
+              "enc": "gWZ3eZaT5tRerQGbuai2oy4WzhC2ABGYlrZrNFCWFRo",
+              "key": "QNJV8LQLekfvHpPuv_zrde-0A9UvWJ0syQu-JY0lmsDumlYs7B5vaNaDDf_Sfhz9"
+            },
+            {
+              "kid": "ppryfc02JqBX3urMYH6PVw",
+              "enc": "6HZKiQ-eIJpfOi9T60tH7gAbgJY25EQm_Gi7YeIlyQk",
+              "key": "baKez8QxEHIMb39W4In0GfKDgye2LYweUEN2_q3yfoglHqiLiP2afRXCCa92b4hj"
+            },
+            {
+              "kid": "XS0jPywTg5UczThfOFEJRA",
+              "enc": "Wt4Obw8p0xlecfq_mhX3pFgkmMbsK_pKNJQYacL8bF4",
+              "key": "kkJcMydTrPR0PpoCNKIjax6oOKTRc_2IiacQbp6yfq4MPLbmZr9vWHtqID1oAW1P"
+            }
+          ],
+          "iv": "u-x6Z4q--VpboQvs",
+          "ct": "SFXVZAI-O21v57qLMf5IT4IcOlR7qrWE7HfiQC8pglvldRlNhgSY9TbMISuBAznigS_KI8Z1CVPqCiwvz9yOXAYRIoFilsBSHJRGUA",
+          "sig": "7Y3cvLCR2fyn52O2SNkX2s-NkhlXx_K--mcrnffEWFjb0O5a0dYsCiBKMDLMdGqodPbUY_QIwTchlr8hTft9CA"
+        },
+        "random": [
+          "6JrXWqOgn2u6_PKfhOkbtk1BmQlZGgtxDnK12pWMOGo",
+          "u-x6Z4q--VpboQvs",
+          "RoW-08E_Xuh4KC74XX110HrAPrXziESC4RLP8TYLi6U",
+          "amFuScSnd29gp2tFFt8R-ARPzXx0T7gRw4t9iELigEg",
+          "wO7kNhc7TmHC88m4jBOn64HxwalRyD4OqqDH0BDRTGI"
+        ]
+      },
+      {
+        "name": "wskey",
+        "ctx": {
+          "n": 1,
+          "member": "user-ana"
+        },
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "wskey",
+            "account": "ws_vectors",
+            "n": 1,
+            "member": "user-ana"
+          },
+          "from": "JxZErH88KnHtvIKF5TrIAw",
+          "to": [
+            {
+              "kid": "eaGsweu9W39LT2lzbwWnCA",
+              "enc": "D0Rzg7nlIRsNcA4_U8fJ7tnbM19bnc2_L5SsMoWf81s",
+              "key": "Mpu2_5tCGqzK9sx9CVANYrw7dPsjTrtdMbgMcHPKqUiOiemu4NQZKNfXz2vZb3Qf"
+            },
+            {
+              "kid": "XS0jPywTg5UczThfOFEJRA",
+              "enc": "ENCo2R_NY6imm1JpJOGki2xxckIEnZqKsL9yHSyfWTQ",
+              "key": "8hGcZ71XQsnZRzjOciDQ3PjjmLj2MXmRnrv2zn7csCMrVhCGfG7W_NUeyQSaC17q"
+            }
+          ],
+          "iv": "jCv5Pzz4XmemP_iR",
+          "ct": "hZiS9M610KUh5YsiaPOHosuY2v9wmoUKIUHY2rHVocJEvlm6FXnNomVhzxyHXifWLJe45gdo4eGtBDwQWHDPH2FpSUf4zY-sNapuJw",
+          "sig": "BGD-SPLMGkvA6qLBpiORi6oJHTAfZC7RAcdrYEsE45VMAPF5_eWNUdkoHNo-RYhhqx1dlZyDDRpO_XXnAmx4DQ"
+        },
+        "random": [
+          "hR7uKmXUys9MarIb7IMCZXgph1SbWZDbFKLjlkculag",
+          "jCv5Pzz4XmemP_iR",
+          "H2WEBbtRxkgv6fZhS4ynXrEvFTtYXioWUp5vVZly6aI",
+          "8wsI2pVnssO8gQ6EYqMrwQznGVrsXMtzcqFqxS_5BKY"
+        ]
+      }
+    ],
+    "envelopes": [
+      {
+        "name": "message",
+        "signer": "integration",
+        "to": ["ops", "integration"],
+        "ctx": {
+          "t": "message",
+          "account": "ws_vectors",
+          "id": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+          "team": "team-ops"
+        },
+        "payload": {
+          "title": "Restart the queue?",
+          "body": "",
+          "kind": "form",
+          "fields": [],
+          "actions": [
+            {
+              "id": "yes",
+              "label": "Yes",
+              "values": {}
+            }
+          ]
+        },
+        "random": [
+          "wUmvqZsttWpTVDCp8mqoeJ5t_kHJnzGBmH-rX3KlWxY",
+          "H7mli-jKe4iWnGeb",
+          "ZzqEJo8WHM6PmxLIuei_IXnBoxZfpBSSjcA4yuUJpM4",
+          "dUqzh4jtRQvsiDpWnwEoeBFCq7fnyW6Yhz_6ErZZ-b4"
+        ],
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "message",
+            "account": "ws_vectors",
+            "id": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+            "team": "team-ops"
+          },
+          "from": "zvBQxct5ooE560WWTP5tBA",
+          "to": [
+            {
+              "kid": "5jIt2cK663D-M_yfgvOLvQ",
+              "enc": "FZhpoq6kYQee-2i_uSTjaCHdpC0jrdU1XS6K9tF2qXc",
+              "key": "ZTcFbkgfeTryVntO0tUBkTIhmGU47d3vLbcxJtcHmWMFJTKug_bb_VQEJM6t0bCn"
+            },
+            {
+              "kid": "zvBQxct5ooE560WWTP5tBA",
+              "enc": "MXbgxRPAeQRfU-psvXiULBmU6iRCz11BI8QonPVTk14",
+              "key": "Ya994pOTh90HzndpRZr-okZoxcztDUdyB8OH3vm4WyEeWsD8o_BbW6Zd4szKHZ74"
+            }
+          ],
+          "iv": "H7mli-jKe4iWnGeb",
+          "ct": "66fTDSgA9r-LBOybCAMxbyAlnrLTgfmZCMk123CliscQkSTH2fvZrfVev_vxuz7uWHTyQKODCew7H1CceKJYQ58gvrhAA5eyrkGtK7MKVnbou8h08cQyq6qGqNN20FrbWdfAJ_87jMPhJti00msjOKKBlUC3-TV1qK69xdB8Ncz4V7MnDDe9jRsBCA",
+          "sig": "Xs8oatCe_u3EMSH9OenM9wpKHORMNyNTRlN5sVOwbktZYSUa7i8eRrMkFQ5Eih03ebdJYSa2faz_U_u8DAgkAg"
+        }
+      },
+      {
+        "name": "response",
+        "signer": "ana",
+        "to": ["ops", "integration"],
+        "ctx": {
+          "t": "response",
+          "account": "ws_vectors",
+          "message": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+          "request": "qmIkzwd2OcYhiX4k9-6uOHVPTgHmTFVWK0vTwFqHMN8",
+          "team": "team-ops",
+          "member": "user-ana"
+        },
+        "payload": {
+          "values": {},
+          "actionId": "yes"
+        },
+        "random": [
+          "oCuU3dZN93fOoN4R-L_1CEa5laABRVNwjweWret77Es",
+          "50r7RRD5d_2bAotc",
+          "u_IP8J-n7TRaOIgDOYRwtgZcN3Lba6tYAa0Mh03vUdI",
+          "bcCCYFrPv62cbiWHTDRV3eMQhtVuKjGrmRjZZwmhuuM"
+        ],
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "response",
+            "account": "ws_vectors",
+            "message": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+            "request": "qmIkzwd2OcYhiX4k9-6uOHVPTgHmTFVWK0vTwFqHMN8",
+            "team": "team-ops",
+            "member": "user-ana"
+          },
+          "from": "cavz5fbqGZ7D48qsT2EmAA",
+          "to": [
+            {
+              "kid": "5jIt2cK663D-M_yfgvOLvQ",
+              "enc": "-XLGirWxXyPCplZJt38IVeVc3hglsIuOQGxtmPuihxw",
+              "key": "wPGFfr4H4SjD8c1l42BGSfq96EvZ_REAThTpWASwUmQMBR79fN22O-LmK9zABhua"
+            },
+            {
+              "kid": "zvBQxct5ooE560WWTP5tBA",
+              "enc": "VE6jznbcr-Jh8k-dB9d5y-nTOdP4qvIJU3e6YdXEXBg",
+              "key": "u2ZJyindu6f_9bzQp7yiNNFxzHPN_M1N---NX9Ng8J9RdUJBi4GHSDgz1tevgGIf"
+            }
+          ],
+          "iv": "50r7RRD5d_2bAotc",
+          "ct": "4SXWzZt7HVADfHgwFsCTGDHM1wSbV2CTmWj5sT0T8iox_CLh8oEoqHWKXz0WWBHDEa0Xsg",
+          "sig": "ZdA4Y3mntO3-_2nqFn8bpgS0SG9Yspk0voHvqrf0012FwvnWcQgbmU9L1SZgLYavC5dlLT5wGK9tMJ-agZ2vCQ"
+        }
+      },
+      {
+        "name": "task",
+        "signer": "ana",
+        "to": ["all", "destination"],
+        "ctx": {
+          "t": "task",
+          "account": "ws_vectors",
+          "id": "2a3b4c5d-6e7f-4a8b-9c0d-e1f2a3b4c5d6",
+          "destination": "3b4c5d6e-7f8a-4b9c-8d0e-f1a2b3c4d5e6",
+          "type": "deploy",
+          "team": "team-all",
+          "member": "user-ana"
+        },
+        "payload": {
+          "values": {
+            "branch": "main"
+          },
+          "session": null
+        },
+        "random": [
+          "u6HwGsLK0YAos8MVZsQBfIZN1IxyaAow4O5NtOmjL-E",
+          "K82dnW_myvhumgkw",
+          "F6dedC93ZkLakJuM9epT_2jheD34BIkzCXHmqWtGfDs",
+          "qVA_VVWLgfAOXBSBhGdujae6hyrm3vICW6c1aAJE7fc"
+        ],
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "task",
+            "account": "ws_vectors",
+            "id": "2a3b4c5d-6e7f-4a8b-9c0d-e1f2a3b4c5d6",
+            "destination": "3b4c5d6e-7f8a-4b9c-8d0e-f1a2b3c4d5e6",
+            "type": "deploy",
+            "team": "team-all",
+            "member": "user-ana"
+          },
+          "from": "cavz5fbqGZ7D48qsT2EmAA",
+          "to": [
+            {
+              "kid": "uJU1RNaFyLfuGdUzpGXYjg",
+              "enc": "_Txms-vr-Gcjm5zSvTvDJIKOreo2_bSF1-CESiNdS1A",
+              "key": "WZJwHtAEVWqzTl_nI_5von21WmdL4RSfJoi31v6gbT9MvdF39-cDmhYtPs5ld83b"
+            },
+            {
+              "kid": "0v2usO2qinyR9omUpHrNLg",
+              "enc": "ZEfZtv0dMCswViNWVFmWLwX1DciY0VYn464jDGT_WFA",
+              "key": "-7yPGfG4EBAdfloK_MkKoDNplYFZu0U7m92851TBlColkdXI_vshZD2gUD7XLVi-"
+            }
+          ],
+          "iv": "K82dnW_myvhumgkw",
+          "ct": "GJJeYjKdO4egw-MIKA7dUd1-NLgE3dyHSucytRZwuxgCdRFyPbXocWcH_oe26Vu7R8YgLsW4vrQnkVhEB4lRCuo",
+          "sig": "l3AlAE4RyI26snRn5f8lVq9ALMEELsfg0wEqxw6CHT7HM84Lmb8DOYm2TbYfsI0vg6HpIENMDafKVhySnwyPAQ"
+        }
+      }
+    ],
+    "negative": [
+      {
+        "name": "non-member signer",
+        "kind": "envelope",
+        "error": "Not a member.",
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "response",
+            "account": "ws_vectors",
+            "message": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+            "request": "qmIkzwd2OcYhiX4k9-6uOHVPTgHmTFVWK0vTwFqHMN8",
+            "team": "team-ops",
+            "member": "user-eve"
+          },
+          "from": "1A5u_QjU5H5_4i1DYazzMg",
+          "to": [
+            {
+              "kid": "5jIt2cK663D-M_yfgvOLvQ",
+              "enc": "E_zrLy6aF24PziUMHZpFyzgNPS2hP2rOlgKE9_WHHE4",
+              "key": "14-Y3PdkJ-J9WzRvaKERAcNQEQOJ1fEkdpr0kgB5hcI1yaDp3VXGdeDh3VPNUUQD"
+            },
+            {
+              "kid": "zvBQxct5ooE560WWTP5tBA",
+              "enc": "5G3trlJRqgdS3QZeZaXCGYrBBfnV5rcfu9Rbzd3S-zI",
+              "key": "v9Xgt7i4sCBeO_-PdMWNMJye3A1J5zFFej3RGJViJkl5swRh6AIwbpTCdn2gTPLk"
+            }
+          ],
+          "iv": "DyZhoWIn-hIRfNt1",
+          "ct": "E-J-Ajix34rtiJ2x6L1VUtoEb1Ve-caBFmZTVJ54BnicoL96G9HC3A2l5teuCLVoSJ66vw",
+          "sig": "BA0PeKqeenf6T6i9hwXaoHl_JgHq2LWGJZTGgUOcPFk0rI3zDSv4CbIrjTKo7g-uwhihLkLJJpy_PczrccHRDQ"
+        }
+      },
+      {
+        "name": "member outside the team",
+        "kind": "envelope",
+        "error": "Not a member of the team",
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "response",
+            "account": "ws_vectors",
+            "message": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+            "request": "qmIkzwd2OcYhiX4k9-6uOHVPTgHmTFVWK0vTwFqHMN8",
+            "team": "team-ops",
+            "member": "user-ben"
+          },
+          "from": "nP0dHm_c1M_ggjN8sNb-QQ",
+          "to": [
+            {
+              "kid": "5jIt2cK663D-M_yfgvOLvQ",
+              "enc": "cXXguDvYnlZzOrqxbNIWjSB7XMgs2kAGxnVaAr4zABw",
+              "key": "jiaJmcVmi4F2SPQI8ALTfiQ_Z51B39xmeLJqckdOtwhOxwIeLBSHmsYeTc1bqK3n"
+            },
+            {
+              "kid": "zvBQxct5ooE560WWTP5tBA",
+              "enc": "9qGkzBDVN4hfAAHQxypbztOXpydWQ-ND50Q2h41Y8QE",
+              "key": "QGGh2W_QSebN0qc0m09TmC9POpUKv4u7R_nqLw2qDoCdE6XO5WQOCk-5gv0RrpIH"
+            }
+          ],
+          "iv": "pWjWYM-b59zEgA8-",
+          "ct": "tJ3o6pU6msMCQ-BLNigPt2MpmwQMbZn352wSl6t7mnFlOrA-hR7vlBWp1MUWpHuIJ9XegA",
+          "sig": "Y5_o9bIs1eeNBjB_aCPCOGBurubjjom84F269ZLJalfN-UScTlYX-q1TkWWVUI986fThh203qXD0NwCbwEeBBg"
+        }
+      },
+      {
+        "name": "signer is not ctx.member",
+        "kind": "envelope",
+        "error": "Untrusted signer",
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "response",
+            "account": "ws_vectors",
+            "message": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+            "request": "qmIkzwd2OcYhiX4k9-6uOHVPTgHmTFVWK0vTwFqHMN8",
+            "team": "team-ops",
+            "member": "user-ana"
+          },
+          "from": "nP0dHm_c1M_ggjN8sNb-QQ",
+          "to": [
+            {
+              "kid": "5jIt2cK663D-M_yfgvOLvQ",
+              "enc": "sdxzVxaaEQg3rgrwI4KnBSJuhlBneHxHS0Szm2f5txM",
+              "key": "tB2nFLoUD2qPrLOvksRkq40AmBilhi561M98w-BzMJdZQI_xoV-oNCrsxRMqy3oG"
+            },
+            {
+              "kid": "zvBQxct5ooE560WWTP5tBA",
+              "enc": "Q_3RC1FCiTffeA3KrrjUGRJdZAI4NlcjvDkxyK1w5zI",
+              "key": "7zo9uq48n0n5UzsU-Nl00pzxiR70D_oicC7Q51cmPC4SLO5C0PnIQOqh-sugoSfP"
+            }
+          ],
+          "iv": "NzcCwaZ_5uek3dHl",
+          "ct": "e06csEm9Xo3rRIMhpZ0eQORxAfPHiZCmQ6UXTzsjz3J-hDWuLZvCHr5L1jf8CGSQEpZoxg",
+          "sig": "vMvZ4R7Cd28ADp1JCXl5NIYa-qma8YOGdq2Rmj0ofm7TtURWFI_Z_CYKOCXYHzaB7zEe1gIMSbarUocjjn-oCg"
+        }
+      },
+      {
+        "name": "stale epoch",
+        "kind": "workspace",
+        "chain": [
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 0,
+              "identity": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+              "box": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "0fNdMKNGVGY2cZKQ9e8jtNLkRY1Y_p82n79pDGVY6gdL5OYNnU6l0SFj9SmplC130OxrelKVjZortWf2vhqvBw"
+          },
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 1,
+              "identity": "twnsloDsGJ778iAEhHnnxe8CTvdQeEEmKCFaGuJIe18",
+              "box": "Bv-6DkUj_7ypL4EKJB19JRPDX6Ne9H6UbSWROZaTtko",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "prev": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "1bVjYpHTKtgIKgzSOx7rlBeqrsIgHKpe-PfOEM44TxwLiLB8B-kpk3vBWt-UsFu_iSgC1Aw7pBHQLFFOvrRCCA",
+            "prevSig": "Slsh7mbDTHPhkPih4x8mIogmGR7eukd-DR4Vv9qjd_iovN9xoKbpfeMRw-CbEjzdgdCC8y8mMUj1Y2YV-qjPDg"
+          }
+        ],
+        "roster": {
+          "roster": {
+            "v": 1,
+            "workspace": "ws_vectors",
+            "epoch": 2,
+            "n": 1,
+            "head": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+            "members": [
+              {
+                "user": "user-ana",
+                "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+                "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+                "caps": ["connect", "keys"],
+                "teams": ["team-ops", "team-all"]
+              },
+              {
+                "user": "user-ben",
+                "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+                "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+                "caps": [],
+                "teams": ["team-all"]
+              }
+            ],
+            "teams": [
+              {
+                "id": "team-ops",
+                "slug": "ops",
+                "keys": [
+                  "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+                  "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+                ]
+              },
+              {
+                "id": "team-all",
+                "slug": "all",
+                "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+              }
+            ],
+            "created": "2026-01-01T00:00:00.000Z"
+          },
+          "sig": "CtxiVUDDLtbEdKkkZibMIqPqxKKrOQQm6DtPh1QJ-HRAdJ1ajp4CAYtldiqfAANo2rdaPKVmieRQQnNbBE3FBg"
+        },
+        "pin": {
+          "workspace": "ws_vectors",
+          "n": 1,
+          "link": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+          "epoch": 3,
+          "roster": "5sfKxDnmfIkRDgkiEmsZMWdFHmBdkfH-XVtZhStn4Mo"
+        },
+        "error": "Stale roster epoch"
+      },
+      {
+        "name": "same epoch, other roster",
+        "kind": "workspace",
+        "chain": [
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 0,
+              "identity": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+              "box": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "0fNdMKNGVGY2cZKQ9e8jtNLkRY1Y_p82n79pDGVY6gdL5OYNnU6l0SFj9SmplC130OxrelKVjZortWf2vhqvBw"
+          },
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 1,
+              "identity": "twnsloDsGJ778iAEhHnnxe8CTvdQeEEmKCFaGuJIe18",
+              "box": "Bv-6DkUj_7ypL4EKJB19JRPDX6Ne9H6UbSWROZaTtko",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "prev": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "1bVjYpHTKtgIKgzSOx7rlBeqrsIgHKpe-PfOEM44TxwLiLB8B-kpk3vBWt-UsFu_iSgC1Aw7pBHQLFFOvrRCCA",
+            "prevSig": "Slsh7mbDTHPhkPih4x8mIogmGR7eukd-DR4Vv9qjd_iovN9xoKbpfeMRw-CbEjzdgdCC8y8mMUj1Y2YV-qjPDg"
+          }
+        ],
+        "roster": {
+          "roster": {
+            "v": 1,
+            "workspace": "ws_vectors",
+            "epoch": 2,
+            "n": 1,
+            "head": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+            "members": [
+              {
+                "user": "user-ana",
+                "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+                "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+                "caps": ["connect", "keys"],
+                "teams": ["team-ops", "team-all"]
+              },
+              {
+                "user": "user-ben",
+                "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+                "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+                "caps": [],
+                "teams": ["team-all"]
+              }
+            ],
+            "teams": [
+              {
+                "id": "team-ops",
+                "slug": "ops",
+                "keys": [
+                  "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+                  "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+                ]
+              },
+              {
+                "id": "team-all",
+                "slug": "all",
+                "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+              }
+            ],
+            "created": "2026-01-01T00:00:00.000Z"
+          },
+          "sig": "CtxiVUDDLtbEdKkkZibMIqPqxKKrOQQm6DtPh1QJ-HRAdJ1ajp4CAYtldiqfAANo2rdaPKVmieRQQnNbBE3FBg"
+        },
+        "pin": {
+          "workspace": "ws_vectors",
+          "n": 1,
+          "link": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+          "epoch": 2,
+          "roster": "58fKxDnmfIkRDgkiEmsZMWdFHmBdkfH-XVtZhStn4Mo"
+        },
+        "error": "Stale roster epoch"
+      },
+      {
+        "name": "fork",
+        "kind": "workspace",
+        "chain": [
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 0,
+              "identity": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+              "box": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "0fNdMKNGVGY2cZKQ9e8jtNLkRY1Y_p82n79pDGVY6gdL5OYNnU6l0SFj9SmplC130OxrelKVjZortWf2vhqvBw"
+          },
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 1,
+              "identity": "gHntyMTVJI83Q5Jooa-EcQeSnpcKVv8UFA3WkfzMIh0",
+              "box": "2MDvfldw_JOop6g0kd_atoCFdzPkuuS7NBV9FlkUl38",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "prev": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "yMbEBHHTUxk9L5wm-KLJN7k6u75n5d5rlR1gKhL-R_ns026jWLZb_frCCqQ960UCeF70AvTZpBhnv-_BfMMVCQ",
+            "prevSig": "8pdZEpgMod5XrJBfrzLbfLK149ff2arDNxVrL301LBo3F9Q6KZRCwWSqa00SnwMpalRUUuhzkZEYJ1qHV9TpDg"
+          }
+        ],
+        "roster": {
+          "roster": {
+            "v": 1,
+            "workspace": "ws_vectors",
+            "epoch": 2,
+            "n": 1,
+            "head": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+            "members": [
+              {
+                "user": "user-ana",
+                "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+                "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+                "caps": ["connect", "keys"],
+                "teams": ["team-ops", "team-all"]
+              },
+              {
+                "user": "user-ben",
+                "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+                "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+                "caps": [],
+                "teams": ["team-all"]
+              }
+            ],
+            "teams": [
+              {
+                "id": "team-ops",
+                "slug": "ops",
+                "keys": [
+                  "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+                  "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+                ]
+              },
+              {
+                "id": "team-all",
+                "slug": "all",
+                "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+              }
+            ],
+            "created": "2026-01-01T00:00:00.000Z"
+          },
+          "sig": "CtxiVUDDLtbEdKkkZibMIqPqxKKrOQQm6DtPh1QJ-HRAdJ1ajp4CAYtldiqfAANo2rdaPKVmieRQQnNbBE3FBg"
+        },
+        "pin": {
+          "workspace": "ws_vectors",
+          "n": 1,
+          "link": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+          "epoch": 2,
+          "roster": "5sfKxDnmfIkRDgkiEmsZMWdFHmBdkfH-XVtZhStn4Mo"
+        },
+        "error": "Workspace chain fork"
+      },
+      {
+        "name": "rollback",
+        "kind": "workspace",
+        "chain": [
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 0,
+              "identity": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+              "box": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "0fNdMKNGVGY2cZKQ9e8jtNLkRY1Y_p82n79pDGVY6gdL5OYNnU6l0SFj9SmplC130OxrelKVjZortWf2vhqvBw"
+          }
+        ],
+        "roster": {
+          "roster": {
+            "v": 1,
+            "workspace": "ws_vectors",
+            "epoch": 3,
+            "n": 0,
+            "head": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+            "members": [
+              {
+                "user": "user-ana",
+                "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+                "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+                "caps": ["connect", "keys"],
+                "teams": ["team-ops", "team-all"]
+              },
+              {
+                "user": "user-ben",
+                "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+                "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+                "caps": [],
+                "teams": ["team-all"]
+              }
+            ],
+            "teams": [
+              {
+                "id": "team-ops",
+                "slug": "ops",
+                "keys": [
+                  "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+                  "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+                ]
+              },
+              {
+                "id": "team-all",
+                "slug": "all",
+                "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+              }
+            ],
+            "created": "2026-01-01T00:00:00.000Z"
+          },
+          "sig": "vzNEBS3dFcuiBgVhURz75VgoDQPsHlvhPNmefxJA52eOvLEtK6VpsP-t-u5NJeLmoFspkFQ7Xw89o56GD_h6DQ"
+        },
+        "pin": {
+          "workspace": "ws_vectors",
+          "n": 1,
+          "link": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+          "epoch": 2,
+          "roster": "5sfKxDnmfIkRDgkiEmsZMWdFHmBdkfH-XVtZhStn4Mo"
+        },
+        "error": "Workspace chain rollback"
+      },
+      {
+        "name": "roster from an old link",
+        "kind": "workspace",
+        "chain": [
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 0,
+              "identity": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+              "box": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "0fNdMKNGVGY2cZKQ9e8jtNLkRY1Y_p82n79pDGVY6gdL5OYNnU6l0SFj9SmplC130OxrelKVjZortWf2vhqvBw"
+          },
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 1,
+              "identity": "twnsloDsGJ778iAEhHnnxe8CTvdQeEEmKCFaGuJIe18",
+              "box": "Bv-6DkUj_7ypL4EKJB19JRPDX6Ne9H6UbSWROZaTtko",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "prev": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "1bVjYpHTKtgIKgzSOx7rlBeqrsIgHKpe-PfOEM44TxwLiLB8B-kpk3vBWt-UsFu_iSgC1Aw7pBHQLFFOvrRCCA",
+            "prevSig": "Slsh7mbDTHPhkPih4x8mIogmGR7eukd-DR4Vv9qjd_iovN9xoKbpfeMRw-CbEjzdgdCC8y8mMUj1Y2YV-qjPDg"
+          }
+        ],
+        "roster": {
+          "roster": {
+            "v": 1,
+            "workspace": "ws_vectors",
+            "epoch": 3,
+            "n": 0,
+            "head": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+            "members": [
+              {
+                "user": "user-ana",
+                "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+                "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+                "caps": ["connect", "keys"],
+                "teams": ["team-ops", "team-all"]
+              },
+              {
+                "user": "user-ben",
+                "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+                "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+                "caps": [],
+                "teams": ["team-all"]
+              }
+            ],
+            "teams": [
+              {
+                "id": "team-ops",
+                "slug": "ops",
+                "keys": [
+                  "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+                  "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+                ]
+              },
+              {
+                "id": "team-all",
+                "slug": "all",
+                "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+              }
+            ],
+            "created": "2026-01-01T00:00:00.000Z"
+          },
+          "sig": "vzNEBS3dFcuiBgVhURz75VgoDQPsHlvhPNmefxJA52eOvLEtK6VpsP-t-u5NJeLmoFspkFQ7Xw89o56GD_h6DQ"
+        },
+        "error": "Roster is not signed by the head"
+      },
+      {
+        "name": "broken succession",
+        "kind": "workspace",
+        "chain": [
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 0,
+              "identity": "jx0SRfsQ-8Jan4w9zmCt_k9HeyR11pzmh3EIjOQYtmc",
+              "box": "NqWZeDuSi8V-fAP8179G0NalkhoTY7eFvCLHCM4Vvxs",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "0fNdMKNGVGY2cZKQ9e8jtNLkRY1Y_p82n79pDGVY6gdL5OYNnU6l0SFj9SmplC130OxrelKVjZortWf2vhqvBw"
+          },
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 1,
+              "identity": "twnsloDsGJ778iAEhHnnxe8CTvdQeEEmKCFaGuJIe18",
+              "box": "Bv-6DkUj_7ypL4EKJB19JRPDX6Ne9H6UbSWROZaTtko",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "prev": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "1bVjYpHTKtgIKgzSOx7rlBeqrsIgHKpe-PfOEM44TxwLiLB8B-kpk3vBWt-UsFu_iSgC1Aw7pBHQLFFOvrRCCA",
+            "prevSig": "1bVjYpHTKtgIKgzSOx7rlBeqrsIgHKpe-PfOEM44TxwLiLB8B-kpk3vBWt-UsFu_iSgC1Aw7pBHQLFFOvrRCCA"
+          }
+        ],
+        "roster": {
+          "roster": {
+            "v": 1,
+            "workspace": "ws_vectors",
+            "epoch": 2,
+            "n": 1,
+            "head": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+            "members": [
+              {
+                "user": "user-ana",
+                "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+                "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+                "caps": ["connect", "keys"],
+                "teams": ["team-ops", "team-all"]
+              },
+              {
+                "user": "user-ben",
+                "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+                "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+                "caps": [],
+                "teams": ["team-all"]
+              }
+            ],
+            "teams": [
+              {
+                "id": "team-ops",
+                "slug": "ops",
+                "keys": [
+                  "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+                  "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+                ]
+              },
+              {
+                "id": "team-all",
+                "slug": "all",
+                "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+              }
+            ],
+            "created": "2026-01-01T00:00:00.000Z"
+          },
+          "sig": "CtxiVUDDLtbEdKkkZibMIqPqxKKrOQQm6DtPh1QJ-HRAdJ1ajp4CAYtldiqfAANo2rdaPKVmieRQQnNbBE3FBg"
+        },
+        "error": "Bad workspace succession signature"
+      },
+      {
+        "name": "wrong root",
+        "kind": "workspace",
+        "chain": [
+          {
+            "statement": {
+              "v": 1,
+              "workspace": "ws_vectors",
+              "n": 1,
+              "identity": "twnsloDsGJ778iAEhHnnxe8CTvdQeEEmKCFaGuJIe18",
+              "box": "Bv-6DkUj_7ypL4EKJB19JRPDX6Ne9H6UbSWROZaTtko",
+              "recovery": "y6SLR2tm7_DH8rxsUwakUKGMy_ph116ZfVxfFqPyrTs",
+              "prev": "G68SRxNNTDWu25JkDARWLIIilFerxZwzhBV8vNk567U",
+              "created": "2026-01-01T00:00:00.000Z"
+            },
+            "sig": "1bVjYpHTKtgIKgzSOx7rlBeqrsIgHKpe-PfOEM44TxwLiLB8B-kpk3vBWt-UsFu_iSgC1Aw7pBHQLFFOvrRCCA",
+            "prevSig": "Slsh7mbDTHPhkPih4x8mIogmGR7eukd-DR4Vv9qjd_iovN9xoKbpfeMRw-CbEjzdgdCC8y8mMUj1Y2YV-qjPDg"
+          }
+        ],
+        "roster": {
+          "roster": {
+            "v": 1,
+            "workspace": "ws_vectors",
+            "epoch": 2,
+            "n": 1,
+            "head": "bRC5GM4clyLMLIHJAfnMaoETD_btlR7duOoAYIWJ-_A",
+            "members": [
+              {
+                "user": "user-ana",
+                "identity": "Z0AmrQeXoFDpljLeIrWw7gj3z5I8nfeBFwqY68tmVkc",
+                "inbox": "JTCaLIP_KPzQgLp4BhekIGGMvdq8vTbsSNXPhdFbB0w",
+                "caps": ["connect", "keys"],
+                "teams": ["team-ops", "team-all"]
+              },
+              {
+                "user": "user-ben",
+                "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+                "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI",
+                "caps": [],
+                "teams": ["team-all"]
+              }
+            ],
+            "teams": [
+              {
+                "id": "team-ops",
+                "slug": "ops",
+                "keys": [
+                  "YPaitzYe8XvUu6CTZR-Y3gaexHUehsr2v1Bxa2alPnQ",
+                  "dVmr1FjfKiHUwot6ttNwchsnCF-Lfs-bd5ZmDFivMBE"
+                ]
+              },
+              {
+                "id": "team-all",
+                "slug": "all",
+                "keys": ["a5cvnZJB7eDu4hVB-357dXZh0F3RNilOXlj7Mqfd_UY"]
+              }
+            ],
+            "created": "2026-01-01T00:00:00.000Z"
+          },
+          "sig": "CtxiVUDDLtbEdKkkZibMIqPqxKKrOQQm6DtPh1QJ-HRAdJ1ajp4CAYtldiqfAANo2rdaPKVmieRQQnNbBE3FBg"
+        },
+        "error": "Workspace fingerprint mismatch"
+      },
+      {
+        "name": "depth-3 certificate",
+        "kind": "certificate",
+        "certificate": {
+          "certificate": {
+            "v": 1,
+            "account": "ws_vectors",
+            "kid": "9UVnXrksPxQ5FU1HOBYAPA",
+            "sign": "sAm1F2U_lfVaUjfmbxEKTBBwNc-JE_uI3HXNSHlfK7k",
+            "box": "VvaVQYxIBJzUICUiIk88Gjh70Cn1OtXF6V1NPjRpdyQ",
+            "created": "2026-01-01T00:00:00.000Z",
+            "teams": ["team-ops"],
+            "epoch": 2,
+            "by": "zvBQxct5ooE560WWTP5tBA"
+          },
+          "sig": "Dlg5CV0nPveZ94pNuK6K86xU3J_9XCJcZMBSyBYRdZRtFmRy68g2UitP1Nv_ilhC0E6NFmYJcfm2MAkLMJ34AA"
+        },
+        "error": "Unknown certifier"
+      },
+      {
+        "name": "member without connect",
+        "kind": "certificate",
+        "certificate": {
+          "certificate": {
+            "v": 1,
+            "account": "ws_vectors",
+            "kid": "9UVnXrksPxQ5FU1HOBYAPA",
+            "sign": "sAm1F2U_lfVaUjfmbxEKTBBwNc-JE_uI3HXNSHlfK7k",
+            "box": "VvaVQYxIBJzUICUiIk88Gjh70Cn1OtXF6V1NPjRpdyQ",
+            "created": "2026-01-01T00:00:00.000Z",
+            "teams": ["team-all"],
+            "epoch": 2,
+            "by": "user-ben"
+          },
+          "sig": "wV-jKypnWzShdjtbN44MG5g2x5rXexS0rOz_lslZjgCDp6t0ExSpvCQULDsqO_ReJbGA4615Sv5kqVNdVg22Ag"
+        },
+        "error": "may not connect"
+      },
+      {
+        "name": "certificate newer than roster",
+        "kind": "certificate",
+        "certificate": {
+          "certificate": {
+            "v": 1,
+            "account": "ws_vectors",
+            "kid": "9UVnXrksPxQ5FU1HOBYAPA",
+            "sign": "sAm1F2U_lfVaUjfmbxEKTBBwNc-JE_uI3HXNSHlfK7k",
+            "box": "VvaVQYxIBJzUICUiIk88Gjh70Cn1OtXF6V1NPjRpdyQ",
+            "created": "2026-01-01T00:00:00.000Z",
+            "teams": ["team-ops"],
+            "epoch": 3
+          },
+          "sig": "SC_e8vG4JBfmiIj4rSzeMwu_vUcYSHLwHlFJPQQpb4JyWULVc2t3ENehFJsPIO9bTIZccNkQltFYNMwaVP0XAQ"
+        },
+        "error": "Stale roster epoch"
+      },
+      {
+        "name": "certificate from an old link",
+        "kind": "certificate",
+        "certificate": {
+          "certificate": {
+            "v": 1,
+            "account": "ws_vectors",
+            "kid": "9UVnXrksPxQ5FU1HOBYAPA",
+            "sign": "sAm1F2U_lfVaUjfmbxEKTBBwNc-JE_uI3HXNSHlfK7k",
+            "box": "VvaVQYxIBJzUICUiIk88Gjh70Cn1OtXF6V1NPjRpdyQ",
+            "created": "2026-01-01T00:00:00.000Z",
+            "teams": ["team-ops"],
+            "epoch": 2
+          },
+          "sig": "k4-ANI1cKY-UNNl0GZip97r3KqUdoI-iSGgsD4CkwI9gyNoqI8oEwCm8IZ-CQmdvf0vKJ8UIN2wjVa76NoZ9Aw"
+        },
+        "error": "Bad certificate signature"
+      },
+      {
+        "name": "forged team key",
+        "kind": "teamkey",
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "teamkey",
+            "account": "ws_vectors",
+            "team": "team-ops",
+            "kv": 2,
+            "member": "user-ana"
+          },
+          "from": "wohpxLRLJiNRWeLsTHcKSw",
+          "to": [
+            {
+              "kid": "eaGsweu9W39LT2lzbwWnCA",
+              "enc": "IhgCarRP1FB___C0kMgAdDxpeejYQUjVYE_w4rmnjw8",
+              "key": "B6AafKS5b31PyEahO97-wDityVKmdtayR7lp9XmV0vdh-U_yZdlyXDWlhun8vHcx"
+            }
+          ],
+          "iv": "KqTkd3aewyFx0GO7",
+          "ct": "dHaJGiVWNqJBsw9ggcJ-pYbNXB5vGJ-zM2w3ozpNWO5Nzs9aSEAezG_5CkRvGjdtK05ojh2ebwGGH9IOxJ9fdijlXnh8fDjNnXvgXw",
+          "sig": "ACAF_A5sQiyOv-2Z142ao99_PMwrZBCwmYMui_XyoIzmsFOiB_mUpxCZLqFAGAFQTZb7zZFm1-d7KTTdyhAADQ"
+        },
+        "ctx": {
+          "team": "team-ops",
+          "kv": 2,
+          "member": "user-ana"
+        },
+        "error": "Team key does not match the roster"
+      },
+      {
+        "name": "personal ctx with team",
+        "kind": "ctx",
+        "ctx": {
+          "t": "message",
+          "account": "acct-vectors",
+          "id": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+          "team": "team-ops"
+        },
+        "error": "Unexpected ctx.team"
+      },
+      {
+        "name": "workspace ctx without team",
+        "kind": "ctx",
+        "ctx": {
+          "t": "message",
+          "account": "ws_vectors",
+          "id": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f"
+        },
+        "error": "Invalid ctx.team"
+      },
+      {
+        "name": "personal teamkey",
+        "kind": "ctx",
+        "ctx": {
+          "t": "teamkey",
+          "account": "acct-vectors"
+        },
+        "error": "Unknown context type"
+      }
+    ],
+    "join": {
+      "claim": {
+        "workspace": "ws_vectors",
+        "invite": "invite-1",
+        "user": "user-ben",
+        "identity": "HyL8bux75xt1UCuTKBDznzXJlw0lfrOJFCibBxbCRic",
+        "inbox": "NaMcXUTnl1XsQB7R2-Z5LWgfRDoRBBXjL59QOYvuPkI"
+      },
+      "secret": "Qd5cSGE_Oo81F8fbsX0iRS8nWZxid-pAf6OHzi_SFNc",
+      "proof": "4KVqxTKlNbSKpOotnfikfDzROdHlA1LZ0IrIteKmTp8"
+    },
+    "receiver": {
+      "claim": {
+        "message": "7c1f2e3d-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
+        "claimId": "claim-ws",
+        "publicKey": {
+          "kty": "RSA",
+          "e": "AQAB",
+          "n": "sGVy"
+        },
+        "member": "user-ana"
+      },
+      "sig": "aHLbqYgPeCKB-XILpFHjlbrprN6ev0cbxP4MdQeNzeCrUPeyBhpdvR7p3f5PA8XRkMAyyDt3hcK6J5oRs3tEDw"
+    }
+  }
 }

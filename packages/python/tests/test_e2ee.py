@@ -1,6 +1,7 @@
 """Python side of the shared end-to-end vectors (packages/sdk/fixtures/e2ee-vectors.json): reproduce every output, open every input."""
 import hashlib
 import json
+import re
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -241,6 +242,159 @@ class BackupAndApprovalTests(unittest.TestCase):
         forged = e2ee.seal(payload=dict(V["keyring"]["value"]), ctx=a["envelope"]["ctx"], signer=other.identity, to=[{"kid": transfer.kid, "box": transfer.box_pub}])
         with self.assertRaisesRegex(E2eeError, "not signed by its identity"):
             e2ee.open_keyring(forged, transfer, a["device"])
+
+
+W = V["workspace"]
+
+
+class WorkspaceTests(unittest.TestCase):
+    """Team workspace vectors: chain, roster, certificates, wraps, team envelopes and failures."""
+
+    def setUp(self):
+        self.ws = e2ee.verify_workspace({"chain": W["chain"], "roster": W["roster"]}, W["fingerprint"])
+        self.ids = [e2ee.workspace_identity(s["seed"]) for s in W["identities"]]
+        self.people = {n: e2ee.keyring_keys(k) for n, k in W["keyrings"].items()}
+        self.ops = [e2ee.team_key_set(W["seeds"][s], self.ws.root) for s in ("ops1", "ops2")]
+        self.all = e2ee.team_key_set(W["seeds"]["all1"], self.ws.root)
+        self.certs = {}
+        for c in W["certificates"]:
+            checked = e2ee.verify_workspace_certificate(c["certificate"], self.ws)
+            self.certs[checked["kid"]] = checked
+        self.openers = {"ops": self.ops[1], "all": self.all, "integration": S.sets["integration"], "destination": S.sets["destination"]}
+
+    def signers(self, env):
+        return lambda kid: e2ee.workspace_signer(self.ws, self.certs, env["ctx"], kid)
+
+    def test_reproduces_chain_roster_and_keys(self):
+        self.assertEqual(self.ws.pin, W["pin"])
+        self.assertEqual(e2ee.safety_code(W["fingerprint"]), W["safetyCode"])
+        for got, want in zip(self.ids, W["identities"]):
+            self.assertEqual((got.kid, got.box_kid, got.sign_pub, got.box_pub), (want["kid"], want["boxKid"], want["signPub"], want["boxPub"]))
+        recovery = e2ee.recovery_key_set(e2ee.parse_recovery_key(W["recovery"]["text"]))
+        self.assertEqual((recovery.kid, recovery.box_pub), (W["recovery"]["kid"], W["recovery"]["boxPub"]))
+        self.assertEqual(e2ee.recovery_key_text(b64u_decode(W["seeds"]["recovery"])), W["recovery"]["text"])
+        self.assertEqual({"ops": [k.kid for k in self.ops], "all": [self.all.kid]}, W["teams"])
+        with draws([]):
+            link0 = e2ee.workspace_link(workspace=W["workspace"], identity=self.ids[0], recovery=recovery.box_pub)
+            link1 = e2ee.workspace_link(workspace=W["workspace"], identity=self.ids[1], recovery=recovery.box_pub, prev=link0, prev_identity=self.ids[0])
+            self.assertEqual([link0, link1], W["chain"])
+            r = W["roster"]["roster"]
+            self.assertEqual(e2ee.sign_roster(epoch=r["epoch"], members=r["members"], teams=r["teams"], head=link1, identity=self.ids[1]), W["roster"])
+            ana = self.people["ana"].identity
+            for c, signer in zip(W["certificates"], (ana, self.ids[1])):
+                body = c["certificate"]["certificate"]
+                got = e2ee.certify_workspace(workspace=body["account"], sign=body["sign"], box=body["box"], teams=body["teams"], epoch=body["epoch"], by=body.get("by"), signer=signer)
+                self.assertEqual(got, c["certificate"])
+        self.assertEqual([[c["teams"], c.get("by")] for c in self.certs.values()], [[["team-ops"], "user-ana"], [["team-all", "team-ops"], None]])
+
+    def test_reproduces_and_opens_wraps_and_envelopes(self):
+        ana = self.people["ana"]
+        teamkey, wskey = W["wraps"]
+        with draws(teamkey["random"]):
+            env = e2ee.wrap_team_key(ws=self.ws, seed=W["seeds"]["ops2"], signer=self.ids[1], **teamkey["ctx"])
+        self.assertEqual(env, teamkey["envelope"])
+        with draws(wskey["random"]):
+            env = e2ee.wrap_workspace_key(ws=self.ws, seed=W["seeds"]["identity1"], signer=self.ids[1], **wskey["ctx"])
+        self.assertEqual(env, wskey["envelope"])
+        recovery = e2ee.recovery_key_set(b64u_decode(W["seeds"]["recovery"]))
+        for opener in (ana.inbox, [recovery]):
+            self.assertEqual(e2ee.open_team_key(teamkey["envelope"], ws=self.ws, recipients=opener, **teamkey["ctx"]).kid, self.ops[1].kid)
+        self.assertEqual(e2ee.open_workspace_key(wskey["envelope"], ws=self.ws, recipients=ana.inbox, **wskey["ctx"]).sign_pub, self.ws.head["identity"])
+        signer_keys = {"integration": S.sets["integration"], **{n: p.identity for n, p in self.people.items()}}
+        for case in W["envelopes"]:
+            with draws(case["random"]):
+                env = e2ee.seal(payload=case["payload"], ctx=case["ctx"], signer=signer_keys[case["signer"]], to=[{"kid": self.openers[n].kid, "box": self.openers[n].box_pub} for n in case["to"]])
+            self.assertEqual(env, case["envelope"], case["name"])
+            for name in case["to"]:
+                got = e2ee.open(env, recipients=[self.openers[name]], signers=self.signers(env), expect=env["ctx"])
+                self.assertEqual(got, {"v": 1, **case["payload"]})
+
+    def test_rejects_every_workspace_negative_case(self):
+        ana = self.people["ana"]
+        for c in W["negative"]:
+            with self.assertRaisesRegex(E2eeError, re.escape(c["error"]), msg=c["name"]):
+                if c["kind"] == "envelope":
+                    e2ee.open(c["envelope"], recipients=[self.ops[1]], signers=self.signers(c["envelope"]), expect=c["envelope"]["ctx"])
+                elif c["kind"] == "workspace":
+                    e2ee.verify_workspace({"chain": c["chain"], "roster": c["roster"]}, W["fingerprint"], pin=c.get("pin"))
+                elif c["kind"] == "certificate":
+                    e2ee.verify_workspace_certificate(c["certificate"], self.ws)
+                elif c["kind"] == "teamkey":
+                    e2ee.open_team_key(c["envelope"], ws=self.ws, recipients=ana.inbox, **c["ctx"])
+                else:
+                    e2ee._check_ctx(c["ctx"])
+
+    def test_join_proof_and_member_receiver(self):
+        j = W["join"]
+        secret = e2ee.invite_secret(W["seeds"]["identity1"], j["claim"]["invite"])
+        self.assertEqual(b64u_encode(secret), j["secret"])
+        self.assertEqual(e2ee.join_proof(secret, **j["claim"]), j["proof"])
+        e2ee.verify_join_proof(secret, j["proof"], **j["claim"])
+        with self.assertRaisesRegex(E2eeError, "Bad join proof"):
+            e2ee.verify_join_proof(secret, j["proof"], **{**j["claim"], "user": "user-eve"})
+        r = W["receiver"]
+        claim = r["claim"]
+        self.assertEqual(e2ee.sign_receiver(W["keyrings"]["ana"], message=claim["message"], claim_id=claim["claimId"], public_key=claim["publicKey"], member=claim["member"]), r["sig"])
+
+
+class WorkspaceClientTests(unittest.IsolatedAsyncioTestCase):
+    """A keyed client in a team workspace: team sealing, stale-key reseal, verified `answered_by`, fail-closed pins."""
+
+    def setUp(self):
+        integration = next(s for s in V["keySets"] if s["name"] == "integration")
+        self.token, self.kid = e2ee.format_token("hdr_ws-test", integration["seed"], W["fingerprint"]), integration["kid"]
+        self.directory = {"account": None, "certificates": [{**c["certificate"], "integrationId": c["name"]} for c in W["certificates"]], "workspace": {"chain": W["chain"], "roster": W["roster"]}}
+        sent = next(s for s in json.loads((Path(__file__).parents[2] / "sdk/fixtures/contracts.json").read_text())["e2ee"]["steps"] if s["name"] == "send")["response"]["body"]
+        self.record = {**sent, "id": W["envelopes"][0]["ctx"]["id"], "team": "team-ops", "senderId": "integration", "sealed": W["envelopes"][0]["envelope"]}
+
+    def client(self, routes, directory=None, **kwargs):
+        import httpx
+        from herald import Herald
+        seen = []
+
+        def serve(request):
+            seen.append(request)
+            if request.url.path == "/api/v1/keys":
+                return httpx.Response(200, json=directory or self.directory)
+            out = routes(request)
+            return out if isinstance(out, httpx.Response) else httpx.Response(200, json=out)
+        return Herald(api_key=self.token, url="https://herald.test", transport=httpx.MockTransport(serve), **kwargs), seen
+
+    async def test_seals_to_the_team_and_reseals_once_when_stale(self):
+        import httpx
+        from herald import __version__
+        posts, pins = [], []
+
+        def routes(request):
+            posts.append(json.loads(request.content))
+            return httpx.Response(409, json={"error": "Stale.", "code": "E2EE_STALE_KEY"}) if len(posts) == 1 else self.record
+        herald, seen = self.client(routes, workspace=W["workspace"], on_pin=pins.append)
+        await herald.send(title="Restart?")
+        body = posts[1]
+        self.assertEqual((body["team"], body["sealed"]["ctx"]["team"]), ("team-ops", "team-ops"))
+        self.assertEqual([t["kid"] for t in body["sealed"]["to"]], [W["teams"]["ops"][1], self.kid])
+        self.assertNotEqual(posts[0]["id"], posts[1]["id"])
+        self.assertEqual([r.url.path for r in seen].count("/api/v1/keys"), 2)
+        self.assertEqual((seen[1].headers["X-Herald-Client"], seen[1].headers["Herald-Workspace"]), ("sdk/" + __version__, W["workspace"]))
+        self.assertEqual(pins, [W["pin"]])
+        self.assertEqual([t["slug"] for t in (await herald.workspace())["teams"]], ["ops"])
+        with self.assertRaisesRegex(E2eeError, "may not address team all"):
+            await herald.send(title="x", team="all")
+
+    async def test_answered_by_only_when_verified(self):
+        response = {"values": {}, "secretFields": [], "createdAt": self.record["createdAt"], "sealed": W["envelopes"][1]["envelope"], "by": "user-ben"}
+        answered = {**self.record, "status": "answered", "kind": "form", "answeredBy": "user-ben", "response": response}
+        forged = next(c for c in W["negative"] if c["name"] == "member outside the team")["envelope"]
+        for record, by in ((answered, "user-ana"), ({**answered, "response": {**response, "sealed": forged}}, None), ({**answered, "team": "team-all"}, None)):
+            herald, _ = self.client(lambda request, r=record: r)
+            got = await herald.get(record["id"])
+            self.assertEqual((got.answered_by, got.response.by, got.unverified), (by, by, None if by else True))
+
+    async def test_fails_closed_on_rollback_and_missing_workspace(self):
+        for pin, directory in (({**W["pin"], "epoch": 3}, None), (W["pin"], {**self.directory, "workspace": None})):
+            herald, _ = self.client(lambda request: self.record, directory, pin=pin)
+            with self.assertRaises(E2eeError):
+                await herald.send(title="x")
 
 
 if __name__ == "__main__":

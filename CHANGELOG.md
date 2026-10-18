@@ -6,6 +6,8 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 - SDKs: while the live socket is open, `wait` (and Python `watch`) falls back to polling every 5 minutes instead of 30 s (30 s while it is down); TypeScript `wait` checks only on sync events newer than the last one it saw, and a check that overlaps an event runs once more.
 - CLI: `herald listen` flushes task logs every 10 s instead of 2 s; a task's final logs still flush before its completion update.
+- SDKs: team workspaces. Keyed clients verify the workspace succession chain and signed roster (pinned with `pin`/`onPin`, Python `pin`/`on_pin`), seal to the team key (`team` on send), accept answers only from verified team members (`answeredBy`, `response.by`) and reseal once on `409 E2EE_STALE_KEY`. Requests send `X-Herald-Client: sdk/<version>`; `workspace` sets `Herald-Workspace`. New schemas for team routing policies, member availability and update pushes; `e2ee` adds the workspace functions and vectors.
+- CLI: `herald login --workspace SLUG`, `send`/`ask --team SLUG`; `show` prints the team and who answered; `whoami` shows the workspace and its teams.
 - TypeScript SDK: the live socket sends a keepalive `ping` every 30 s and reconnects when one goes unanswered, so a silently dropped connection no longer leaves `wait` on the 5-minute poll.
 
 ## 0.3.0-beta.6
