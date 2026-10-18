@@ -11,13 +11,15 @@ def backoff(attempt, rand=random.random):
 
 
 class LiveSocket:
-    """One socket shared by every waiter; each open or event sets all subscribed events."""
+    """One socket shared by every waiter; each open, event or drop sets all subscribed events."""
 
     def __init__(self, connect, delay=backoff):
         self._connect = connect
         self._delay = delay
         self._events = set()
         self._task = None
+        # Whether the socket is open, so events arrive without polling.
+        self.connected = False
 
     def subscribe(self):
         event = asyncio.Event()
@@ -43,6 +45,7 @@ class LiveSocket:
             try:
                 async with self._connect() as socket:
                     opened = time.monotonic()
+                    self.connected = True
                     self._wake()
                     async for _ in socket:
                         self._wake()
@@ -51,6 +54,11 @@ class LiveSocket:
             except Exception:
                 # Waiters still poll over HTTP, which reports authorization failures.
                 pass
+            finally:
+                self.connected = False
+            if opened is not None:
+                # Waiters switch back to the faster poll while the socket is down.
+                self._wake()
             if opened is not None and time.monotonic() - opened >= STABLE:
                 attempt = 0
             await asyncio.sleep(self._delay(attempt))

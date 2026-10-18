@@ -142,6 +142,7 @@ it('retries rate-limited log batches with a stable key and never fails a task ov
   const logPosts: Array<{ id: string; key?: string; sequence: number }> = [];
   const task = ids('limited', 'broken', 'broken-again');
   const statuses: Record<string, string> = {};
+  const order: string[] = [];
   let consume: ((message: Message) => Promise<void>) | undefined;
   const client = await fake({
     async request(
@@ -159,9 +160,11 @@ it('retries rate-limited log batches with a stable key and never fails a task ov
         if (id === task.limited && logPosts.filter((p) => p.id === id).length === 1)
           throw new HeraldError('Rate limited.', 429, undefined, 0);
         if (id !== task.limited) throw new HeraldError('Unavailable.', 503, undefined, 0);
+        order.push('logs');
         return {};
       }
       statuses[id] = body.status as string;
+      if (id === task.limited) order.push(body.status as string);
       return {};
     },
     watch(fn: (message: Message) => Promise<void>) {
@@ -191,6 +194,9 @@ it('retries rate-limited log batches with a stable key and never fails a task ov
   expect(limited).toHaveLength(2);
   expect(limited[0].key).toBe(`${task.limited}:logs:0`);
   expect(limited[1].key).toBe(limited[0].key);
+  // A task's last logs flush before its completion update, not on the next interval.
+  expect(order.indexOf('logs')).toBeGreaterThanOrEqual(0);
+  expect(order.indexOf('logs')).toBeLessThan(order.indexOf('completed'));
   expect(logPosts.filter((p) => p.id === task.broken)).toHaveLength(5);
   // Once delivery has failed, later batches try once instead of stalling the queue.
   expect(logPosts.filter((p) => p.id === task['broken-again'])).toHaveLength(1);

@@ -9,15 +9,27 @@ vi.mock('ws', async () => {
         super();
         sockets.push(this);
       }
+      // Answers keepalive pings as the server does.
+      send(data: string) {
+        if (data === 'ping') queueMicrotask(() => this.emit('message', Buffer.from('pong')));
+      }
       close() {}
     },
   };
 });
-import { backoff, Herald, LiveSocket } from './index';
+import { backoff, Herald, LiveSocket, type Message } from './index';
 class FakeSocket extends EventEmitter {
   closed = false;
+  terminated = false;
+  sent: string[] = [];
+  send(data: string) {
+    this.sent.push(data);
+  }
   close() {
     this.closed = true;
+  }
+  terminate() {
+    this.terminated = true;
   }
 }
 afterEach(() => {
@@ -76,6 +88,84 @@ it('shares one socket, wakes every subscriber and reconnects with growing delays
   opened[3].emit('close');
   vi.advanceTimersByTime(60_000);
   expect(opened).toHaveLength(4);
+});
+it('pings every 30 s and drops a socket that misses a pong', () => {
+  vi.useFakeTimers();
+  const opened: FakeSocket[] = [];
+  const live = new LiveSocket(
+    () => {
+      opened.push(new FakeSocket());
+      return opened.at(-1)!;
+    },
+    () => 1000,
+  );
+  const events: string[] = [];
+  live.subscribe((event) => events.push(event.type));
+  opened[0].emit('open');
+  vi.advanceTimersByTime(30_000);
+  expect(opened[0].sent).toEqual(['ping']);
+  // A pong wakes no one.
+  opened[0].emit('message', Buffer.from('pong'));
+  vi.advanceTimersByTime(30_000);
+  expect(opened[0].sent).toEqual(['ping', 'ping']);
+  expect(events).toEqual(['open']);
+  // No answer: the half-open socket is dropped at once and a new one follows.
+  vi.advanceTimersByTime(30_000);
+  expect(opened[0].terminated).toBe(true);
+  expect(live.connected).toBe(false);
+  expect(events).toEqual(['open', 'close']);
+  opened[0].emit('close');
+  expect(events).toEqual(['open', 'close']);
+  vi.advanceTimersByTime(1000);
+  expect(opened).toHaveLength(2);
+  expect(opened[0].sent).toHaveLength(2);
+});
+it('polls slowly while the socket is up and checks only on newer sync revisions', async () => {
+  vi.useFakeTimers();
+  const client = new Herald({ apiKey: 'test-only', url: 'https://herald.test' });
+  let release = () => {};
+  const get = vi
+    .spyOn(client, 'get')
+    .mockImplementationOnce(
+      () => new Promise((r) => (release = () => r({ status: 'pending' } as Message))),
+    )
+    .mockResolvedValue({ status: 'pending' } as Message);
+  const controller = new AbortController();
+  const waiting = client.wait('one', { signal: controller.signal }).catch(() => 'aborted');
+  const socket = sockets[0] as unknown as EventEmitter;
+  const calls = async () => {
+    await vi.advanceTimersByTimeAsync(0);
+    return get.mock.calls.length;
+  };
+  expect(await calls()).toBe(1);
+  // An open during a check earns one more check once it finishes.
+  socket.emit('open');
+  expect(await calls()).toBe(1);
+  release();
+  expect(await calls()).toBe(2);
+  await vi.advanceTimersByTimeAsync(299_999);
+  expect(await calls()).toBe(2);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(await calls()).toBe(3);
+  const event = (data: string) => socket.emit('message', Buffer.from(data));
+  event('{"type":"sync","revision":5}');
+  expect(await calls()).toBe(4);
+  event('{"type":"sync","revision":5}');
+  event('{"type":"sync","revision":4}');
+  event('{"type":"other"}');
+  expect(await calls()).toBe(4);
+  // Unparsable or revision-less sync events still wake.
+  event('not json');
+  expect(await calls()).toBe(5);
+  event('{"type":"sync"}');
+  expect(await calls()).toBe(6);
+  // While the socket is down, the poll returns to 30 s.
+  socket.emit('close');
+  expect(await calls()).toBe(6);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(await calls()).toBe(7);
+  controller.abort();
+  expect(await waiting).toBe('aborted');
 });
 it('multiplexes concurrent waits and watches over one WebSocket', async () => {
   const fetch = vi
