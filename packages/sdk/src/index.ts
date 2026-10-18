@@ -21,7 +21,7 @@ import { E2eeError, fileKey, openFile, parseToken, sealedSize, sealFile } from '
 import { KeyedSession, type FileAttachment, type OpenedLog } from './keyed.js';
 import { HeraldError, parseRetryAfter, readError, readJson, retryDelay, sleep } from './http.js';
 import { version } from './version.js';
-import { LiveSocket } from './socket.js';
+import { LiveSocket, type LiveEvent } from './socket.js';
 import { idleBody, type UploadData } from './upload.js';
 export type {
   Account,
@@ -51,6 +51,7 @@ export { HeraldError, parseRetryAfter } from './http.js';
 export { E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog } from './keyed.js';
 export { backoff, LiveSocket } from './socket.js';
+export type { LiveEvent } from './socket.js';
 export type { UploadData } from './upload.js';
 export { version } from './version.js';
 /** `GET /api/ping`: a public liveness check. */
@@ -489,13 +490,16 @@ export class Herald {
     const seconds = duration(options.waitTimeout ?? 3600);
     return new Promise((resolve, reject) => {
       let unsubscribe: (() => void) | undefined,
+        fallback: ReturnType<typeof setTimeout> | undefined,
+        revision = -1,
         done = false,
-        checking = false;
+        checking = false,
+        again = false;
       const finish = (message?: Message, error?: unknown) => {
         if (done) return;
         done = true;
         clearTimeout(timeout);
-        clearInterval(fallback);
+        clearTimeout(fallback);
         unsubscribe?.();
         options.signal?.removeEventListener('abort', abort);
         if (message) resolve(message);
@@ -503,7 +507,9 @@ export class Herald {
       };
       const abort = () => finish(undefined, options.signal?.reason || new Error('Aborted.'));
       const check = async () => {
-        if (done || checking) return;
+        if (done) return;
+        // An event during a check may postdate its read, so it earns one more.
+        if (checking) return void (again = true);
         checking = true;
         try {
           const message = await this.get(id);
@@ -512,7 +518,32 @@ export class Herald {
           if (e instanceof HeraldError && e.status < 500 && e.status !== 429) finish(undefined, e);
         } finally {
           checking = false;
+          if (again) {
+            again = false;
+            void check();
+          }
         }
+      };
+      // The fallback poll is slow while the socket delivers events, faster while it is down.
+      const poll = () => {
+        clearTimeout(fallback);
+        if (done) return;
+        fallback = setTimeout(
+          () => {
+            poll();
+            void check();
+          },
+          this.live.connected ? 300_000 : 30_000,
+        );
+      };
+      const wake = (event: LiveEvent) => {
+        if (event.type === 'open' || event.type === 'close') poll();
+        if (event.type === 'close' || event.type === 'event') return;
+        if (event.type === 'sync' && event.revision !== undefined) {
+          if (event.revision <= revision) return;
+          revision = event.revision;
+        }
+        void check();
       };
       const timeout = setTimeout(
         () =>
@@ -526,11 +557,11 @@ export class Herald {
           ),
         seconds * 1000,
       );
-      const fallback = setInterval(check, 30000);
       options.signal?.addEventListener('abort', abort, { once: true });
       if (options.signal?.aborted) abort();
       else {
-        unsubscribe = this.live.subscribe(check);
+        unsubscribe = this.live.subscribe(wake);
+        poll();
         void check();
       }
     });
@@ -578,7 +609,9 @@ export class Herald {
     options.signal?.addEventListener('abort', stop, { once: true });
     if (options.signal?.aborted) stop();
     else {
-      unsubscribe = this.live.subscribe(refresh);
+      unsubscribe = this.live.subscribe((event) => {
+        if (event.type !== 'close') void refresh();
+      });
       void refresh();
     }
     return stop;

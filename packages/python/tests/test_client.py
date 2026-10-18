@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from pydantic import BaseModel
 from herald import ActionAnswer, Herald, HeraldError, LiveSocket, Message, Tombstone, backoff, e2ee
+from herald.client import LIVE_POLL, POLL
 from websockets.exceptions import InvalidStatus
 from fixtures import keyed
 
@@ -232,6 +233,21 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(opened), 1)
             await asyncio.sleep(0)
             self.assertIsNone(client.live._task)
+
+    async def test_poll_slows_only_while_the_socket_is_up(self):
+        opened = []
+        async with Herald() as client:
+            client.live = LiveSocket(lambda: FakeSocket(opened), delay=lambda _: 60)
+            self.assertEqual(client._poll(), POLL)
+            event = client.live.subscribe()
+            await asyncio.wait_for(event.wait(), 1)
+            self.assertEqual(client._poll(), LIVE_POLL)
+            event.clear()
+            opened[0].closed.set()
+            # A drop wakes waiters so they return to the faster poll.
+            await asyncio.wait_for(event.wait(), 1)
+            self.assertEqual(client._poll(), POLL)
+            client.live.unsubscribe(event)
 
     async def test_socket_reconnects_with_jittered_backoff(self):
         self.assertEqual([backoff(n, lambda: 1) for n in (0, 1, 5, 9)], [1, 2, 30, 30])

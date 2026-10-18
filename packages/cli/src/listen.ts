@@ -16,7 +16,7 @@ const configSchema = z.object({
   /** Tasks run at once; 1 keeps the serial queue. */
   concurrency: z.number().int().min(1).max(16).default(1),
 });
-const LOG_INTERVAL = 2000;
+const LOG_INTERVAL = 10_000;
 const LOG_ATTEMPTS = 5;
 /** Renews a lapsing task lease; the server re-queues tasks after five minutes of silence. */
 const HEARTBEAT_INTERVAL = 60000;

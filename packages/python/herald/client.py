@@ -17,8 +17,9 @@ from .models import Account, ActionAnswer, Attachment, CreatedIntegration, Desti
 
 RETRIES = 2
 UNKEYED = "This token has no end-to-end key. Create a new token in Herald (Settings → Connections) or run herald login."
-# Seconds between HTTP checks while the live socket is quiet or down.
+# Seconds between HTTP checks while the live socket is down, and while it is up.
 POLL = 30
+LIVE_POLL = 300
 FINAL = ("answered", "expired", "cancelled")
 
 
@@ -293,6 +294,9 @@ class Herald:
     def socket(self):
         return OriginConnection(self.url.replace("http", "ws", 1) + "/ws", additional_headers={"Authorization": "Bearer " + self.key}, user_agent_header=self.user_agent, open_timeout=15)
 
+    def _poll(self):
+        return LIVE_POLL if self.live.connected else POLL
+
     async def wait(self, message_id, *, wait_timeout=3600):
         if not 0 < wait_timeout <= 86400:
             raise ValueError("Wait timeout must be between zero and 24 hours.")
@@ -311,7 +315,7 @@ class Herald:
                     except httpx.TransportError:
                         pass
                     try:
-                        await asyncio.wait_for(event.wait(), POLL)
+                        await asyncio.wait_for(event.wait(), self._poll())
                     except TimeoutError:
                         pass
         except TimeoutError as error:
@@ -372,7 +376,7 @@ class Herald:
                 if len(page) == 100:
                     continue
                 try:
-                    await asyncio.wait_for(event.wait(), POLL)
+                    await asyncio.wait_for(event.wait(), self._poll())
                 except TimeoutError:
                     pass
         finally:
