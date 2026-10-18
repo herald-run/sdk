@@ -9,6 +9,10 @@ vi.mock('ws', async () => {
         super();
         sockets.push(this);
       }
+      // Answers keepalive pings as the server does.
+      send(data: string) {
+        if (data === 'ping') queueMicrotask(() => this.emit('message', Buffer.from('pong')));
+      }
       close() {}
     },
   };
@@ -16,8 +20,16 @@ vi.mock('ws', async () => {
 import { backoff, Herald, LiveSocket, type Message } from './index';
 class FakeSocket extends EventEmitter {
   closed = false;
+  terminated = false;
+  sent: string[] = [];
+  send(data: string) {
+    this.sent.push(data);
+  }
   close() {
     this.closed = true;
+  }
+  terminate() {
+    this.terminated = true;
   }
 }
 afterEach(() => {
@@ -76,6 +88,37 @@ it('shares one socket, wakes every subscriber and reconnects with growing delays
   opened[3].emit('close');
   vi.advanceTimersByTime(60_000);
   expect(opened).toHaveLength(4);
+});
+it('pings every 30 s and drops a socket that misses a pong', () => {
+  vi.useFakeTimers();
+  const opened: FakeSocket[] = [];
+  const live = new LiveSocket(
+    () => {
+      opened.push(new FakeSocket());
+      return opened.at(-1)!;
+    },
+    () => 1000,
+  );
+  const events: string[] = [];
+  live.subscribe((event) => events.push(event.type));
+  opened[0].emit('open');
+  vi.advanceTimersByTime(30_000);
+  expect(opened[0].sent).toEqual(['ping']);
+  // A pong wakes no one.
+  opened[0].emit('message', Buffer.from('pong'));
+  vi.advanceTimersByTime(30_000);
+  expect(opened[0].sent).toEqual(['ping', 'ping']);
+  expect(events).toEqual(['open']);
+  // No answer: the half-open socket is dropped at once and a new one follows.
+  vi.advanceTimersByTime(30_000);
+  expect(opened[0].terminated).toBe(true);
+  expect(live.connected).toBe(false);
+  expect(events).toEqual(['open', 'close']);
+  opened[0].emit('close');
+  expect(events).toEqual(['open', 'close']);
+  vi.advanceTimersByTime(1000);
+  expect(opened).toHaveLength(2);
+  expect(opened[0].sent).toHaveLength(2);
 });
 it('polls slowly while the socket is up and checks only on newer sync revisions', async () => {
   vi.useFakeTimers();

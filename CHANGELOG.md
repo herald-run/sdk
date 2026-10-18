@@ -6,6 +6,7 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 - SDKs: while the live socket is open, `wait` (and Python `watch`) falls back to polling every 5 minutes instead of 30 s (30 s while it is down); TypeScript `wait` checks only on sync events newer than the last one it saw, and a check that overlaps an event runs once more.
 - CLI: `herald listen` flushes task logs every 10 s instead of 2 s; a task's final logs still flush before its completion update.
+- TypeScript SDK: the live socket sends a keepalive `ping` every 30 s and reconnects when one goes unanswered, so a silently dropped connection no longer leaves `wait` on the 5-minute poll.
 
 ## 0.3.0-beta.6
 
