@@ -86,7 +86,7 @@ export interface Account {
   credits?: number;
   devices?: number;
   storage: number;
-  /** When the monthly included allowance next resets: monthly from the latest subscription start, else signup. */
+  /** When the included allowance next resets: monthly on the billing date on paid plans, else at the UTC month start. */
   usageResetsAt?: string;
   /** @deprecated Same as `usageResetsAt`; removed after one release. */
   renewsAt: string;
