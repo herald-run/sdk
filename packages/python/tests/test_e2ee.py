@@ -321,6 +321,14 @@ class WorkspaceTests(unittest.TestCase):
                     e2ee.verify_workspace_certificate(c["certificate"], self.ws)
                 elif c["kind"] == "teamkey":
                     e2ee.open_team_key(c["envelope"], ws=self.ws, recipients=ana.inbox, **c["ctx"])
+                elif c["kind"] == "wskey":
+                    e2ee.open_workspace_key(c["envelope"], ws=self.ws, recipients=ana.inbox, **c["ctx"])
+                elif c["kind"] == "join":
+                    e2ee.verify_join_proof(b64u_decode(c["secret"]), c["proof"], **c["claim"])
+                elif c["kind"] == "receiver":
+                    member = e2ee.team_member(self.ws, c["claim"]["member"], c["team"])
+                    claim = c["claim"]
+                    e2ee.verify_receiver(c["sig"], member["identity"], message=claim["message"], claim_id=claim["claimId"], public_key=claim["publicKey"], member=claim["member"])
                 else:
                     e2ee._check_ctx(c["ctx"])
 
@@ -330,6 +338,11 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(b64u_encode(secret), j["secret"])
         self.assertEqual(e2ee.join_proof(secret, **j["claim"]), j["proof"])
         e2ee.verify_join_proof(secret, j["proof"], **j["claim"])
+        self.assertEqual(e2ee.invite_fragment(secret, W["fingerprint"]), j["fragment"])
+        self.assertEqual(e2ee.parse_invite_fragment("#" + j["fragment"]), (secret, W["fingerprint"]))
+        with self.assertRaisesRegex(E2eeError, "Malformed invite link"):
+            e2ee.parse_invite_fragment(j["secret"])
+        self.assertEqual([m["name"] for m in self.ws.members.values()], ["Ana", "Ben"])
         with self.assertRaisesRegex(E2eeError, "Bad join proof"):
             e2ee.verify_join_proof(secret, j["proof"], **{**j["claim"], "user": "user-eve"})
         r = W["receiver"]
@@ -395,6 +408,81 @@ class WorkspaceClientTests(unittest.IsolatedAsyncioTestCase):
             herald, _ = self.client(lambda request: self.record, directory, pin=pin)
             with self.assertRaises(E2eeError):
                 await herald.send(title="x")
+
+    async def test_record_team_only_from_a_verified_envelope_or_own_send(self):
+        from herald.keyed import KeyedSession
+        integration = next(s for s in V["keySets"] if s["name"] == "integration")
+
+        async def directory():
+            return self.directory
+
+        def keyed():
+            return KeyedSession(integration["seed"], W["fingerprint"], directory)
+        k = keyed()
+        body = await k.seal_message({"title": "x"}, "key-1")
+        self.assertEqual(await k.team_of(body["id"]), "team-ops")
+        for bad in ({**self.record, "team": "team-all"}, {**self.record, "sealed": W["envelopes"][1]["envelope"]}):
+            s = keyed()
+            self.assertTrue((await s.open_record(bad))["unverified"])
+            with self.assertRaisesRegex(E2eeError, "The record has no team"):
+                await s.team_of(bad["id"])
+        claim, sig = W["receiver"]["claim"], W["receiver"]["sig"]
+        receiver = {"claimId": claim["claimId"], "publicKey": claim["publicKey"], "sig": sig, "member": claim["member"]}
+
+        async def record():
+            return self.record
+        r = keyed()
+        self.assertEqual(await r.check_receiver(claim["message"], receiver, record), receiver)
+        with self.assertRaisesRegex(E2eeError, "Not a member of the team"):
+            await r.check_receiver(claim["message"], {**receiver, "member": "user-ben"}, record)
+
+    async def test_reads_herald_pin_and_fails_closed(self):
+        from unittest import mock
+        with mock.patch.dict("os.environ", {"HERALD_PIN": json.dumps({**W["pin"], "epoch": 3})}):
+            herald, _ = self.client(lambda request: self.record)
+            with self.assertRaisesRegex(E2eeError, "Stale roster epoch"):
+                await herald.send(title="x")
+        with mock.patch.dict("os.environ", {"HERALD_PIN": '{"workspace": "ws_x"}'}):
+            with self.assertRaisesRegex(E2eeError, "Malformed workspace pin"):
+                self.client(lambda request: self.record)
+
+
+class WorkspaceAnchorTests(unittest.TestCase):
+    """Keyring anchors and explicit re-certification."""
+
+    def test_keyring_pin_never_swaps_root_or_downgrades(self):
+        keyring = e2ee.create_keyring("user-ana")
+        anchor = {"workspace": W["workspace"], "fingerprint": W["fingerprint"], "pin": W["pin"]}
+        pinned = e2ee.keyring_pin(keyring, **anchor)
+        self.assertEqual(pinned["workspaces"], [anchor])
+        self.assertEqual(e2ee.parse_workspace_pin(json.dumps(W["pin"])), W["pin"])
+        newer = {**W["pin"], "epoch": 3, "roster": W["pin"]["link"]}
+        updated = e2ee.keyring_pin(pinned, **{**anchor, "pin": newer})
+        self.assertEqual(updated["workspaces"], [{**anchor, "pin": newer}])
+        self.assertEqual(e2ee.keyring_pin(pinned, workspace=W["workspace"], fingerprint=W["fingerprint"])["workspaces"], [anchor])
+        with self.assertRaisesRegex(E2eeError, "Stale roster epoch"):
+            e2ee.keyring_pin(updated, **anchor)
+        with self.assertRaisesRegex(E2eeError, "Workspace fingerprint mismatch"):
+            e2ee.keyring_pin(pinned, **{**anchor, "fingerprint": e2ee.fingerprint(W["identities"][1]["signPub"])})
+
+    def test_recertifies_with_previous_teams_only(self):
+        previous = e2ee.verify_workspace({"chain": W["chain"], "roster": W["roster"]}, W["fingerprint"])
+        head = e2ee.workspace_identity(W["identities"][1]["seed"])
+        r = W["roster"]["roster"]
+        ana = {**r["members"][0], "teams": ["team-all"]}
+        nxt = e2ee.sign_roster(epoch=3, members=[ana], teams=r["teams"], head=W["chain"][1], identity=head)
+        current = e2ee.verify_workspace({"chain": W["chain"], "roster": nxt}, W["fingerprint"])
+        cert = W["certificates"][0]["certificate"]
+        again = e2ee.recertify_workspace(cert, previous=previous, current=current, identity=head)
+        self.assertEqual((again["certificate"]["teams"], again["certificate"]["epoch"], "by" in again["certificate"]), (["team-ops"], 3, False))
+        self.assertEqual(e2ee.verify_workspace_certificate(again, current)["teams"], ["team-ops"])
+        failing = next(c for c in W["negative"] if c["name"] == "member without connect")["certificate"]
+        with self.assertRaisesRegex(E2eeError, "may not connect"):
+            e2ee.recertify_workspace(failing, previous=previous, current=current, identity=head)
+        with self.assertRaisesRegex(E2eeError, "re-signed by the head"):
+            e2ee.recertify_workspace(cert, previous=previous, current=current, identity=e2ee.workspace_identity(W["identities"][0]["seed"]))
+        with self.assertRaisesRegex(E2eeError, "Not the previous roster"):
+            e2ee.recertify_workspace(cert, previous=current, current=current, identity=head)
 
 
 if __name__ == "__main__":

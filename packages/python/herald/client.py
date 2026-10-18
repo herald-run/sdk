@@ -61,6 +61,9 @@ class Herald:
         if keyed and "seed" not in parsed:
             raise e2ee.E2eeError(UNKEYED)
         self.key = parsed["auth"]
+        # `pin`: the newest workspace chain head and roster verified in earlier runs; defaults to `HERALD_PIN` (JSON).
+        if pin is None and os.getenv("HERALD_PIN") and "seed" in parsed:
+            pin = e2ee.parse_workspace_pin(os.getenv("HERALD_PIN"))
         self._keyed = KeyedSession(parsed["seed"], parsed["fingerprint"], lambda: self.request("/keys"), pin, on_pin) if "seed" in parsed else None
         # Longest server Retry-After, in seconds, that a request waits out before failing.
         self.max_retry_after = max_retry_after

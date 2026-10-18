@@ -171,6 +171,13 @@ it('verifies and opens the workspace vectors', async () => {
       if (c.kind === 'certificate') return e2ee.verifyWorkspaceCertificate(c.certificate, ws);
       if (c.kind === 'teamkey')
         return e2ee.openTeamKey(c.envelope, { ws, recipients: ana.inbox, ...c.ctx });
+      if (c.kind === 'wskey')
+        return e2ee.openWorkspaceKey(c.envelope, { ws, recipients: ana.inbox, ...c.ctx });
+      if (c.kind === 'join') return e2ee.verifyJoinProof(b64u.decode(c.secret), c.claim, c.proof);
+      if (c.kind === 'receiver') {
+        const member = e2ee.teamMember(ws, c.claim.member, c.team);
+        return e2ee.verifyReceiver(c.sig, member.identity, c.claim);
+      }
       return e2ee.checkCtx(c.ctx);
     };
     await expect(run(), c.name).rejects.toThrow(c.error);
@@ -180,6 +187,11 @@ it('verifies and opens the workspace vectors', async () => {
     w.join.secret,
   );
   await e2ee.verifyJoinProof(secret, w.join.claim, w.join.proof);
+  expect(e2ee.inviteFragment(secret, w.fingerprint)).toBe(w.join.fragment);
+  const parsed = e2ee.parseInviteFragment('#' + w.join.fragment);
+  expect([b64u.encode(parsed.secret), parsed.fingerprint]).toEqual([w.join.secret, w.fingerprint]);
+  expect(() => e2ee.parseInviteFragment(w.join.secret)).toThrow('Malformed invite link');
+  expect([...ws.members.values()].map((m) => m.name)).toEqual(['Ana', 'Ben']);
   await expect(
     e2ee.verifyJoinProof(secret, { ...w.join.claim, user: 'user-eve' }, w.join.proof),
   ).rejects.toThrow('Bad join proof');

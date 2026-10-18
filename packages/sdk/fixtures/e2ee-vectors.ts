@@ -442,6 +442,7 @@ async function workspaceVectors(
   };
   const entry = (name: 'ana' | 'ben', caps: ('connect' | 'keys')[], teams: string[]) => ({
     user: users[name],
+    name: name === 'ana' ? 'Ana' : 'Ben',
     identity: people[name].identity.signPub,
     inbox: people[name].inbox.at(-1)!.boxPub,
     caps,
@@ -599,12 +600,52 @@ async function workspaceVectors(
   });
   const oldRoster = await e2ee.signRoster({ epoch: 3, members, teams, head: link0 }, id0);
   const forgedTeam = await team(seeds.forged);
+  const toAna = [{ kid: people.ana.inboxKid, box: people.ana.inbox[0].boxPub }];
   const forgedWrap = await e2ee.seal({
     payload: { seed: seeds.forged },
     ctx: { t: 'teamkey', account: WS, team: OPS, kv: 2, member: users.ana },
-    signer: id0,
-    to: [{ kid: people.ana.inboxKid, box: people.ana.inbox[0].boxPub }],
+    signer: id1,
+    to: toAna,
   });
+  const oldLinkWrap = await e2ee.seal({
+    payload: { seed: seeds.ops2 },
+    ctx: { t: 'teamkey', account: WS, team: OPS, kv: 2, member: users.ana },
+    signer: id0,
+    to: toAna,
+  });
+  const wrongLinkWrap = await e2ee.seal({
+    payload: { seed: seeds.identity0 },
+    ctx: { t: 'wskey', account: WS, n: 0, member: users.ana },
+    signer: id1,
+    to: toAna,
+  });
+  const otherTeam = await e2ee.seal({
+    payload: { title: 'x', body: '', kind: 'message', fields: [] },
+    ctx: { t: 'message', account: WS, id: ID, team: ALL },
+    signer: sets.integration,
+    to: [recipient(keys.ops), recipient(keys.integration)],
+  });
+  const noTeamCert = await e2ee.certifyWorkspace(
+    {
+      workspace: WS,
+      keys: { sign: sets.outsider.signPub, box: sets.outsider.boxPub },
+      teams: ['team-gone'],
+      epoch: 2,
+      by: users.ana,
+    },
+    people.ana.identity,
+  );
+  const unnamed = members.map((m, i) =>
+    i ? m : (Object.fromEntries(Object.entries(m).filter(([k]) => k !== 'name')) as typeof m),
+  );
+  const noName = await e2ee.signRoster({ epoch: 2, members: unnamed, teams, head: link1 }, id1);
+  const renamed = {
+    ...roster,
+    roster: {
+      ...roster.roster,
+      members: roster.roster.members.map((m, i) => (i ? m : { ...m, name: 'Eve' })),
+    },
+  };
   const integrationCert = await e2ee.certifyWorkspace(
     {
       workspace: WS,
@@ -644,6 +685,22 @@ async function workspaceVectors(
     id0,
   );
   const pin = ws.pin;
+  const secret = await e2ee.inviteSecret(seeds.identity1, 'invite-1');
+  const claim = {
+    workspace: WS,
+    fingerprint: fp,
+    invite: 'invite-1',
+    user: users.ben,
+    identity: people.ben.identity.signPub,
+    inbox: people.ben.inbox[0].boxPub,
+  };
+  const receiverClaim = {
+    message: ID,
+    claimId: 'claim-ws',
+    publicKey: { kty: 'RSA', e: 'AQAB', n: 'sGVy' },
+    member: users.ana,
+  };
+  const receiverSig = await e2ee.signReceiver(keyrings.ana, receiverClaim);
   const negative = [
     await forged('non-member signer', 'eve', users.eve, 'Not a member.'),
     await forged('member outside the team', 'ben', users.ben, 'Not a member of the team'),
@@ -733,6 +790,70 @@ async function workspaceVectors(
       error: 'Team key does not match the roster',
     },
     {
+      name: 'integration certified for another team',
+      kind: 'envelope',
+      envelope: otherTeam,
+      error: 'Untrusted signer',
+    },
+    {
+      name: 'roster member without name',
+      kind: 'workspace',
+      chain,
+      roster: noName,
+      error: 'Malformed roster member',
+    },
+    {
+      name: 'roster member name altered',
+      kind: 'workspace',
+      chain,
+      roster: renamed,
+      error: 'Bad roster signature',
+    },
+    {
+      name: 'certificate with no team after intersection',
+      kind: 'certificate',
+      certificate: noTeamCert,
+      error: 'The certificate covers no team',
+    },
+    {
+      name: 'team key wrap signed by an old link',
+      kind: 'teamkey',
+      envelope: oldLinkWrap,
+      ctx: { team: OPS, kv: 2, member: users.ana },
+      error: 'Untrusted signer',
+    },
+    {
+      name: 'wskey for the wrong link',
+      kind: 'wskey',
+      envelope: wrongLinkWrap,
+      ctx: { n: 0, member: users.ana },
+      error: 'Workspace key does not match the chain',
+    },
+    {
+      name: 'join proof for another root',
+      kind: 'join',
+      claim: { ...claim, fingerprint: await e2ee.fingerprint(id1.signPub) },
+      secret: b64u.encode(secret),
+      proof: await e2ee.joinProof(secret, claim),
+      error: 'Bad join proof',
+    },
+    {
+      name: 'join proof for other keys',
+      kind: 'join',
+      claim: { ...claim, user: users.eve },
+      secret: b64u.encode(secret),
+      proof: await e2ee.joinProof(secret, claim),
+      error: 'Bad join proof',
+    },
+    {
+      name: 'receiver claim with the wrong member',
+      kind: 'receiver',
+      claim: { ...receiverClaim, member: users.ben },
+      sig: receiverSig,
+      team: ALL,
+      error: 'Bad receiver signature',
+    },
+    {
       name: 'personal ctx with team',
       kind: 'ctx',
       ctx: { t: 'message', account: 'acct-vectors', id: ID, team: OPS },
@@ -754,20 +875,6 @@ async function workspaceVectors(
   if (forgedTeam.boxPub === ops[1].boxPub) throw new Error('forged key');
   take();
   const recoveryText = e2ee.recoveryKeyText(b64u.decode(seeds.recovery));
-  const secret = await e2ee.inviteSecret(seeds.identity1, 'invite-1');
-  const claim = {
-    workspace: WS,
-    invite: 'invite-1',
-    user: users.ben,
-    identity: people.ben.identity.signPub,
-    inbox: people.ben.inbox[0].boxPub,
-  };
-  const receiverClaim = {
-    message: ID,
-    claimId: 'claim-ws',
-    publicKey: { kty: 'RSA', e: 'AQAB', n: 'sGVy' },
-    member: users.ana,
-  };
   return {
     workspace: WS,
     fingerprint: fp,
@@ -790,7 +897,12 @@ async function workspaceVectors(
     wraps,
     envelopes,
     negative,
-    join: { claim, secret: b64u.encode(secret), proof: await e2ee.joinProof(secret, claim) },
-    receiver: { claim: receiverClaim, sig: await e2ee.signReceiver(keyrings.ana, receiverClaim) },
+    join: {
+      claim,
+      secret: b64u.encode(secret),
+      fragment: e2ee.inviteFragment(secret, fp),
+      proof: await e2ee.joinProof(secret, claim),
+    },
+    receiver: { claim: receiverClaim, sig: receiverSig },
   };
 }

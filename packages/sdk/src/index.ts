@@ -22,6 +22,7 @@ import {
   fileKey,
   openFile,
   parseToken,
+  parseWorkspacePin,
   sealedSize,
   sealFile,
   type WorkspacePin,
@@ -142,9 +143,13 @@ export type HeraldOptions = {
   userAgent?: string;
   /** Sent as `Herald-Workspace`; tokens are bound to one workspace, so this is optional. */
   workspace?: string;
-  /** The newest workspace chain head and roster this token verified, from earlier runs. */
+  /**
+   * The newest workspace chain head and roster this token verified, from earlier runs; defaults to
+   * `HERALD_PIN` (the pin as JSON). Without one, a fresh client trusts the newest chain and roster
+   * the server shows under the token's root (see the e2ee spec's limitations).
+   */
   pin?: WorkspacePin;
-  /** Called with a newer verified pin, to store it with the token. */
+  /** Called with a newer verified pin, to store it with the token (and in `HERALD_PIN`). */
   onPin?: (pin: WorkspacePin) => void;
 };
 export function duration(value: number | string): number {
@@ -203,7 +208,9 @@ export class Herald {
         parsed.fingerprint!,
         () => this.request('/keys'),
         {
-          pin: options.pin,
+          pin:
+            options.pin ??
+            (process.env.HERALD_PIN ? parseWorkspacePin(process.env.HERALD_PIN) : undefined),
           onPin: options.onPin,
         },
       );

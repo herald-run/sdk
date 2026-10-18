@@ -3,7 +3,11 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { sealedContracts } from '../fixtures/contracts';
 import * as e2ee from './e2ee/index';
 import { Herald, HeraldError, version, type KeyDirectory, type Message } from './index';
-afterEach(() => vi.restoreAllMocks());
+import { KeyedSession } from './keyed';
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 // Team workspace behaviour of a keyed client, on the shared workspace vectors.
 const V = JSON.parse(
   readFileSync(new URL('../fixtures/e2ee-vectors.json', import.meta.url), 'utf8'),
@@ -159,4 +163,91 @@ it('fails closed on rolled-back rosters and personal directories', async () => {
     await expect(herald.send({ title: 'x' })).rejects.toThrow(e2ee.E2eeError);
     vi.restoreAllMocks();
   }
+});
+
+it('takes a record team only from a verified envelope or its own send', async () => {
+  const keyed = () => new KeyedSession(integration.seed, W.fingerprint, async () => directory);
+  const k = keyed();
+  const body = await k.sealMessage({ title: 'x' }, 'key-1');
+  expect(await k.teamOf(body.id)).toBe('team-ops');
+  // A team this connection is not certified for, or an envelope that fails, records nothing.
+  for (const bad of [record({ team: 'team-all' }), record({ sealed: response.envelope })]) {
+    const s = keyed();
+    expect((await s.openRecord(bad)).unverified).toBe(true);
+    await expect(s.teamOf(bad.id)).rejects.toThrow('The record has no team');
+  }
+  // Secret receivers must be members of the record's verified team.
+  const { claim, sig } = W.receiver;
+  const receiver = {
+    claimId: claim.claimId,
+    publicKey: claim.publicKey,
+    sig,
+    member: claim.member,
+  };
+  const r = keyed();
+  expect(await r.checkReceiver(claim.message, receiver, async () => record())).toBe(receiver);
+  await expect(
+    r.checkReceiver(claim.message, { ...receiver, member: 'user-ben' }, async () => record()),
+  ).rejects.toThrow('Not a member of the team');
+});
+
+it('reads HERALD_PIN and fails closed on a newer pin', async () => {
+  vi.stubEnv('HERALD_PIN', JSON.stringify({ ...W.pin, epoch: 3 }));
+  serve({ 'GET /api/v1/keys': directory, 'POST /api/v1/messages': record() });
+  await expect(new Herald({ apiKey: token, url }).send({ title: 'x' })).rejects.toThrow(
+    'Stale roster epoch',
+  );
+  vi.stubEnv('HERALD_PIN', '{"workspace":"ws_x"}');
+  expect(() => new Herald({ apiKey: token, url })).toThrow('Malformed workspace pin');
+});
+
+it('keeps keyring anchors: no root swap, no pin downgrade', async () => {
+  const keyring = e2ee.createKeyring('user-ana');
+  const anchor = { workspace: W.workspace, fingerprint: W.fingerprint, pin: W.pin };
+  const pinned = e2ee.keyringPin(keyring, anchor);
+  expect(pinned.workspaces).toEqual([anchor]);
+  expect(e2ee.parseWorkspacePin(JSON.stringify(W.pin))).toEqual(W.pin);
+  const newer = { ...W.pin, epoch: 3, roster: W.pin.link };
+  expect(e2ee.keyringPin(pinned, { ...anchor, pin: newer }).workspaces).toEqual([
+    { ...anchor, pin: newer },
+  ]);
+  expect(e2ee.keyringPin(pinned, { ...anchor, pin: undefined }).workspaces).toEqual([anchor]);
+  expect(() => e2ee.keyringPin(e2ee.keyringPin(pinned, { ...anchor, pin: newer }), anchor)).toThrow(
+    'Stale roster epoch',
+  );
+  const other = await e2ee.fingerprint(W.identities[1].signPub);
+  expect(() => e2ee.keyringPin(pinned, { ...anchor, fingerprint: other })).toThrow(
+    'Workspace fingerprint mismatch',
+  );
+});
+
+it('re-certifies only certificates verified under the previous roster, teams intersected', async () => {
+  const previous = await e2ee.verifyWorkspace({ chain: W.chain, roster: W.roster }, W.fingerprint);
+  const head = await e2ee.workspaceIdentity(W.identities[1].seed);
+  const r = W.roster.roster;
+  const ana = { ...r.members[0], teams: ['team-all'] };
+  const next = await e2ee.signRoster(
+    { epoch: 3, members: [ana], teams: r.teams, head: W.chain[1] },
+    head,
+  );
+  const current = await e2ee.verifyWorkspace({ chain: W.chain, roster: next }, W.fingerprint);
+  // Ana's connection keeps only the teams she had when she certified it, not her new ones.
+  const cert = W.certificates[0].certificate;
+  const again = await e2ee.recertifyWorkspace(cert, { previous, current, identity: head });
+  expect(again.certificate).toMatchObject({ teams: ['team-ops'], epoch: 3 });
+  expect(again.certificate.by).toBeUndefined();
+  expect((await e2ee.verifyWorkspaceCertificate(again, current)).teams).toEqual(['team-ops']);
+  const failing = W.negative.find(
+    (c: { name: string }) => c.name === 'member without connect',
+  ).certificate;
+  await expect(
+    e2ee.recertifyWorkspace(failing, { previous, current, identity: head }),
+  ).rejects.toThrow('may not connect');
+  const old = await e2ee.workspaceIdentity(W.identities[0].seed);
+  await expect(e2ee.recertifyWorkspace(cert, { previous, current, identity: old })).rejects.toThrow(
+    're-signed by the head',
+  );
+  await expect(
+    e2ee.recertifyWorkspace(cert, { previous: current, current, identity: head }),
+  ).rejects.toThrow('Not the previous roster');
 });

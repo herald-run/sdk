@@ -4,12 +4,15 @@ import { canon } from './canon';
 import { H } from './hash';
 import { fingerprint, keySet, kid, sign, verify, type KeySet } from './keys';
 import { now, randomBytes } from './random';
+import type { KeyringWorkspace } from './workspace';
 /** The account's secret keys: one identity seed and inbox seeds, newest last. */
 export interface Keyring {
   v: 1;
   account: string;
   identity: string;
   inbox: { seed: string; created: string }[];
+  /** Team workspace anchors (root fingerprint and pin), shared by all the member's devices. */
+  workspaces?: KeyringWorkspace[];
 }
 /** Key sets carry their account kids: the identity's signer kid and each inbox's recipient kid. */
 export interface KeyringKeys {
@@ -31,7 +34,8 @@ export function checkKeyring(keyring: Keyring): Keyring {
     keyring.account !== '' &&
     Array.isArray(keyring.inbox) &&
     keyring.inbox.length > 0 &&
-    keyring.inbox.every((entry) => typeof entry?.created === 'string');
+    keyring.inbox.every((entry) => typeof entry?.created === 'string') &&
+    (keyring.workspaces === undefined || Array.isArray(keyring.workspaces));
   if (!ok) fail('Malformed keyring.');
   bytesOf(keyring.identity, 32);
   for (const entry of keyring.inbox) bytesOf(entry.seed, 32);

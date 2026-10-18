@@ -324,7 +324,7 @@ class KeyedSession:
         self.files = {}
         # Task IDs -> the integration that runs them, so logs open only under its key.
         self._runners = {}
-        # Record IDs -> their team, from opened records.
+        # Record IDs -> their team: set at send time or from a verified envelope's `ctx.team` only.
         self._teams = {}
         self._state, self._loaded = None, 0.0
 
@@ -414,7 +414,11 @@ class KeyedSession:
         if s.get("ws") is None:
             return [s["inbox"], me]
         t = s["ws"].teams.get(team) if team else None
-        return [{"kid": t["kid"], "box": t["box"]}, me] if t else e2ee._fail("Unknown team.")
+        if not t:
+            e2ee._fail("Unknown team.")
+        if team not in s["mine"]["teams"]:
+            e2ee._fail("This connection may not address the team.")
+        return [{"kid": t["kid"], "box": t["box"]}, me]
 
     async def _open(self, env, expect, signer):
         """Opens `env` if exactly the kid `signer(state, env)` picks signed it; a new certificate triggers a refetch."""
@@ -460,6 +464,8 @@ class KeyedSession:
 
     async def _seal_message(self, message, idempotency_key, team):
         record_id = str(uuid.uuid4())
+        if team:
+            self._teams[record_id] = team
         if message.get("kind") == "secret":
             m = check_secret_offer(message)
             payload = {"kind": "secret", "title": m["title"], "body": m["body"]}
@@ -483,10 +489,9 @@ class KeyedSession:
         unsealed answer are `unverified`."""
         if not isinstance(m, dict):
             return m
-        ws = (await self.state()).get("ws")
+        s = await self.state()
+        ws = s.get("ws")
         task = task or m.get("direction") == "outbound"
-        if ws is not None and m.get("team"):
-            self._teams[m["id"]] = m["team"]
         # `answeredBy` comes only from a verified answer.
         m = {k: v for k, v in m.items() if k != "answeredBy"}
         if m.get("response"):
@@ -500,8 +505,13 @@ class KeyedSession:
                     self._runners[m["id"]] = m["recipientId"]
             elif not m.get("sealed"):
                 e2ee._fail("This message is not end-to-end encrypted.")
+            # The server's `team` counts only once the envelope's signed `ctx.team` matched it.
+            if ws is not None and m.get("team") not in s["mine"]["teams"]:
+                e2ee._fail("The record is outside the teams this connection is certified for.")
             out = {**m, "e2ee": True}
             out = await (self._task(out, m["input"]["sealed"]) if task else self._content(out, m["sealed"]))
+            if ws is not None:
+                self._teams[m["id"]] = m["team"]
             if not task and response.get("sealed"):
                 out = await self._response(out, m["sealed"], response["sealed"])
             elif not task and out.get("kind") != "secret" and (m.get("response") or m.get("status") == "answered"):

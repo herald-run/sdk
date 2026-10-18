@@ -691,3 +691,35 @@ it('uses a team workspace login: --team, answered by, whoami teams and the store
     'may not address team all',
   );
 });
+it('keeps an env token pinned with --pin-file and HERALD_PIN', async () => {
+  const V = JSON.parse(
+    await readFile(new URL('../../sdk/fixtures/e2ee-vectors.json', import.meta.url), 'utf8'),
+  );
+  const W = V.workspace;
+  const integration = V.keySets.find((s: { name: string }) => s.name === 'integration');
+  const token = e2ee.formatToken('hdr_ws', integration.seed, W.fingerprint);
+  const certificates = W.certificates.map((c: { name: string; certificate: object }) => ({
+    ...c.certificate,
+    integrationId: c.name,
+  }));
+  server({
+    'GET /api/v1/keys': () =>
+      Response.json({
+        account: null,
+        certificates,
+        workspace: { chain: W.chain, roster: W.roster },
+      }),
+    'GET /api/v1/token': () => Response.json({ name: 'CI', scopes: [], account: {} }),
+    'GET /api/v1/account': () => Response.json({ name: 'Me', email: 'me@example.com' }),
+  });
+  const file = join(home, 'pin.json');
+  expect((await run(['whoami', '--pin-file', file], { HERALD_TOKEN: token })).code).toBe(0);
+  expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(W.pin);
+  // A pin newer than the server's roster fails closed, from the file or the environment.
+  const newer = JSON.stringify({ ...W.pin, epoch: 3 });
+  await writeFile(file, newer);
+  const stale = await run(['whoami', '--pin-file', file], { HERALD_TOKEN: token });
+  expect(stale.out + stale.err).toMatch(/Stale roster epoch/);
+  const env = await run(['whoami'], { HERALD_TOKEN: token, HERALD_PIN: newer });
+  expect(env.out + env.err).toMatch(/Stale roster epoch/);
+});

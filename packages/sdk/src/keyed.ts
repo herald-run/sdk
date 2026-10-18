@@ -115,7 +115,7 @@ export class KeyedSession {
   #state?: Promise<State>;
   #loaded = 0;
   #options: KeyedOptions;
-  /** Record IDs → their team, from opened records. */
+  /** Record IDs → their team: set at send time or from a verified envelope's `ctx.team` only. */
   #teams = new Map<string, string>();
   constructor(
     seed: string,
@@ -247,6 +247,7 @@ export class KeyedSession {
     const me = { kid: s.me.kid, box: s.me.boxPub };
     if (!s.ws) return [s.inbox, me];
     const t = (team && s.ws.teams.get(team)) || fail('Unknown team.');
+    if (!s.mine!.teams.includes(team!)) fail('This connection may not address the team.');
     return [{ kid: t.kid, box: t.box }, me];
   };
   /** A record's team; `record` loads it when this session has not opened it yet. */
@@ -301,6 +302,7 @@ export class KeyedSession {
     const s = await this.state();
     const id = crypto.randomUUID();
     const team = this.#team(s, parsed.data.team);
+    if (team) this.#teams.set(id, team);
     const seal = async (payload: Payload) => ({
       id,
       ...(team ? { team } : {}),
@@ -351,9 +353,8 @@ export class KeyedSession {
    */
   async openRecord<M extends Message>(m: M, options: { task?: boolean } = {}): Promise<M> {
     if (!m || typeof m !== 'object') return m;
-    const { ws } = await this.state();
+    const { ws, mine } = await this.state();
     const task = options.task || m.direction === 'outbound';
-    if (ws && m.team) this.#teams.set(m.id, m.team);
     // `answeredBy` comes only from a verified answer.
     m = { ...m, ...(m.response ? { response: omit(m.response, 'by') } : {}) };
     delete m.answeredBy;
@@ -362,9 +363,13 @@ export class KeyedSession {
         if (!m.input?.sealed) fail('This task is not end-to-end encrypted.');
         if (m.recipientId) this.#runners.set(m.id, m.recipientId);
       } else if (!m.sealed) fail('This message is not end-to-end encrypted.');
+      // The server's `team` counts only once the envelope's signed `ctx.team` matched it.
+      if (ws && !mine!.teams.includes(m.team as string))
+        fail('The record is outside the teams this connection is certified for.');
       let out: M = { ...m, e2ee: true };
       if (task) out = await this.#task(out, m.input!.sealed!);
       else out = await this.#content(out, m.sealed!);
+      if (ws) this.#teams.set(m.id, m.team!);
       if (!task && m.response?.sealed)
         out = await this.#response(out, m.sealed!, m.response.sealed);
       else if (!task && out.kind !== 'secret' && (m.response || m.status === 'answered'))

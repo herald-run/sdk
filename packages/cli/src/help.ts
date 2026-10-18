@@ -134,6 +134,7 @@ const globals = `Global options:
   --json             Machine-readable JSON output
   --profile NAME     Use a named profile (or HERALD_PROFILE)
   --url ORIGIN       Server (or HERALD_URL; default https://app.herald.run)
+  --pin-file FILE    Team workspace pin for env tokens, kept current (or HERALD_PIN, read only)
   -h, --help         Show help
   --version          Print the version`;
 export function usage(name?: string) {
@@ -164,7 +165,7 @@ export function completion(shell: string) {
     return `_herald() {
   local cur=\${COMP_WORDS[COMP_CWORD]}
   if [ "$COMP_CWORD" -eq 1 ]; then COMPREPLY=($(compgen -W "${names}" -- "$cur"));
-  else COMPREPLY=($(compgen -f -W "--help --json --profile --url" -- "$cur")); fi
+  else COMPREPLY=($(compgen -f -W "--help --json --profile --url --pin-file" -- "$cur")); fi
 }
 complete -o default -F _herald herald`;
   if (shell === 'zsh')

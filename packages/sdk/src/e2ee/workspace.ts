@@ -1,4 +1,5 @@
 import type { Certificate, SealedEnvelope } from '../schema/e2ee';
+import type { Keyring } from './keyring';
 import { b64u, bytesOf, fail, utf8, type Bytes } from './bytes';
 import { canon } from './canon';
 import { H, hkdf, hmac } from './hash';
@@ -24,6 +25,8 @@ export interface ChainLink {
 }
 export interface RosterMember {
   user: string;
+  /** Display name, set by the device that confirmed the member; apps show it, never the server's. */
+  name: string;
   identity: string;
   inbox: string;
   /** `connect`: may certify integrations; `keys`: holds the workspace identity. */
@@ -55,7 +58,10 @@ export interface WorkspaceDirectory {
   chain: ChainLink[];
   roster: SignedRoster;
 }
-/** The newest chain head and roster a client has verified; later directories may not go back. */
+/**
+ * The newest chain head and roster a client has verified; later directories may not go back. Env
+ * token clients pass it as `HERALD_PIN` (this object as JSON).
+ */
 export interface WorkspacePin {
   workspace: string;
   n: number;
@@ -164,8 +170,66 @@ export async function workspaceLink(input: {
 }
 
 function checkPin(pin: WorkspacePin | undefined, workspace: string) {
-  if (pin && pin.workspace !== workspace) fail('Workspace pin mismatch.');
+  if (pin && parseWorkspacePin(pin).workspace !== workspace) fail('Workspace pin mismatch.');
   return pin;
+}
+const digestText = (value: unknown) => typeof value === 'string' && /^[\w-]{43}$/.test(value);
+
+/** A pin from its JSON text (`HERALD_PIN`, a pin file) or object; malformed pins fail. */
+export function parseWorkspacePin(value: unknown): WorkspacePin {
+  let p = value;
+  if (typeof p === 'string')
+    try {
+      p = JSON.parse(p);
+    } catch {
+      p = undefined;
+    }
+  const pin = p as WorkspacePin;
+  const ok =
+    text(pin?.workspace) &&
+    pin.workspace.startsWith('ws_') &&
+    int(pin.n) &&
+    int(pin.epoch) &&
+    pin.epoch >= 1 &&
+    digestText(pin.link) &&
+    digestText(pin.roster);
+  if (!ok) fail('Malformed workspace pin.');
+  const { workspace, n, link, epoch, roster } = pin;
+  return { workspace, n, link, epoch, roster };
+}
+
+/** Fails unless `next` is the same as or newer than `pin` (no rollback, fork or stale roster). */
+export function checkNewerPin(pin: WorkspacePin, next: WorkspacePin) {
+  if (pin.workspace !== next.workspace) fail('Workspace pin mismatch.');
+  if (next.n < pin.n) fail('Workspace chain rollback.');
+  if (next.n === pin.n && next.link !== pin.link) fail('Workspace chain fork.');
+  if (next.epoch < pin.epoch || (next.epoch === pin.epoch && next.roster !== pin.roster))
+    fail('Stale roster epoch.');
+}
+
+/** A personal keyring's anchor for one workspace: its root fingerprint and newest pin. */
+export interface KeyringWorkspace {
+  workspace: string;
+  fingerprint: string;
+  pin?: WorkspacePin;
+}
+/**
+ * Records a workspace anchor in the personal keyring (which syncs to all the member's devices).
+ * A stored root is never replaced (mismatch fails) and a stored pin never goes back; store only
+ * pins `verifyWorkspace` returned under the stored pin.
+ */
+export function keyringPin(keyring: Keyring, entry: KeyringWorkspace): Keyring {
+  const { workspace, fingerprint: fp } = entry;
+  if (!text(workspace) || !workspace.startsWith('ws_') || !/^[\w-]{22}$/.test(fp))
+    fail('Malformed workspace anchor.');
+  const pin = entry.pin && parseWorkspacePin(entry.pin);
+  if (pin && pin.workspace !== workspace) fail('Workspace pin mismatch.');
+  const list = keyring.workspaces ?? [];
+  const old = list.find((w) => w.workspace === workspace);
+  if (old && old.fingerprint !== fp) fail('Workspace fingerprint mismatch.');
+  if (old?.pin && pin) checkNewerPin(old.pin, pin);
+  const next = { workspace, fingerprint: fp, ...((pin ?? old?.pin) && { pin: pin ?? old!.pin }) };
+  return { ...keyring, workspaces: [...list.filter((w) => w !== old), next] };
 }
 
 /** Verifies the chain from the pinned root fingerprint to its head, against a pinned head. */
@@ -285,6 +349,8 @@ export async function verifyRoster(
     const ok =
       text(m?.user) &&
       !members.has(m.user) &&
+      text(m.name, 400) &&
+      [...m.name].length <= 100 &&
       Array.isArray(caps) &&
       caps.every((c) => CAPS.includes(c)) &&
       new Set(caps).size === caps.length &&
@@ -392,12 +458,39 @@ export async function verifyWorkspaceCertificate(
   };
 }
 
+/**
+ * Re-certifies under the current head a certificate verified under the previous roster (an
+ * explicit, confirmed action, never automatic). Its teams are its effective teams there, so already
+ * intersected with its certifier's teams, that still exist; none left fails.
+ */
+export async function recertifyWorkspace(
+  cert: Certificate,
+  input: { previous: VerifiedWorkspace; current: VerifiedWorkspace; identity: WorkspaceIdentity },
+): Promise<Certificate> {
+  const { previous, current, identity } = input;
+  if (previous.workspace !== current.workspace || previous.epoch >= current.epoch)
+    fail('Not the previous roster.');
+  if (identity.signPub !== current.head.identity) fail('Certificates are re-signed by the head.');
+  const checked = await verifyWorkspaceCertificate(cert, previous);
+  const teams = checked.teams.filter((team) => current.teams.has(team));
+  if (!teams.length) fail('The certificate covers no team.');
+  const keys = { sign: checked.sign, box: checked.box };
+  return certifyWorkspace(
+    { workspace: current.workspace, keys, teams, epoch: current.epoch },
+    identity,
+  );
+}
+
 /** A member of `team` by user id, or a failure naming why not. */
 export function teamMember(ws: VerifiedWorkspace, user: unknown, team: unknown): VerifiedMember {
   const member = (typeof user === 'string' && ws.members.get(user)) || fail('Not a member.');
   if (typeof team !== 'string' || !member.teams.includes(team)) fail('Not a member of the team.');
   return member;
 }
+
+/** Key wraps are signed by the current head only; a rotation re-wraps under the new head. */
+const headSigner = (ws: VerifiedWorkspace, from: string) =>
+  from === ws.head.signerKid ? ws.head.identity : undefined;
 
 const keyRecipients = (ws: VerifiedWorkspace, member: VerifiedMember): RecipientKey[] => [
   { kid: member.inboxKid, box: member.inbox },
@@ -440,7 +533,7 @@ export async function openTeamKey(
   const { ws, team, kv, member } = options;
   const { seed } = await open<{ seed: string }>(env, {
     recipients: options.recipients,
-    signers: (from) => ws.identities.get(from),
+    signers: (from) => headSigner(ws, from),
     expect: { t: 'teamkey', account: ws.workspace, team, kv, member },
   });
   const set = await teamKeySet(seed, ws.root);
@@ -475,7 +568,7 @@ export async function openWorkspaceKey(
   const { ws, n, member } = options;
   const { seed } = await open<{ seed: string }>(env, {
     recipients: options.recipients,
-    signers: (from) => ws.identities.get(from),
+    signers: (from) => headSigner(ws, from),
     expect: { t: 'wskey', account: ws.workspace, n, member },
   });
   const identity = await workspaceIdentity(seed);
@@ -491,6 +584,8 @@ export async function inviteSecret(identitySeed: string, invite: string): Promis
 }
 export interface JoinClaim {
   workspace: string;
+  /** `fingerprint(root)` the joiner pinned from the invite fragment. */
+  fingerprint: string;
   invite: string;
   user: string;
   identity: string;
@@ -498,8 +593,8 @@ export interface JoinClaim {
 }
 /** The joiner's proof that it holds the invite link's secret for exactly these keys. */
 export async function joinProof(secret: Uint8Array, claim: JoinClaim): Promise<string> {
-  const { workspace, invite, user, identity, inbox } = claim;
-  const input = await H('join', canon({ workspace, invite, user, identity, inbox }));
+  const { workspace, fingerprint, invite, user, identity, inbox } = claim;
+  const input = await H('join', canon({ workspace, fingerprint, invite, user, identity, inbox }));
   return b64u.encode(await hmac(bytesOf(secret, 32), input));
 }
 export async function verifyJoinProof(secret: Uint8Array, claim: JoinClaim, proof: string) {
@@ -510,11 +605,23 @@ export async function verifyJoinProof(secret: Uint8Array, claim: JoinClaim, proo
   if (diff) fail('Bad join proof.');
 }
 
+/** The invite link fragment `<b64u secret>.<fingerprint(root)>`, without `#`. */
+export function inviteFragment(secret: Uint8Array, fingerprint: string): string {
+  if (!/^[\w-]{22}$/.test(fingerprint)) fail('Malformed fingerprint.');
+  return `${b64u.encode(bytesOf(secret, 32))}.${fingerprint}`;
+}
+/** Reads an invite link fragment (with or without `#`): the secret and the root to pin. */
+export function parseInviteFragment(fragment: string): { secret: Bytes; fingerprint: string } {
+  const match = /^#?([\w-]{43})\.([\w-]{22})$/.exec(typeof fragment === 'string' ? fragment : '');
+  if (!match) return fail('Malformed invite link.');
+  return { secret: bytesOf(match[1], 32), fingerprint: match[2] };
+}
+
 const MEMBER_SIGNED = ['response', 'task', 'secret'];
 /**
  * The signing key a workspace context allows for kid `from`: a member of `ctx.team` for answers,
  * tasks and secrets; an integration certified for `ctx.team` (from `certificates`, by kid) for
- * messages, logs and results; a chain identity for key wraps.
+ * messages, logs and results; only the current head for key wraps.
  */
 export function workspaceSigner(
   ws: VerifiedWorkspace,
@@ -523,7 +630,7 @@ export function workspaceSigner(
   from: string,
 ): string | undefined {
   if (ctx?.account !== ws.workspace) return undefined;
-  if (ctx.t === 'teamkey' || ctx.t === 'wskey') return ws.identities.get(from);
+  if (ctx.t === 'teamkey' || ctx.t === 'wskey') return headSigner(ws, from);
   if (MEMBER_SIGNED.includes(ctx.t)) {
     const member = teamMember(ws, ctx.member, ctx.team);
     return from === member.kid ? member.identity : undefined;

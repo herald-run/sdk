@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { readFile, stat, unlink } from 'node:fs/promises';
+import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { parseArgs } from 'node:util';
@@ -65,6 +65,7 @@ const options = {
   json: { type: 'boolean' },
   profile: { type: 'string' },
   url: { type: 'string' },
+  'pin-file': { type: 'string' },
   input: { type: 'string', short: 'i' },
   out: { type: 'string', short: 'o', multiple: true },
   file: { type: 'string', multiple: true },
@@ -102,7 +103,15 @@ const options = {
   workspace: { type: 'string' },
   team: { type: 'string' },
 } as const;
-const globalOptions = ['help', 'version', 'json', 'profile', 'url'];
+const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
+/** A team workspace pin file: absent means no pin yet; anything else must be a valid pin. */
+async function readPin(path: string) {
+  const text = await readFile(path, 'utf8').catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined;
+    throw error;
+  });
+  return text === undefined ? undefined : e2ee.parseWorkspacePin(text);
+}
 const integer = (value: string | undefined, name: string) => {
   if (value === undefined) return undefined;
   if (!/^\d{1,15}$/.test(value)) throw new UsageError(`${name} must be a nonnegative integer.`);
@@ -192,6 +201,9 @@ export async function main(argv: string[], io: Io): Promise<number> {
     const token = (keyless ? '' : env || savedToken(saved)) || '';
     // A saved team workspace login keeps its pin current, so a server cannot roll it back.
     const pinned = !keyless && !env && saved.workspace;
+    // Env tokens: `--pin-file` is read and kept current; `HERALD_PIN` is read only.
+    const pinFile = keyless ? undefined : values['pin-file'];
+    const envPin = !keyless && !pinned && io.env.HERALD_PIN;
     const client = new Herald({
       url: base,
       apiKey: token,
@@ -201,6 +213,13 @@ export async function main(argv: string[], io: Io): Promise<number> {
         pin: saved.pin,
         onPin: (pin: e2ee.WorkspacePin) => {
           saving = saveLogin(directory, profile, host, base, { ...saved, pin }).catch(() => {});
+        },
+      }),
+      ...(envPin && { pin: e2ee.parseWorkspacePin(envPin) }),
+      ...(pinFile && {
+        pin: await readPin(pinFile),
+        onPin: (pin: e2ee.WorkspacePin) => {
+          saving = writeFile(pinFile, JSON.stringify(pin) + '\n').catch(() => {});
         },
       }),
     });

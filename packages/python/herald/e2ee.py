@@ -521,6 +521,7 @@ def _check_keyring(keyring):
         and isinstance(keyring.get("inbox"), list)
         and len(keyring["inbox"]) > 0
         and all(isinstance(entry, dict) and isinstance(entry.get("created"), str) for entry in keyring["inbox"])
+        and isinstance(keyring.get("workspaces", []), list)
     )
     if not ok:
         _fail("Malformed keyring.")
@@ -835,9 +836,57 @@ class VerifiedWorkspace:
 
 
 def _check_pin(pin, workspace):
-    if pin is not None and pin.get("workspace") != workspace:
+    if pin is not None and parse_workspace_pin(pin)["workspace"] != workspace:
         _fail("Workspace pin mismatch.")
     return pin
+
+
+def _digest_text(value):
+    return isinstance(value, str) and re.fullmatch(r"[\w-]{43}", value, re.ASCII) is not None
+
+
+def parse_workspace_pin(value) -> dict:
+    """A pin from its JSON text (`HERALD_PIN`, a pin file) or dict; malformed pins fail."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            value = None
+    p = value if isinstance(value, dict) else {}
+    ok = _text(p.get("workspace")) and p["workspace"].startswith("ws_") and _int(p.get("n")) and _int(p.get("epoch")) and p["epoch"] >= 1 and _digest_text(p.get("link")) and _digest_text(p.get("roster"))
+    if not ok:
+        _fail("Malformed workspace pin.")
+    return {k: p[k] for k in ("workspace", "n", "link", "epoch", "roster")}
+
+
+def check_newer_pin(pin: dict, new: dict) -> None:
+    """Fails unless `new` is the same as or newer than `pin` (no rollback, fork or stale roster)."""
+    if pin["workspace"] != new["workspace"]:
+        _fail("Workspace pin mismatch.")
+    if new["n"] < pin["n"]:
+        _fail("Workspace chain rollback.")
+    if new["n"] == pin["n"] and new["link"] != pin["link"]:
+        _fail("Workspace chain fork.")
+    if new["epoch"] < pin["epoch"] or (new["epoch"] == pin["epoch"] and new["roster"] != pin["roster"]):
+        _fail("Stale roster epoch.")
+
+
+def keyring_pin(keyring: dict, *, workspace: str, fingerprint: str, pin: Optional[dict] = None) -> dict:
+    """Records a workspace anchor (root fingerprint, newest pin) in the personal keyring; a stored root is never replaced and a stored pin never goes back."""
+    if not _text(workspace) or not workspace.startswith("ws_") or not isinstance(fingerprint, str) or not re.fullmatch(r"[\w-]{22}", fingerprint, re.ASCII):
+        _fail("Malformed workspace anchor.")
+    pin = parse_workspace_pin(pin) if pin is not None else None
+    if pin is not None and pin["workspace"] != workspace:
+        _fail("Workspace pin mismatch.")
+    entries = keyring.get("workspaces") or []
+    old = next((w for w in entries if w.get("workspace") == workspace), None)
+    if old is not None and old.get("fingerprint") != fingerprint:
+        _fail("Workspace fingerprint mismatch.")
+    if old is not None and old.get("pin") and pin is not None:
+        check_newer_pin(old["pin"], pin)
+    keep = pin or (old or {}).get("pin")
+    entry = {"workspace": workspace, "fingerprint": fingerprint, **({"pin": keep} if keep else {})}
+    return {**keyring, "workspaces": [w for w in entries if w is not old] + [entry]}
 
 
 def verify_chain(chain: list, pinned_fp: str, *, workspace: Optional[str] = None, pin: Optional[dict] = None) -> VerifiedWorkspace:
@@ -920,7 +969,7 @@ def verify_roster(signed: dict, chain: VerifiedWorkspace, *, pin: Optional[dict]
     for m in r["members"]:
         caps = m.get("caps") if isinstance(m, dict) else None
         ok = (
-            isinstance(m, dict) and _text(m.get("user")) and m["user"] not in members
+            isinstance(m, dict) and _text(m.get("user")) and m["user"] not in members and _text(m.get("name"), 100)
             and isinstance(caps, list) and all(c in _CAPS for c in caps) and len(set(caps)) == len(caps)
             and isinstance(m.get("teams"), list) and all(isinstance(x, str) and x in teams for x in m["teams"]) and len(set(m["teams"])) == len(m["teams"])
         )
@@ -977,6 +1026,19 @@ def verify_workspace_certificate(cert: dict, ws: VerifiedWorkspace) -> dict:
     return {"kid": body["kid"], "sign": body["sign"], "box": body["box"], "teams": teams, **({"by": body["by"]} if "by" in body else {})}
 
 
+def recertify_workspace(cert: dict, *, previous: VerifiedWorkspace, current: VerifiedWorkspace, identity: WorkspaceIdentity) -> dict:
+    """Re-certifies under the current head a certificate verified under the previous roster (an explicit, confirmed action, never automatic); teams are its effective teams there that still exist."""
+    if previous.workspace != current.workspace or previous.epoch >= current.epoch:
+        _fail("Not the previous roster.")
+    if identity.sign_pub != current.head["identity"]:
+        _fail("Certificates are re-signed by the head.")
+    checked = verify_workspace_certificate(cert, previous)
+    teams = [t for t in checked["teams"] if t in current.teams]
+    if not teams:
+        _fail("The certificate covers no team.")
+    return certify_workspace(workspace=current.workspace, sign=checked["sign"], box=checked["box"], teams=teams, epoch=current.epoch, signer=identity)
+
+
 def team_member(ws: VerifiedWorkspace, user, team) -> dict:
     """A member of `team` by user id."""
     member = ws.members.get(user) if isinstance(user, str) else None
@@ -988,16 +1050,21 @@ def team_member(ws: VerifiedWorkspace, user, team) -> dict:
 
 
 def workspace_signer(ws: VerifiedWorkspace, certificates: dict, ctx: dict, sender: str) -> Optional[str]:
-    """The signing key a workspace context allows for kid `sender`: a member of `ctx.team` for answers, tasks and secrets; an integration certified for `ctx.team` (`certificates` by kid) otherwise; a chain identity for key wraps."""
+    """The signing key a workspace context allows for kid `sender`: a member of `ctx.team` for answers, tasks and secrets; an integration certified for `ctx.team` (`certificates` by kid) otherwise; only the current head for key wraps."""
     if not isinstance(ctx, dict) or ctx.get("account") != ws.workspace:
         return None
     if ctx.get("t") in ("teamkey", "wskey"):
-        return ws.identities.get(sender)
+        return _head_signer(ws, sender)
     if ctx.get("t") in _MEMBER_SIGNED:
         member = team_member(ws, ctx.get("member"), ctx.get("team"))
         return member["identity"] if sender == member["kid"] else None
     cert = certificates.get(sender)
     return cert["sign"] if cert and ctx.get("team") in cert["teams"] else None
+
+
+def _head_signer(ws, sender):
+    # Key wraps are signed by the current head only; a rotation re-wraps under the new head.
+    return ws.head["identity"] if sender == ws.head["signerKid"] else None
 
 
 def _key_recipients(ws, member):
@@ -1014,7 +1081,7 @@ def wrap_team_key(*, ws: VerifiedWorkspace, team: str, kv: int, member: str, see
 
 def open_team_key(env: dict, *, ws: VerifiedWorkspace, recipients: list, team: str, kv: int, member: str) -> KeySet:
     """Opens a team key wrap; the seed must derive the roster's published key for that version."""
-    payload = open(env, recipients=recipients, signers=ws.identities.get, expect={"t": "teamkey", "account": ws.workspace, "team": team, "kv": kv, "member": member})
+    payload = open(env, recipients=recipients, signers=lambda k: _head_signer(ws, k), expect={"t": "teamkey", "account": ws.workspace, "team": team, "kv": kv, "member": member})
     s = team_key_set(payload.get("seed"), ws.root)
     if kv < 1 or (ws.teams.get(team) or {"keys": []})["keys"][kv - 1 : kv] != [s.box_pub]:
         _fail("Team key does not match the roster.")
@@ -1032,7 +1099,7 @@ def wrap_workspace_key(*, ws: VerifiedWorkspace, n: int, member: str, seed: str,
 
 def open_workspace_key(env: dict, *, ws: VerifiedWorkspace, recipients: list, n: int, member: str) -> WorkspaceIdentity:
     """Opens an identity wrap; the seed must derive the head's identity at link `n`."""
-    payload = open(env, recipients=recipients, signers=ws.identities.get, expect={"t": "wskey", "account": ws.workspace, "n": n, "member": member})
+    payload = open(env, recipients=recipients, signers=lambda k: _head_signer(ws, k), expect={"t": "wskey", "account": ws.workspace, "n": n, "member": member})
     identity = workspace_identity(payload.get("seed"))
     if n != ws.head["n"] or identity.sign_pub != ws.head["identity"]:
         _fail("Workspace key does not match the chain.")
@@ -1044,9 +1111,24 @@ def invite_secret(identity_seed: str, invite: str) -> bytes:
     return _hmac(_hkdf(_bytes(identity_seed, 32), "herald/e2ee/v1 invite"), invite.encode())
 
 
-def join_proof(secret: BytesLike, *, workspace: str, invite: str, user: str, identity: str, inbox: str) -> str:
-    """The joiner's proof that it holds the invite link's secret for exactly these keys."""
-    data = H("join", canon({"workspace": workspace, "invite": invite, "user": user, "identity": identity, "inbox": inbox}))
+def invite_fragment(secret: BytesLike, fingerprint: str) -> str:
+    """The invite link fragment `<b64u secret>.<fingerprint(root)>`, without `#`."""
+    if not isinstance(fingerprint, str) or not re.fullmatch(r"[\w-]{22}", fingerprint, re.ASCII):
+        _fail("Malformed fingerprint.")
+    return b64u_encode(_bytes(secret, 32)) + "." + fingerprint
+
+
+def parse_invite_fragment(fragment: str) -> tuple:
+    """Reads an invite link fragment (with or without `#`): `(secret, fingerprint)`, the root to pin."""
+    match = re.fullmatch(r"#?([\w-]{43})\.([\w-]{22})", fragment, re.ASCII) if isinstance(fragment, str) else None
+    if not match:
+        _fail("Malformed invite link.")
+    return _bytes(match[1], 32), match[2]
+
+
+def join_proof(secret: BytesLike, *, workspace: str, fingerprint: str, invite: str, user: str, identity: str, inbox: str) -> str:
+    """The joiner's proof that it holds the invite link's secret for exactly these keys and pinned root."""
+    data = H("join", canon({"workspace": workspace, "fingerprint": fingerprint, "invite": invite, "user": user, "identity": identity, "inbox": inbox}))
     return b64u_encode(_hmac(_bytes(secret, 32), data))
 
 
