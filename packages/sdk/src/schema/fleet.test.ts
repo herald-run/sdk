@@ -10,22 +10,22 @@ import {
 
 const world = worldFileSchema.parse({
   areas: [
-    { id: 'server', label: 'Server', kind: 'service', paths: ['apps/server/**'] },
+    { id: 'server', label: 'Server', kind: 'service', paths: ['src/server/**'] },
     { id: 'docs', label: 'Docs', paths: ['docs/', '**/*.md'] },
-    { id: 'web', label: 'Web', kind: 'ui', paths: ['apps/web/src/*.ts', 'packages/ui/?/x'] },
+    { id: 'web', label: 'Web', kind: 'ui', paths: ['src/web/*.ts', 'lib/ui/?/x'] },
   ],
 });
 
 describe('fleet world files', () => {
   it('matches globs in file order', () => {
-    expect(areaOf(world, 'apps/server/src/index.ts')).toBe('server');
-    expect(areaOf(world, 'apps/server/README.md')).toBe('server');
+    expect(areaOf(world, 'src/server/index.ts')).toBe('server');
+    expect(areaOf(world, 'src/server/README.md')).toBe('server');
     expect(areaOf(world, 'README.md')).toBe('docs');
     expect(areaOf(world, './docs/a/b.txt')).toBe('docs');
-    expect(areaOf(world, 'apps/web/src/app.ts')).toBe('web');
-    expect(areaOf(world, 'apps/web/src/lib/app.ts')).toBe('outskirts');
-    expect(areaOf(world, 'packages/ui/a/x')).toBe('web');
-    expect(areaOf(world, 'packages/ui/ab/x')).toBe('outskirts');
+    expect(areaOf(world, 'src/web/app.ts')).toBe('web');
+    expect(areaOf(world, 'src/web/lib/app.ts')).toBe('outskirts');
+    expect(areaOf(world, 'lib/ui/a/x')).toBe('web');
+    expect(areaOf(world, 'lib/ui/ab/x')).toBe('outskirts');
   });
   it('escapes regex characters', () => {
     expect(globToRegExp('a+b/(c).ts').test('a+b/(c).ts')).toBe(true);
