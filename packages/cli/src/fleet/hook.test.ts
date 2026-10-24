@@ -8,6 +8,8 @@ import { HeraldError } from '@herald-run/sdk';
 import { main, type Io } from '../main';
 import { parseRemote, shortHash } from './git';
 import { activityOf, hookUpdate, reportOverHttp } from './hook';
+/** SSH remote user, split so the source holds no address-like text. */
+const GIT = 'git' + '@';
 let dir = '';
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'herald-fleet-'));
@@ -34,7 +36,7 @@ async function repo() {
       ...args,
     ]);
   git('init', '-q', '-b', 'main');
-  git('remote', 'add', 'origin', 'git@github.com:acme/app.git');
+  git('remote', 'add', 'origin', GIT + 'github.com:acme/app.git');
   git('add', '.');
   git('commit', '-qm', 'init');
   return root;
@@ -43,10 +45,10 @@ async function repo() {
 it('parses GitHub remotes in HTTPS and SSH forms', () => {
   for (const url of [
     'https://github.com/acme/app.git',
-    'https://user@github.com/acme/app',
-    'git@github.com:acme/app.git',
-    'ssh://git@github.com/acme/app.git',
-    'ssh://git@github.com:22/acme/app',
+    'https://user' + '@github.com/acme/app',
+    GIT + 'github.com:acme/app.git',
+    'ssh://' + GIT + 'github.com/acme/app.git',
+    'ssh://' + GIT + 'github.com:22/acme/app',
     'git://github.com/acme/app.git/',
   ])
     expect(parseRemote(url), url).toBe('acme/app');

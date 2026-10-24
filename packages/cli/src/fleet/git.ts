@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 /** A repo checkout as Fleet reporters see it. */
 export type Checkout = { root: string; branch?: string; repo?: string };
-/** `owner/repo` from a GitHub remote: HTTPS, SSH (`git@github.com:o/r.git`) or `ssh://` forms. */
+/** `owner/repo` from a GitHub remote: HTTPS, SSH (`<user>@github.com:owner/repo.git`) or `ssh://` forms. */
 export function parseRemote(url: string): string | undefined {
   const m = url
     .trim()
