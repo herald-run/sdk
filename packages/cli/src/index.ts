@@ -30,9 +30,12 @@ function open(url: string) {
     return false;
   }
 }
+const argv = process.argv.slice(2);
+// Hooks must never hold up the agent, whatever happens below.
+if (argv[0] === 'fleet' && argv[1] === 'hook') setTimeout(() => process.exit(0), 2000).unref();
 // A reader that closes early (`| head`) ends the command quietly.
 process.stdout.on('error', () => process.exit());
-process.exitCode = await main(process.argv.slice(2), {
+process.exitCode = await main(argv, {
   out: (line) => console.log(line),
   err: (line) => console.error(line),
   write: (chunk) => process.stdout.write(chunk),
