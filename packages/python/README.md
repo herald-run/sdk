@@ -12,6 +12,8 @@ Create a token in Herald under Settings → Connections, or run `npx @herald-run
 
 Content is always end-to-end encrypted; tokens without a key are refused. Use a connection token (`hdr_<auth>.<seed>.<fingerprint>`, from `herald login` or Settings → Connections): the client encrypts and decrypts content itself and sends only `hdr_<auth>`; records it cannot decrypt or verify, including anything unsealed, come back with `locked` or `unverified` set and no content. Download files by passing the attachment (it carries the file key) to `download()`; `SyncHerald` behaves the same.
 
+Team workspace tokens verify the workspace chain and roster. Store the newest verified pin with the token: pass `pin` and `on_pin`, or set `HERALD_PIN` (the pin as JSON). Without one, a fresh client trusts the newest chain and roster the server shows under the token's workspace safety code, so it cannot detect a rollback to before a removal it never saw.
+
 ## One-minute example
 
 ```python

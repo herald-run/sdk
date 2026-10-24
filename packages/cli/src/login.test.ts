@@ -272,3 +272,54 @@ it('stores a key only after the person confirms the safety code', async () => {
   );
   expect(created).toEqual([]);
 });
+it('logs in to a team workspace pinned to its verified chain and roster', async () => {
+  const { readFileSync } = await import('node:fs');
+  const V = JSON.parse(
+    readFileSync(new URL('../../sdk/fixtures/e2ee-vectors.json', import.meta.url), 'utf8'),
+  );
+  const W = V.workspace;
+  const head = await e2ee.workspaceIdentity(W.identities[1].seed);
+  const workspaceFp = await e2ee.fingerprint(W.chain[0].statement.identity);
+  const headers: Array<string | null> = [];
+  const { created } = server({
+    integrations: [],
+    keys: { account: null, certificates: [], workspace: { chain: W.chain, roster: W.roster } },
+    certificate: () =>
+      e2ee.certifyWorkspace(
+        {
+          workspace: W.workspace,
+          keys: { sign: key()[0], box: key()[1] },
+          teams: ['team-ops'],
+          epoch: 2,
+        },
+        head,
+      ),
+  });
+  const fetch = vi.mocked(globalThis.fetch);
+  const real = fetch.getMockImplementation()!;
+  fetch.mockImplementation(async (url, init) => {
+    headers.push(new Headers(init?.headers).get('Herald-Workspace'));
+    return real(url, init);
+  });
+  const log = io();
+  const { saved } = await login(
+    'https://herald.test',
+    { workspace: 'ops-crew', safetyCode: e2ee.safetyCode(workspaceFp) },
+    {},
+    log,
+  );
+  expect(log.log.mock.calls[0][0]).toContain('&w=ops-crew');
+  expect(headers).toContain('ops-crew');
+  expect(saved).toMatchObject({ fingerprint: workspaceFp, workspace: W.workspace, pin: W.pin });
+  expect(created).toHaveLength(1);
+  // A stored newer pin refuses the older roster.
+  server({ integrations: [], keys: { account: null, certificates: [], workspace: W } });
+  await expect(
+    login(
+      'https://herald.test',
+      { workspace: 'ops-crew', safetyCode: e2ee.safetyCode(workspaceFp) },
+      { pin: { ...W.pin, epoch: 3 } },
+      io(),
+    ),
+  ).rejects.toThrow(e2ee.E2eeError);
+});

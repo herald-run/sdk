@@ -38,6 +38,8 @@ class Response(Model):
     action_id: str | None = None
     secret_fields: list[str] = []
     created_at: str | None = None
+    # Team workspaces: the member who answered, as the server recorded it.
+    by: str | None = None
 
 
 class TaskLog(Model):
@@ -73,6 +75,12 @@ class TaskExecution(Model):
     logs: list[TaskLog] | None = None
 
 
+class Routing(Model):
+    """A team request's routing: `state` and when the next step is due."""
+    state: str
+    next_at: str | None = None
+
+
 class Message(Model):
     """A request, message or task; `direction: outbound` marks tasks."""
     id: str
@@ -96,6 +104,13 @@ class Message(Model):
     input: TaskInput | None = None
     result: TaskResult | None = None
     execution: TaskExecution | None = None
+    # Team workspaces: the team inbox and routing state. `answered_by` is set only from a verified answer.
+    team: str | None = None
+    assignee: str | None = None
+    claimed_at: str | None = None
+    level: int | None = None
+    answered_by: str | None = None
+    routing: Routing | None = None
     # End-to-end encryption: `sealed` content was opened (`e2ee`), or could not be decrypted
     # (`locked`) or verified (`unverified`), leaving placeholder content.
     sealed: dict[str, Any] | None = None
@@ -142,6 +157,8 @@ class SecretReceiver(Model):
     public_key: dict[str, Any] | None = None
     received: bool | None = None
     sig: str | None = None
+    # The team member who claimed it, in a team workspace.
+    member: str | None = None
 
 
 class Integration(Model):

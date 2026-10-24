@@ -32,14 +32,33 @@ const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid'>> = {
   result: { task: 'string' },
   secret: { message: 'string', field: 'string' },
   keyring: { device: 'string' },
+  teamkey: {},
+  wskey: {},
 };
+/** Fields a `ws_` (team workspace) account's contexts add; forbidden elsewhere. */
+const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
+  message: { team: 'string' },
+  log: { team: 'string' },
+  result: { team: 'string' },
+  response: { team: 'string', member: 'string' },
+  task: { team: 'string', member: 'string' },
+  secret: { team: 'string', member: 'string' },
+  teamkey: { team: 'string', kv: 'number', member: 'string' },
+  wskey: { n: 'number', member: 'string' },
+};
+/** Team workspace ids start with `ws_`; personal account ids never do. */
+export const isWorkspace = (account: unknown) =>
+  typeof account === 'string' && account.startsWith('ws_');
 const KEY_INFO = utf8('herald/e2ee/v1 key');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Largest payload JSON, in UTF-8 bytes, whose ciphertext fits the envelope schema. */
 export const MAX_PAYLOAD_BYTES = 134_984;
 export function checkCtx(ctx: Ctx, expect?: Expect) {
   if (!ctx || typeof ctx !== 'object' || !Object.hasOwn(CTX, ctx.t)) fail('Unknown context type.');
-  const want: Record<string, string> = { t: 'string', account: 'string', ...CTX[ctx.t] };
+  const ws = isWorkspace(ctx.account);
+  if (!ws && !Object.keys(CTX[ctx.t]).length) fail('Unknown context type.');
+  const extra = ws ? (WORKSPACE[ctx.t] ?? {}) : {};
+  const want: Record<string, string> = { t: 'string', account: 'string', ...CTX[ctx.t], ...extra };
   // `id` is the record's UUID, chosen by the sender, so the server cannot replay content elsewhere.
   for (const key of Object.keys(ctx)) if (!Object.hasOwn(want, key)) fail(`Unexpected ctx.${key}.`);
   for (const [key, type] of Object.entries(want)) {

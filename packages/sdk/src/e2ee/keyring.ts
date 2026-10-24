@@ -4,12 +4,15 @@ import { canon } from './canon';
 import { H } from './hash';
 import { fingerprint, keySet, kid, sign, verify, type KeySet } from './keys';
 import { now, randomBytes } from './random';
+import type { KeyringWorkspace } from './workspace';
 /** The account's secret keys: one identity seed and inbox seeds, newest last. */
 export interface Keyring {
   v: 1;
   account: string;
   identity: string;
   inbox: { seed: string; created: string }[];
+  /** Team workspace anchors (root fingerprint and pin), shared by all the member's devices. */
+  workspaces?: KeyringWorkspace[];
 }
 /** Key sets carry their account kids: the identity's signer kid and each inbox's recipient kid. */
 export interface KeyringKeys {
@@ -31,7 +34,8 @@ export function checkKeyring(keyring: Keyring): Keyring {
     keyring.account !== '' &&
     Array.isArray(keyring.inbox) &&
     keyring.inbox.length > 0 &&
-    keyring.inbox.every((entry) => typeof entry?.created === 'string');
+    keyring.inbox.every((entry) => typeof entry?.created === 'string') &&
+    (keyring.workspaces === undefined || Array.isArray(keyring.workspaces));
   if (!ok) fail('Malformed keyring.');
   bytesOf(keyring.identity, 32);
   for (const entry of keyring.inbox) bytesOf(entry.seed, 32);
@@ -124,21 +128,20 @@ export interface ReceiverClaim {
   message: string;
   claimId: string;
   publicKey: unknown;
+  /** Team workspaces: the claiming member, whose personal identity signs. */
+  member?: string;
 }
+const receiverInput = ({ message, claimId, publicKey, member }: ReceiverClaim) =>
+  H(
+    'receiver',
+    canon({ message, claimId, publicKey, ...(member === undefined ? {} : { member }) }),
+  );
 /** Signs a secret receiver's one-time public key with the account identity. */
 export async function signReceiver(keyring: Keyring, claim: ReceiverClaim): Promise<string> {
   const { identity } = await keyringKeys(keyring);
-  const { message, claimId, publicKey } = claim;
-  return sign(identity.signPriv, await H('receiver', canon({ message, claimId, publicKey })));
+  return sign(identity.signPriv, await receiverInput(claim));
 }
 export async function verifyReceiver(sig: string, identitySignPub: string, claim: ReceiverClaim) {
-  const { message, claimId, publicKey } = claim;
-  if (
-    !(await verify(
-      identitySignPub,
-      sig,
-      await H('receiver', canon({ message, claimId, publicKey })),
-    ))
-  )
+  if (!(await verify(identitySignPub, sig, await receiverInput(claim))))
     fail('Bad receiver signature.');
 }

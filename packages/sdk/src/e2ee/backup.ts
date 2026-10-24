@@ -20,6 +20,8 @@ function base32(bytes: Uint8Array) {
   if (bits) out += CROCKFORD[(value << (5 - bits)) & 31];
   return out.match(/.{1,4}/g)!.join('-');
 }
+/** The text form of recovery key bytes. */
+export const recoveryKeyText = (bytes: Uint8Array) => base32(bytesOf(bytes, 32));
 export function recoveryKey(): { bytes: Bytes; text: string } {
   const bytes = randomBytes(32);
   return { bytes, text: base32(bytes) };

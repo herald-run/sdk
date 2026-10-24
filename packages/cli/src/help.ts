@@ -8,6 +8,7 @@ const message = ['input', 'title', 'body', 'body-file', 'kind', 'field', 'action
   'reply-to',
   'deadline',
   'key',
+  'team',
 ]);
 const compose = `Fields: ID[?]:TYPE[:LABEL[:CHOICES]], required unless ID ends with ?. TYPE: text, textarea,
 number, boolean, select, multiselect, date, secret, file or secret-file (one file for this
@@ -23,12 +24,12 @@ answered as q1, q2… (each also accepts Other text).`;
 export const commands: Record<string, Spec> = {
   login: {
     summary: 'Connect this device in the browser and store a token',
-    options: ['name', 'scopes', 'no-browser', 'safety-code'],
+    options: ['name', 'scopes', 'no-browser', 'safety-code', 'workspace'],
     detail:
       'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.\nThe approval also certifies an end-to-end key stored with the token. Confirm that the safety code matches the approval page, or pass it with --safety-code when not in a terminal.',
   },
   logout: { summary: 'Revoke the stored token and delete it locally' },
-  whoami: { summary: 'Show the token, its scopes, the account and its safety code' },
+  whoami: { summary: 'Show the token, its scopes, the account or workspace and its safety code' },
   status: { summary: 'Check the server and the stored token' },
   send: {
     summary: 'Send a message; --wait waits for an answer',
@@ -112,6 +113,8 @@ const describe: Record<string, string> = {
   scopes: '--scopes LIST      all, or comma-separated scopes',
   'no-browser': '--no-browser       Print the approval link only',
   'safety-code': '--safety-code CODE Expected 30-digit account safety code (end-to-end encryption)',
+  workspace: '--workspace SLUG   Connect to a team workspace instead of your personal account',
+  team: "--team SLUG        Team to send to (team workspaces; default: the connection's first team)",
   search: '--search TEXT',
   status: '--status STATUS    pending, answered, expired, cancelled, ...',
   direction: '--direction DIR    inbound or outbound',
@@ -131,6 +134,7 @@ const globals = `Global options:
   --json             Machine-readable JSON output
   --profile NAME     Use a named profile (or HERALD_PROFILE)
   --url ORIGIN       Server (or HERALD_URL; default https://app.herald.run)
+  --pin-file FILE    Team workspace pin for env tokens, kept current (or HERALD_PIN, read only)
   -h, --help         Show help
   --version          Print the version`;
 export function usage(name?: string) {
@@ -161,7 +165,7 @@ export function completion(shell: string) {
     return `_herald() {
   local cur=\${COMP_WORDS[COMP_CWORD]}
   if [ "$COMP_CWORD" -eq 1 ]; then COMPREPLY=($(compgen -W "${names}" -- "$cur"));
-  else COMPREPLY=($(compgen -f -W "--help --json --profile --url" -- "$cur")); fi
+  else COMPREPLY=($(compgen -f -W "--help --json --profile --url --pin-file" -- "$cur")); fi
 }
 complete -o default -F _herald herald`;
   if (shell === 'zsh')

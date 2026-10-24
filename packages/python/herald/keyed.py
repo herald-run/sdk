@@ -316,24 +316,83 @@ def strip(m, flag):
 
 
 class KeyedSession:
-    def __init__(self, seed, fingerprint, directory):
+    def __init__(self, seed, fingerprint, directory, pin=None, on_pin=None):
         self.seed, self.fingerprint, self._directory = seed, fingerprint, directory
+        # Team workspaces: the newest verified chain head and roster; `on_pin` stores newer ones.
+        self.pin, self._on_pin = pin, on_pin
         # File keys learned from uploads and opened records, by file ID.
         self.files = {}
         # Task IDs -> the integration that runs them, so logs open only under its key.
         self._runners = {}
+        # Record IDs -> their team: set at send time or from a verified envelope's `ctx.team` only.
+        self._teams = {}
         self._state, self._loaded = None, 0.0
 
     async def state(self, refresh=False):
-        """The verified key directory, fetched once; `refresh` refetches at most every 10 s."""
-        if self._state is None or (refresh and time.monotonic() - self._loaded > 10):
+        """The verified key directory, fetched once; `refresh` refetches at most every 10 s, `"force"` at once."""
+        if self._state is None or refresh == "force" or (refresh and time.monotonic() - self._loaded > 10):
             self._loaded = time.monotonic()
             self._state = await self._load()
         return self._state
 
+    async def _load_workspace(self, directory, me):
+        ws = e2ee.verify_workspace(directory["workspace"], self.fingerprint, pin=self.pin)
+        signers, kids, certs = {}, {}, {}
+        for cert in directory.get("certificates") or []:
+            try:
+                checked = e2ee.verify_workspace_certificate(cert, ws)
+            except (E2eeError, KeyError, TypeError):
+                continue
+            signers[checked["kid"]], kids[cert.get("integrationId")], certs[checked["kid"]] = checked["sign"], checked["kid"], checked
+        # A certificate newer than the roster fails above, so a server cannot roll this token back.
+        mine = certs.get(me.kid)
+        if not mine or mine["sign"] != me.sign_pub:
+            e2ee._fail("This token's key is not certified for the workspace.")
+        if not self.pin or (self.pin["epoch"], self.pin["n"]) != (ws.pin["epoch"], ws.pin["n"]):
+            self.pin = ws.pin
+            if self._on_pin:
+                self._on_pin(ws.pin)
+        head = ws.head
+        return {"directory": directory, "account": ws.workspace, "me": me, "identity": head["identity"], "identity_kid": head["signerKid"], "inbox": {"kid": head["boxKid"], "box": head["box"]}, "signers": signers, "kids": kids, "ws": ws, "certs": certs, "mine": mine}
+
+    async def workspace(self):
+        """The team workspace this token belongs to (id, epoch, the teams it may address), or None."""
+        s = await self.state()
+        ws = s.get("ws")
+        if ws is None:
+            return None
+        team = lambda i: {"id": i, "slug": ws.teams[i]["slug"]}  # noqa: E731
+        return {"id": ws.workspace, "fingerprint": self.fingerprint, "epoch": ws.epoch, "teams": [team(i) for i in s["mine"]["teams"]], "allTeams": [team(i) for i in ws.teams]}
+
+    def _team(self, s, wanted=None):
+        ws = s.get("ws")
+        if ws is None:
+            return None if wanted is None else e2ee._fail("Teams need a team workspace token.")
+        if wanted is None:
+            return s["mine"]["teams"][0]
+        team = wanted if wanted in ws.teams else next((t["id"] for t in ws.teams.values() if t["slug"] == wanted), None)
+        if team is None:
+            e2ee._fail(f"Unknown team {wanted}.")
+        if team not in s["mine"]["teams"]:
+            e2ee._fail(f"This connection may not address team {wanted}.")
+        return team
+
+    async def team_of(self, record_id, record=None):
+        """A record's team; `record` loads it when this session has not opened it."""
+        s = await self.state()
+        if s.get("ws") is None:
+            return None
+        if record_id not in self._teams and record is not None:
+            await self.open_record(await record())
+        return self._teams.get(record_id) or e2ee._fail("The record has no team.")
+
     async def _load(self):
         directory = await self._directory()
         me = e2ee.key_set(self.seed)
+        if directory.get("workspace"):
+            return await self._load_workspace(directory, me)
+        if self.pin:
+            e2ee._fail("This token belongs to a team workspace, but the server sent none.")
         if not directory.get("account"):
             e2ee._fail("End-to-end encryption is not set up for this account yet. Open Herald on a signed-in device first.")
         info = e2ee.verify_account(directory["account"], self.fingerprint)
@@ -348,43 +407,69 @@ class KeyedSession:
             kids[cert.get("integrationId")] = checked["kid"]
         if signers.get(me.kid) != me.sign_pub:
             e2ee._fail("This token's key is not certified for the account.")
-        return {"directory": directory, "account": account, "me": me, "identity": info.identity, "identity_kid": info.signer_kid, "inbox": {"kid": info.inbox_kid, "box": info.inbox}, "signers": signers, "kids": kids}
+        return {"directory": directory, "account": account, "me": me, "identity": info.identity, "identity_kid": info.signer_kid, "inbox": {"kid": info.inbox_kid, "box": info.inbox}, "signers": signers, "kids": kids, "certs": {}}
 
-    def _to(self, s):
-        return [s["inbox"], {"kid": s["me"].kid, "box": s["me"].box_pub}]
+    def _to(self, s, team=None):
+        me = {"kid": s["me"].kid, "box": s["me"].box_pub}
+        if s.get("ws") is None:
+            return [s["inbox"], me]
+        t = s["ws"].teams.get(team) if team else None
+        if not t:
+            e2ee._fail("Unknown team.")
+        if team not in s["mine"]["teams"]:
+            e2ee._fail("This connection may not address the team.")
+        return [{"kid": t["kid"], "box": t["box"]}, me]
 
     async def _open(self, env, expect, signer):
-        """Opens `env` if exactly the kid `signer(state)` picks signed it; a new certificate triggers a refetch."""
+        """Opens `env` if exactly the kid `signer(state, env)` picks signed it; a new certificate triggers a refetch."""
         s = await self.state()
-        if signer(s) != env.get("from"):
+        if signer(s, env) != env.get("from"):
             s = await self.state(True)
-        kid = signer(s)
-        key = s["identity"] if kid == s["identity_kid"] else s["signers"].get(kid)
+        kid, ws, expect = signer(s, env), s.get("ws"), dict(expect)
+        if ws is None:
+            expect.pop("team", None)
+            key = s["identity"] if kid == s["identity_kid"] else s["signers"].get(kid)
+        elif not isinstance(expect.get("team"), str):
+            return e2ee._fail("The record has no team.")
+        else:
+            key = e2ee.workspace_signer(ws, s["certs"], env.get("ctx"), kid) if kid and kid == env.get("from") else None
         return e2ee.open(env, recipients=[s["me"]], signers=lambda k: key if k == kid else None, expect={**expect, "account": s["account"]})
 
     @staticmethod
-    def _identity(s):
-        return s["identity_kid"]
+    def _identity(s, env=None):
+        """The account identity, or in a team workspace the member named by `ctx.member`."""
+        if s.get("ws") is None:
+            return s["identity_kid"]
+        member = s["ws"].members.get(((env or {}).get("ctx") or {}).get("member"))
+        return member["kid"] if member else None
 
     @staticmethod
     def _integration(integration_id):
-        return lambda s: s["kids"].get(integration_id) if integration_id else None
+        return lambda s, env=None: s["kids"].get(integration_id) if integration_id else None
 
     def _learn(self, files):
         for f in files:
             self.files[f["id"]] = f
 
-    async def _seal(self, payload, ctx):
+    async def _seal(self, payload, ctx, team=None):
         s = await self.state()
-        return e2ee.seal(payload=payload, ctx={**ctx, "account": s["account"]}, signer=s["me"], to=self._to(s))
+        return e2ee.seal(payload=payload, ctx={**ctx, "account": s["account"], **({"team": team} if team else {})}, signer=s["me"], to=self._to(s, team))
 
     async def seal_message(self, message, idempotency_key):
         """A sealed request body under a new record ID; secret offers seal their title and body."""
+        message = dict(message)
+        team = self._team(await self.state(), message.pop("team", None))
+        body = await self._seal_message(message, idempotency_key, team)
+        return {**body, "team": team} if team else body
+
+    async def _seal_message(self, message, idempotency_key, team):
         record_id = str(uuid.uuid4())
+        if team:
+            self._teams[record_id] = team
         if message.get("kind") == "secret":
             m = check_secret_offer(message)
             payload = {"kind": "secret", "title": m["title"], "body": m["body"]}
-            body = {"id": record_id, "kind": "secret", "sealed": await self._seal(payload, {"t": "message", "id": record_id}), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": False, "attachments": []}
+            body = {"id": record_id, "kind": "secret", "sealed": await self._seal(payload, {"t": "message", "id": record_id}, team), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": False, "attachments": []}
             return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}
         m = check_input(message)
         files = []
@@ -394,7 +479,7 @@ class KeyedSession:
                 e2ee._fail(f"Attachment {file['id']} was not uploaded by this keyed client.")
             files.append({k: known[k] for k in ("id", "name", "type", "size", "key")})
         payload = {"attachments": files, **{k: m[k] for k in CONTENT if k in m}}
-        body = {"id": record_id, "kind": "message", "sealed": await self._seal(payload, {"t": "message", "id": record_id}), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": m["kind"] == "form" or bool(m["fields"]) or bool(m.get("actions")), "attachments": [{"id": f["id"]} for f in files]}
+        body = {"id": record_id, "kind": "message", "sealed": await self._seal(payload, {"t": "message", "id": record_id}, team), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": m["kind"] == "form" or bool(m["fields"]) or bool(m.get("actions")), "attachments": [{"id": f["id"]} for f in files]}
         return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}
 
     async def open_record(self, m, task=False):
@@ -404,8 +489,13 @@ class KeyedSession:
         unsealed answer are `unverified`."""
         if not isinstance(m, dict):
             return m
-        await self.state()
+        s = await self.state()
+        ws = s.get("ws")
         task = task or m.get("direction") == "outbound"
+        # `answeredBy` comes only from a verified answer.
+        m = {k: v for k, v in m.items() if k != "answeredBy"}
+        if m.get("response"):
+            m["response"] = {k: v for k, v in m["response"].items() if k != "by"}
         response = m.get("response") or {}
         try:
             if task:
@@ -415,8 +505,13 @@ class KeyedSession:
                     self._runners[m["id"]] = m["recipientId"]
             elif not m.get("sealed"):
                 e2ee._fail("This message is not end-to-end encrypted.")
+            # The server's `team` counts only once the envelope's signed `ctx.team` matched it.
+            if ws is not None and m.get("team") not in s["mine"]["teams"]:
+                e2ee._fail("The record is outside the teams this connection is certified for.")
             out = {**m, "e2ee": True}
             out = await (self._task(out, m["input"]["sealed"]) if task else self._content(out, m["sealed"]))
+            if ws is not None:
+                self._teams[m["id"]] = m["team"]
             if not task and response.get("sealed"):
                 out = await self._response(out, m["sealed"], response["sealed"])
             elif not task and out.get("kind") != "secret" and (m.get("response") or m.get("status") == "answered"):
@@ -426,7 +521,7 @@ class KeyedSession:
                     continue
                 env, error = m[key].get("sealed"), None
                 if env:
-                    error = (await self._open(env, {"t": "result", "task": m["id"]}, self._integration(m.get("recipientId")))).get("error")
+                    error = (await self._open(env, {"t": "result", "task": m["id"], "team": m.get("team")}, self._integration(m.get("recipientId")))).get("error")
                     if error is not None and not isinstance(error, str):
                         e2ee._fail("Malformed task result.")
                 out[key] = _omit({**_omit(m[key], "error"), "error": error})
@@ -435,7 +530,7 @@ class KeyedSession:
             return strip(m, "locked" if str(error) == NO_ENTRY else "unverified")
 
     async def _content(self, out, env):
-        payload = await self._open(env, {"t": "message", "id": out.get("id")}, self._integration(out.get("senderId")))
+        payload = await self._open(env, {"t": "message", "id": out.get("id"), "team": out.get("team")}, self._integration(out.get("senderId")))
         files = check_files(payload.pop("attachments", None))
         fields = {k: v for k, v in payload.items() if k != "v"}
         try:
@@ -451,7 +546,7 @@ class KeyedSession:
         return {**_omit(out, *CONTENT), **{k: content[k] for k in CONTENT if k in content}, "attachments": files}
 
     async def _task(self, out, env):
-        payload = await self._open(env, {"t": "task", "id": out.get("id"), "destination": out.get("destinationId"), "type": out.get("typeId")}, self._identity)
+        payload = await self._open(env, {"t": "task", "id": out.get("id"), "destination": out.get("destinationId"), "type": out.get("typeId"), "team": out.get("team")}, self._identity)
         values, session = check_answers(payload.get("values", {})), payload.get("session")
         if session is not None and not (isinstance(session, dict) and isinstance(session.get("prompt"), str)):
             e2ee._fail("Malformed task input.")
@@ -466,7 +561,7 @@ class KeyedSession:
         return out
 
     async def _response(self, out, request, env):
-        expect = {"t": "response", "message": out["id"], "request": e2ee.envelope_digest(request)}
+        expect = {"t": "response", "message": out["id"], "request": e2ee.envelope_digest(request), "team": out.get("team")}
         payload = await self._open(env, expect, self._identity)
         values, action, files = check_answers(payload.get("values")), payload.get("actionId"), check_files(payload.get("attachments"))
         actions, fields = out.get("actions") or [], out.get("fields") or []
@@ -479,7 +574,9 @@ class KeyedSession:
             e2ee._fail("The answer does not match the request.")
         self._learn(files)
         known = {f["id"] for f in out.get("attachments") or []}
-        return {**out, "response": _omit({**out["response"], "values": values, "actionId": action}), "attachments": (out.get("attachments") or []) + [f for f in files if f["id"] not in known]}
+        # Verified: the signer is this member of the request's team.
+        by = env["ctx"]["member"] if (await self.state()).get("ws") is not None else None
+        return {**out, **({"answeredBy": by} if by else {}), "response": _omit({**out["response"], "values": values, "actionId": action, "by": by}), "attachments": (out.get("attachments") or []) + [f for f in files if f["id"] not in known]}
 
     async def open_logs(self, task, logs, fetch):
         """A task's log lines opened; only the integration running the task may sign them. `fetch` loads the task record when this session has not opened it."""
@@ -493,18 +590,19 @@ class KeyedSession:
             try:
                 if not log.get("sealed"):
                     e2ee._fail("This log line is not end-to-end encrypted.")
-                text = (await self._open(log["sealed"], {"t": "log", "task": task, "seq": log["sequence"]}, self._integration(runner))).get("text")
+                text = (await self._open(log["sealed"], {"t": "log", "task": task, "seq": log["sequence"], "team": self._teams.get(task)}, self._integration(runner))).get("text")
                 opened.append({**log, "text": text, "e2ee": True} if isinstance(text, str) else e2ee._fail("Malformed log."))
             except E2eeError as error:
                 opened.append({**log, "text": "", "e2ee": True, ("locked" if str(error) == NO_ENTRY else "unverified"): True})
         return opened
 
-    async def seal_update(self, task, update):
+    async def seal_update(self, task, update, record=None):
         """Seals log text (at most 4,096 characters per line) and the error of a task update."""
         out = {k: v for k, v in update.items() if k not in ("logs", "error")}
+        team = await self.team_of(task, record)
 
         async def seal(payload, ctx):
-            env = await self._seal(payload, ctx)
+            env = await self._seal(payload, ctx, team)
             return env if len(json.dumps(env, separators=(",", ":"))) <= ENVELOPE_LIMIT else e2ee._fail("A sealed log line is too large.")
         if update.get("logs") is not None:
             out["logs"] = []
@@ -519,21 +617,25 @@ class KeyedSession:
             out["errorSealed"] = await seal({"error": update["error"]}, {"t": "result", "task": task})
         return out
 
-    async def open_secret(self, message, field, env):
+    async def open_secret(self, message, field, env, record=None):
         """A secret field's text, or a secret file field's attachments (their keys are learned)."""
-        payload = await self._open(env, {"t": "secret", "message": message, "field": field}, self._identity)
+        payload = await self._open(env, {"t": "secret", "message": message, "field": field, "team": await self.team_of(message, record)}, self._identity)
         if isinstance(payload.get("value"), str):
             return payload["value"]
         files = check_files(payload.get("files")) if payload.get("files") else e2ee._fail("Malformed secret.")
         self._learn(files)
         return files
 
-    async def check_receiver(self, message, receiver):
-        """Accepts a claimed receiver's one-time key only when the account identity signed it."""
+    async def check_receiver(self, message, receiver, record=None):
+        """Accepts a claimed receiver's one-time key only when the account identity signed it; in a team workspace, a member of the request's team."""
         if not receiver.get("claimId") or not receiver.get("publicKey"):
             return receiver
         if not receiver.get("sig"):
             e2ee._fail("The secret receiver is not signed by the account.")
         s = await self.state()
-        e2ee.verify_receiver(receiver["sig"], s["identity"], message=message, claim_id=receiver["claimId"], public_key=receiver["publicKey"])
+        if s.get("ws") is None:
+            e2ee.verify_receiver(receiver["sig"], s["identity"], message=message, claim_id=receiver["claimId"], public_key=receiver["publicKey"])
+            return receiver
+        member = e2ee.team_member(s["ws"], receiver.get("member"), await self.team_of(message, record))
+        e2ee.verify_receiver(receiver["sig"], member["identity"], message=message, claim_id=receiver["claimId"], public_key=receiver["publicKey"], member=receiver["member"])
         return receiver

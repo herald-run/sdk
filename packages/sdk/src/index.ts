@@ -17,8 +17,17 @@ import type {
   TaskLog,
   ThreadPage,
 } from './schema/index.js';
-import { E2eeError, fileKey, openFile, parseToken, sealedSize, sealFile } from './e2ee/index.js';
-import { KeyedSession, type FileAttachment, type OpenedLog } from './keyed.js';
+import {
+  E2eeError,
+  fileKey,
+  openFile,
+  parseToken,
+  parseWorkspacePin,
+  sealedSize,
+  sealFile,
+  type WorkspacePin,
+} from './e2ee/index.js';
+import { KeyedSession, type FileAttachment, type OpenedLog, type WorkspaceInfo } from './keyed.js';
 import { HeraldError, parseRetryAfter, readError, readJson, retryDelay, sleep } from './http.js';
 import { version } from './version.js';
 import { LiveSocket, type LiveEvent } from './socket.js';
@@ -49,7 +58,8 @@ export type {
 export { createKeys, seal, unseal } from './schema/crypto.js';
 export { HeraldError, parseRetryAfter } from './http.js';
 export { E2eeError } from './e2ee/index.js';
-export type { FileAttachment, OpenedLog } from './keyed.js';
+export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
+export type { WorkspacePin } from './e2ee/index.js';
 export { backoff, LiveSocket } from './socket.js';
 export type { LiveEvent } from './socket.js';
 export type { UploadData } from './upload.js';
@@ -115,6 +125,32 @@ export type SecretReceiver = {
   received?: boolean;
   /** The account identity's signature over the claim, checked by the client. */
   sig?: string;
+  /** Team workspaces: the claiming member, whose personal identity signed. */
+  member?: string;
+};
+/** An answered request: values, the chosen action, and in a team workspace who answered. */
+export type AskDetails<T extends Answers = Answers> = {
+  values: T;
+  actionId?: string;
+  /** The verified member who answered; team workspaces only. */
+  answeredBy?: string;
+  message: Message;
+};
+export type HeraldOptions = {
+  apiKey?: string;
+  url?: string;
+  maxRetryAfter?: number;
+  userAgent?: string;
+  /** Sent as `Herald-Workspace`; tokens are bound to one workspace, so this is optional. */
+  workspace?: string;
+  /**
+   * The newest workspace chain head and roster this token verified, from earlier runs; defaults to
+   * `HERALD_PIN` (the pin as JSON). Without one, a fresh client trusts the newest chain and roster
+   * the server shows under the token's root (see the e2ee spec's limitations).
+   */
+  pin?: WorkspacePin;
+  /** Called with a newer verified pin, to store it with the token (and in `HERALD_PIN`). */
+  onPin?: (pin: WorkspacePin) => void;
 };
 export function duration(value: number | string): number {
   const match = String(value).match(/^(\d+(?:\.\d+)?)(ms|s|m|h)?$/);
@@ -128,6 +164,8 @@ const RETRIES = 2;
 const UNKEYED =
   'This token has no end-to-end key. Create a new token in Herald (Settings → Connections) or run herald login.';
 const path = (id: string) => encodeURIComponent(id);
+const stale = (error: unknown) =>
+  error instanceof HeraldError && error.status === 409 && error.code === 'E2EE_STALE_KEY';
 export class Herald {
   readonly base: string;
   readonly apiKey: string;
@@ -135,11 +173,11 @@ export class Herald {
   readonly maxRetryAfter: number;
   /** Sent as `User-Agent`; defaults to `herald-sdk-ts/<version>`. */
   readonly userAgent: string;
+  /** Sent as `Herald-Workspace` when set. */
+  readonly workspaceId?: string;
   #live?: LiveSocket;
   #keyed?: KeyedSession;
-  constructor(
-    options: { apiKey?: string; url?: string; maxRetryAfter?: number; userAgent?: string } = {},
-  ) {
+  constructor(options: HeraldOptions = {}) {
     this.base = (options.url || process.env.HERALD_URL || 'https://app.herald.run').replace(
       /\/$/,
       '',
@@ -165,7 +203,18 @@ export class Herald {
     if (parsed && !parsed.seed) throw new E2eeError(UNKEYED);
     this.apiKey = parsed?.auth ?? token;
     if (parsed?.seed)
-      this.#keyed = new KeyedSession(parsed.seed, parsed.fingerprint!, () => this.request('/keys'));
+      this.#keyed = new KeyedSession(
+        parsed.seed,
+        parsed.fingerprint!,
+        () => this.request('/keys'),
+        {
+          pin:
+            options.pin ??
+            (process.env.HERALD_PIN ? parseWorkspacePin(process.env.HERALD_PIN) : undefined),
+          onPin: options.onPin,
+        },
+      );
+    this.workspaceId = options.workspace;
     this.maxRetryAfter = options.maxRetryAfter ?? 60;
     this.userAgent = options.userAgent || `herald-sdk-ts/${version}`;
   }
@@ -191,7 +240,30 @@ export class Herald {
     return this.#openTask(task);
   }
   #headers(extra: Record<string, string> = {}) {
-    return { Authorization: 'Bearer ' + this.apiKey, 'User-Agent': this.userAgent, ...extra };
+    return {
+      Authorization: 'Bearer ' + this.apiKey,
+      'User-Agent': this.userAgent,
+      'X-Herald-Client': `sdk/${version}`,
+      ...(this.workspaceId ? { 'Herald-Workspace': this.workspaceId } : {}),
+      ...extra,
+    };
+  }
+  /**
+   * The team workspace this token belongs to (id, epoch, the teams it may address), or
+   * undefined for a personal account.
+   */
+  async workspace(): Promise<WorkspaceInfo | undefined> {
+    return this.#keys.workspace();
+  }
+  /** Seals and posts; after `409 E2EE_STALE_KEY` reloads the keys and reseals once. */
+  async #sealed<T>(post: () => Promise<T>): Promise<T> {
+    try {
+      return await post();
+    } catch (error) {
+      if (!stale(error)) throw error;
+      await this.#keys.state('force');
+      return post();
+    }
   }
   /**
    * Calls `/api/v1` + `path`. Reads and keyed writes retry network errors and 5xx; any request
@@ -271,8 +343,11 @@ export class Herald {
   ): Promise<Message> {
     const idempotencyKey =
       (typeof options === 'string' ? options : options.idempotencyKey) || crypto.randomUUID();
-    const body = await this.#keys.sealMessage(input, idempotencyKey);
-    return this.#open(await this.request<Message>('/messages', body, { idempotencyKey }));
+    const post = async () => {
+      const body = await this.#keys.sealMessage(input, idempotencyKey);
+      return this.request<Message>('/messages', body, { idempotencyKey });
+    };
+    return this.#open(await this.#sealed(post));
   }
   async get(id: string): Promise<Message> {
     return this.#open(await this.request<Message>('/messages/' + path(id)));
@@ -404,8 +479,12 @@ export class Herald {
     update: TaskUpdate,
     options: Pick<RequestOptions, 'idempotencyKey' | 'retry'> = {},
   ): Promise<Message> {
-    const body = await this.#keys.sealUpdate(id, update);
-    return this.#openTask(await this.request<Message>(`/tasks/${path(id)}/update`, body, options));
+    const record = () => this.request<Message>('/messages/' + path(id));
+    const post = async () => {
+      const body = await this.#keys.sealUpdate(id, update, record);
+      return this.request<Message>(`/tasks/${path(id)}/update`, body, options);
+    };
+    return this.#openTask(await this.#sealed(post));
   }
   /** Consumes the encrypted envelopes of an answered request's secret fields. */
   collectSecrets(id: string): Promise<Record<string, Envelope | SealedEnvelope>> {
@@ -421,7 +500,9 @@ export class Herald {
     const values: Record<string, string | FileAttachment[]> = {};
     for (const [field, envelope] of Object.entries(envelopes)) {
       if (!('ct' in envelope)) throw new E2eeError('This secret is not end-to-end encrypted.');
-      values[field] = await keys.openSecret(id, field, envelope);
+      values[field] = await keys.openSecret(id, field, envelope, () =>
+        this.request<Message>('/messages/' + path(id)),
+      );
     }
     return values;
   }
@@ -439,7 +520,7 @@ export class Herald {
       undefined,
       options,
     );
-    return keys.checkReceiver(id, receiver);
+    return keys.checkReceiver(id, receiver, () => this.request<Message>('/messages/' + path(id)));
   }
   /** Deposits the value sealed to the claimed receiver's key; repeating the same deposit is safe. */
   deliverSecret(
@@ -451,6 +532,15 @@ export class Herald {
   }
   async ask<T extends Answers = Answers>(input: AskInput, options: WaitOptions = {}): Promise<T> {
     return (await this.answer(input, options)).response!.values as T;
+  }
+  /** Like `ask`, with the chosen action, the record and, in a team workspace, who answered. */
+  async askDetails<T extends Answers = Answers>(
+    input: AskInput,
+    options: WaitOptions = {},
+  ): Promise<AskDetails<T>> {
+    const message = await this.answer(input, options);
+    const { values, actionId } = message.response!;
+    return { values: values as T, actionId, answeredBy: message.answeredBy, message };
   }
   async askAction<T extends Answers = Answers>(
     input: AskInput & { actions: NonNullable<MessageRequest['actions']> },

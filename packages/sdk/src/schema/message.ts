@@ -6,6 +6,7 @@ import { actionSchema, type RequestAction } from './actions';
 import { reviewBlockSchema, reviewImageTypes, type ReviewBlock } from './review';
 import type { SessionInput, SessionRequest } from './session';
 import type { SealedEnvelope } from './e2ee';
+import type { RoutingState } from './team';
 export const publicKeySchema = z
   .object({
     kty: z.literal('RSA'),
@@ -35,6 +36,8 @@ const common = {
   group: z.string().max(120).optional(),
   expiresAt: z.string().datetime().optional(),
   expiresIn: z.number().positive().max(86400).optional(),
+  /** Team workspaces: the team inbox (id or slug); the connection's default when omitted. */
+  team: z.string().min(1).max(200).optional(),
 };
 const contentInputSchema = z.object({
   ...common,
@@ -219,8 +222,20 @@ interface StoredRecord extends StoredContent {
     createdAt: string;
     /** End-to-end encrypted `values` and `actionId` (`ctx.t = "response"`). */
     sealed?: SealedEnvelope;
+    /** Team workspaces: the member who answered, as the server recorded it. */
+    by?: string;
   };
   deleteAt?: string;
+  /** Team workspaces: the team inbox's id. */
+  team?: string;
+  /** Team workspaces: the member who claimed the request, and when. */
+  assignee?: string;
+  claimedAt?: string;
+  /** Team workspaces: the routing level now notified (0-based). */
+  level?: number;
+  /** Team workspaces: the member who answered. Keyed clients set it only from a verified answer. */
+  answeredBy?: string;
+  routing?: { state: RoutingState; nextAt?: string };
   /** End-to-end encrypted content (`ctx.t = "message"`); content fields hold placeholders. */
   sealed?: SealedEnvelope;
 }
