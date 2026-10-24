@@ -68,13 +68,17 @@ export async function hookUpdate(input: HookInput): Promise<FleetUpdate | undefi
     state.area = areaOf(world, path);
     if (file || !isDir) state.files = [path];
   }
-  return { repo: repo.repo, key, state };
+  return { repo: repo.repo, key, state, ...(repo.pushed ? { pushed: true } : {}) };
 }
 /** HTTP fallback writes per unit at most this often. */
 export const HTTP_EVERY = 15_000;
 type HookState = {
   worlds: Record<string, { id: string | null; at: number }>;
-  units: Record<string, { at: number; state: Partial<UnitState> }>;
+  /** `pending`: merged but not yet sent. */
+  units: Record<
+    string,
+    { at: number; state: Partial<UnitState>; repo?: string; ttl?: number; pending?: true }
+  >;
 };
 async function readState(path: string): Promise<HookState> {
   try {
@@ -96,7 +100,8 @@ async function writeState(path: string, data: HookState, now: number) {
 }
 /**
  * Reports an update over HTTP without a daemon: each unit at most every 15 s, merging what
- * arrives in between; world ids are cached in the 0600 state file.
+ * arrives in between; world ids are cached in the 0600 state file. A held idle or waiting state
+ * calls `defer`, which should run `flushOverHttp` once it is due.
  */
 export async function reportOverHttp(
   fleet: Pick<Fleet, 'world' | 'report' | 'remove'>,
@@ -104,13 +109,20 @@ export async function reportOverHttp(
   statePath: string,
   now = Date.now(),
   signal?: AbortSignal,
+  defer?: () => void,
 ) {
   const data = await readState(statePath);
   const unit = data.units[update.key];
   const state = mergeState(unit?.state, update.state);
   const due = update.remove || !unit || now - unit.at >= HTTP_EVERY;
-  data.units[update.key] = { at: unit?.at ?? 0, state };
-  if (!due) return writeState(statePath, data, now);
+  const ttl = update.ttl ?? unit?.ttl;
+  data.units[update.key] = { at: unit?.at ?? 0, state, repo: update.repo, ...(ttl ? { ttl } : {}) };
+  if (!due) {
+    data.units[update.key]!.pending = true;
+    await writeState(statePath, data, now);
+    if (['idle', 'waiting'].includes(update.state?.activity ?? '')) defer?.();
+    return;
+  }
   let world = data.worlds[update.repo];
   if (!world || now - world.at > (world.id ? 3_600_000 : 600_000)) {
     world = { id: (await fleet.world(update.repo))?.id ?? null, at: now };
@@ -125,12 +137,26 @@ export async function reportOverHttp(
     }
     if (!state.name) return;
     data.units[update.key]!.at = now;
-    await fleet.report(
-      world.id,
-      [{ key: update.key, ttl: update.ttl, state: state as UnitState }],
-      { signal, retry: false },
-    );
+    await fleet.report(world.id, [{ key: update.key, ttl, state: state as UnitState }], {
+      signal,
+      retry: false,
+    });
   } finally {
     await writeState(statePath, data, now);
   }
+}
+/** Sends a unit's held state once its interval is up, unless a later hook sent it first. */
+export async function flushOverHttp(
+  fleet: Pick<Fleet, 'world' | 'report' | 'remove'>,
+  key: string,
+  statePath: string,
+  sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+  timeout = () => AbortSignal.timeout(10_000),
+) {
+  const held = (await readState(statePath)).units[key];
+  if (!held?.pending) return;
+  await sleep(Math.min(Math.max(held.at + HTTP_EVERY - Date.now(), 0), HTTP_EVERY));
+  const unit = (await readState(statePath)).units[key];
+  if (unit?.pending && unit.repo)
+    await reportOverHttp(fleet, { repo: unit.repo, key }, statePath, Date.now(), timeout());
 }

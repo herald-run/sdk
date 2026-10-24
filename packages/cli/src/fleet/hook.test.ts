@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HeraldError } from '@herald-run/sdk';
 import { main, type Io } from '../main';
 import { parseRemote, shortHash } from './git';
-import { activityOf, hookUpdate, reportOverHttp } from './hook';
+import { activityOf, flushOverHttp, hookUpdate, reportOverHttp } from './hook';
 /** SSH remote user, split so the source holds no address-like text. */
 const GIT = 'git' + '@';
 let dir = '';
@@ -83,6 +83,9 @@ it('builds updates from hook input: key, name, branch, area and files', async ()
   const root = await repo();
   const base = { session_id: 's1', cwd: root };
   const key = 'cc-' + shortHash('s1');
+  const update = { ...base, hook_event_name: 'Stop' };
+  expect(await hookUpdate(update)).not.toHaveProperty('pushed');
+  execFileSync('git', ['-C', root, 'update-ref', 'refs/remotes/origin/main', 'HEAD']);
   expect(
     await hookUpdate({
       ...base,
@@ -93,6 +96,7 @@ it('builds updates from hook input: key, name, branch, area and files', async ()
   ).toEqual({
     repo: 'acme/app',
     key,
+    pushed: true,
     state: {
       name: 'app (main)',
       kind: 'claude-code',
@@ -155,6 +159,35 @@ it('reports over HTTP at most every 15 s per unit, merging what arrives between'
   await reportOverHttp(fleet, { repo: 'acme/app', key: 'cc-1', remove: true }, path, 31_000);
   expect(remove).toHaveBeenCalledWith('fw_1', 'cc-1', { retry: false, signal: undefined });
   expect(JSON.parse(await readFile(path, 'utf8')).units).toEqual({});
+});
+
+it('sends a held idle or waiting state once the interval is up', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(100_000);
+  const path = join(dir, 'state.json');
+  const report = vi.fn(async () => ({ units: [] }));
+  const fleet = { world: vi.fn(async () => ({ id: 'fw_1' }) as never), report, remove: vi.fn() };
+  const update = (state: object) => ({ repo: 'acme/app', key: 'cc-1', state });
+  const defer = vi.fn();
+  await reportOverHttp(fleet, update({ name: 'app', activity: 'running' }), path, 100_000);
+  await reportOverHttp(fleet, update({ activity: 'editing' }), path, 105_000, undefined, defer);
+  expect(defer).not.toHaveBeenCalled();
+  await reportOverHttp(fleet, update({ activity: 'idle' }), path, 106_000, undefined, defer);
+  expect(defer).toHaveBeenCalledOnce();
+  expect(report).toHaveBeenCalledOnce();
+  vi.setSystemTime(106_000);
+  const sleep = vi.fn(async (ms: number) => void vi.setSystemTime(Date.now() + ms));
+  await flushOverHttp(fleet, 'cc-1', path, sleep);
+  expect(sleep).toHaveBeenCalledWith(9000);
+  expect(report).toHaveBeenLastCalledWith(
+    'fw_1',
+    [{ key: 'cc-1', state: { name: 'app', activity: 'idle' } }],
+    expect.anything(),
+  );
+  // Sent: a second flush does nothing.
+  await flushOverHttp(fleet, 'cc-1', path, sleep);
+  expect(report).toHaveBeenCalledTimes(2);
+  vi.useRealTimers();
 });
 
 const io = (stdin: () => Promise<string>, env: Record<string, string> = {}) => {

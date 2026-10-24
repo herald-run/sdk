@@ -59,6 +59,8 @@ export type Io = {
   signal?: AbortSignal;
   /** The working directory; defaults to the process's. */
   cwd?: string;
+  /** Runs the CLI with `args` in a detached background process. */
+  spawn?: (args: string[]) => void;
 };
 /** `herald fleet hook` gives up after this long: it must never hold up the agent. */
 export const HOOK_TIMEOUT = 1500;
@@ -569,6 +571,15 @@ async function run(argv: string[], io: Io): Promise<number> {
           print,
           stdin: io.stdin,
           signal: io.signal,
+          defer:
+            io.spawn &&
+            ((args) =>
+              io.spawn!([
+                ...args,
+                ...(['profile', 'url', 'pin-file'] as const).flatMap((o) =>
+                  values[o] ? [`--${o}`, values[o]] : [],
+                ),
+              ])),
         });
       case 'completion': {
         const script = completion(arg(1, 'bash|zsh|fish'));

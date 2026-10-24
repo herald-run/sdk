@@ -56,33 +56,57 @@ export type WorldFile = z.infer<typeof worldFileSchema>;
 /** World files larger than this are refused. */
 export const worldFileBytes = 64 * 1024;
 
-const globCache = new Map<string, RegExp>();
-/** `**` spans directories, `*` and `?` stay within one; a trailing `/` matches everything below. */
-export function globToRegExp(glob: string): RegExp {
-  let re = globCache.get(glob);
-  if (re) return re;
-  const g = glob.replace(/^\.?\/+/, '').replace(/\/$/, '/**');
-  let out = '';
-  for (let i = 0; i < g.length; i++) {
-    const c = g[i]!;
-    if (c === '*' && g[i + 1] === '*') {
-      const slash = g[i + 2] === '/';
-      out += slash ? '(?:.*/)?' : '.*';
-      i += slash ? 2 : 1;
-    } else if (c === '*') out += '[^/]*';
-    else if (c === '?') out += '[^/]';
-    else out += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+/** Wildcard match of one path segment; `*` and `?` never cross `/`. O(|glob|·|seg|). */
+function segMatch(g: string, s: string): boolean {
+  let gi = 0;
+  let si = 0;
+  let star = -1;
+  let mark = 0;
+  while (si < s.length) {
+    if (gi < g.length && (g[gi] === '?' || g[gi] === s[si])) {
+      gi++;
+      si++;
+    } else if (gi < g.length && g[gi] === '*') {
+      star = gi++;
+      mark = si;
+    } else if (star >= 0) {
+      gi = star + 1;
+      si = ++mark;
+    } else return false;
   }
-  re = new RegExp(`^${out}$`);
-  if (globCache.size > 2000) globCache.clear();
-  globCache.set(glob, re);
-  return re;
+  while (g[gi] === '*') gi++;
+  return gi === g.length;
+}
+/**
+ * Whether a repo-relative path matches a glob, in time bounded by |glob|·|path|. A segment of
+ * just `**` spans zero or more directories (one or more files when last); `*` and `?` stay within
+ * a segment, as does `**` inside one; a trailing `/` matches everything below.
+ */
+export function globMatch(glob: string, path: string): boolean {
+  const g = glob
+    .replace(/^\.?\/+/, '')
+    .replace(/\/$/, '/**')
+    .split('/');
+  const p = path.split('/');
+  const n = p.length;
+  // next[j]: g[i+1..] matches p[j..]; filled backwards so each pair is tried once.
+  let next = new Uint8Array(n + 1);
+  next[n] = 1;
+  for (let i = g.length - 1; i >= 0; i--) {
+    const cur = new Uint8Array(n + 1);
+    const last = i === g.length - 1;
+    if (g[i] === '**') {
+      if (!last) cur[n] = next[n]!;
+      for (let j = n - 1; j >= 0; j--) cur[j] = last || next[j] || cur[j + 1] ? 1 : 0;
+    } else for (let j = n - 1; j >= 0; j--) cur[j] = next[j + 1] && segMatch(g[i]!, p[j]!) ? 1 : 0;
+    next = cur;
+  }
+  return next[0] === 1;
 }
 /** The area owning a repo-relative path: the first with a matching glob, else `outskirts`. */
 export function areaOf(world: WorldFile, path: string): string {
   const p = path.replace(/^\.?\/+/, '');
-  for (const area of world.areas)
-    if (area.paths.some((g) => globToRegExp(g).test(p))) return area.id;
+  for (const area of world.areas) if (area.paths.some((g) => globMatch(g, p))) return area.id;
   return outskirts;
 }
 const kindHints: [RegExp, AreaKind][] = [

@@ -11,6 +11,8 @@ export const updateSchema = z
     ttl: z.number().int().min(30).max(3600).optional(),
     state: z.record(z.string(), z.unknown()).optional(),
     remove: z.literal(true).optional(),
+    /** The ref is on the remote, so it may be tracked. */
+    pushed: z.literal(true).optional(),
   })
   .strict();
 export type FleetUpdate = Omit<z.infer<typeof updateSchema>, 'state'> & {

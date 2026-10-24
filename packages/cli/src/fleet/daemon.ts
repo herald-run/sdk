@@ -11,7 +11,7 @@ import {
 } from '@herald-run/sdk';
 import { mergeState, updateSchema, type FleetUpdate } from './protocol';
 type Reporter = Pick<FleetReporter, 'send' | 'close'>;
-export type DaemonFleet = Pick<Fleet, 'worlds' | 'remove' | 'track' | 'report'> & {
+export type DaemonFleet = Pick<Fleet, 'worlds' | 'remove' | 'track'> & {
   reporter(world: string, options: Parameters<Fleet['reporter']>[1]): Reporter;
 };
 export type DaemonOptions = {
@@ -29,6 +29,8 @@ type Unit = {
   repo: string;
   ttl: number;
   state: Partial<UnitState>;
+  /** The last update's ref is on the remote. */
+  pushed: boolean;
   dirty: boolean;
   touched: number;
   sentAt: number;
@@ -81,6 +83,7 @@ export class FleetDaemon {
       repo: update.repo,
       ttl: 600,
       state: {},
+      pushed: false,
       dirty: true,
       touched: 0,
       sentAt: -Infinity,
@@ -89,6 +92,7 @@ export class FleetDaemon {
     next.repo = update.repo;
     next.ttl = update.ttl ?? next.ttl;
     next.state = mergeState(next.state, update.state);
+    next.pushed = update.pushed === true;
     next.dirty = true;
     next.touched = this.#now();
     this.#units.set(update.key, next);
@@ -129,36 +133,28 @@ export class FleetDaemon {
       reporter: undefined as unknown as Reporter,
     };
     world.reporter = this.#fleet.reporter(found.id, {
-      onError: (error) => void this.#refused(repo, world, error),
+      onError: (error) => this.#refused(repo, world, error),
       onOpen: () => this.#log(`Reporting to ${repo}.`),
     });
     this.#worlds.set(repo, world);
     return world;
   }
   /** A refused frame: its units are sent and stored again, after a pause where one applies. */
-  async #refused(repo: string, world: World, error: FleetFrameError) {
+  #refused(repo: string, world: World, error: FleetFrameError) {
     const now = this.#now();
-    const units = [...this.#units.values()].filter((u) => u.repo === repo);
-    for (const u of units) {
-      u.dirty = true;
-      u.persisted = undefined;
-    }
+    for (const u of this.#units.values())
+      if (u.repo === repo) Object.assign(u, { dirty: true, persisted: undefined });
     if (error.code === 'E2EE_STALE_KEY') return;
     this.#log(`${repo}: ${error.error}${error.code ? ` (${error.code})` : ''}`);
+    if (error.code === 'FLEET_RATE' && error.retryAfter !== undefined) {
+      world.pausedUntil = now + error.retryAfter * 1000;
+      return;
+    }
     if (error.code !== 'FLEET_QUOTA') {
       world.pausedUntil = now + 60_000;
       return;
     }
-    let resets = error.resetsAt ? Date.parse(error.resetsAt) : NaN;
-    const probe = units.find((u) => u.state.name);
-    // Socket error frames may not say when the quota resets; an HTTP write's 429 does.
-    if (Number.isNaN(resets) && probe)
-      try {
-        await this.#fleet.report(world.id, [this.#report(probe)], { retry: false });
-        resets = now;
-      } catch (e) {
-        if (e instanceof HeraldError && e.resetsAt) resets = Date.parse(e.resetsAt);
-      }
+    const resets = error.resetsAt ? Date.parse(error.resetsAt) : NaN;
     world.pausedUntil = Number.isNaN(resets) ? now + 300_000 : resets;
     if (world.pausedUntil > now)
       this.#log(`${repo}: paused until ${new Date(world.pausedUntil).toISOString()}.`);
@@ -222,7 +218,7 @@ export class FleetDaemon {
       if (persist) Object.assign(u, { persistedAt: now, persisted: snapshot(u.state) });
       const ref = u.state.ref;
       const id = `${world.id}:${ref}`;
-      if (ref && ref !== world.defaultBranch && !this.#tracked.has(id)) {
+      if (ref && u.pushed && ref !== world.defaultBranch && !this.#tracked.has(id)) {
         this.#tracked.add(id);
         void this.#fleet
           .track(world.id, ref)

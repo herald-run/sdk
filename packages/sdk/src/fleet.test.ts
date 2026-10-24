@@ -207,8 +207,15 @@ it('reporter sends frames while open, within the frame budget, and surfaces erro
     'message',
     JSON.stringify({ type: 'error', error: 'Paused.', code: 'FLEET_QUOTA' }),
   );
+  sockets[0].emit(
+    'message',
+    JSON.stringify({ type: 'error', error: 'Slow.', code: 'FLEET_RATE', retryAfter: 4 }),
+  );
   sockets[0].emit('message', 'not json');
-  expect(errors).toEqual([{ error: 'Paused.', code: 'FLEET_QUOTA' }]);
+  expect(errors).toEqual([
+    { error: 'Paused.', code: 'FLEET_QUOTA' },
+    { error: 'Slow.', code: 'FLEET_RATE', retryAfter: 4 },
+  ]);
   // A dropped socket reconnects after the backoff delay; close() stops it.
   sockets[0].emit('close', 1008, 'Too many messages');
   expect(reporter.connected).toBe(false);

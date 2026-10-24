@@ -12,8 +12,16 @@ import type { UnitStateInput } from './keyed.js';
 export type { UnitStateInput };
 /** One unit to report: `ttl` seconds (30-3600, default 600) without a write fade it to idle. */
 export type UnitReport = { key: string; ttl?: number; state: UnitStateInput };
-/** A reporter socket's error frame: the server refused a frame (all its units). */
-export type FleetFrameError = { error: string; code?: string; resetsAt?: string };
+/**
+ * A reporter socket's error frame: the server refused a frame (all its units). `retryAfter` (s)
+ * comes with `FLEET_RATE`, `resetsAt` with `FLEET_QUOTA`.
+ */
+export type FleetFrameError = {
+  error: string;
+  code?: string;
+  resetsAt?: string;
+  retryAfter?: number;
+};
 export type FleetReportOptions = {
   signal?: AbortSignal;
   /** `false` fails at once on a rate limit instead of waiting out a short Retry-After. */
@@ -248,7 +256,13 @@ export class FleetReporter {
     socket.on('pong', () => void (answered = true));
     socket.on('message', (data: unknown) => {
       answered = true;
-      let frame: { type?: unknown; error?: unknown; code?: unknown; resetsAt?: unknown };
+      let frame: {
+        type?: unknown;
+        error?: unknown;
+        code?: unknown;
+        resetsAt?: unknown;
+        retryAfter?: unknown;
+      };
       try {
         frame = JSON.parse(String(data));
       } catch {
@@ -259,6 +273,7 @@ export class FleetReporter {
         error: typeof frame.error === 'string' ? frame.error : 'The frame was refused.',
         ...(typeof frame.code === 'string' ? { code: frame.code } : {}),
         ...(typeof frame.resetsAt === 'string' ? { resetsAt: frame.resetsAt } : {}),
+        ...(typeof frame.retryAfter === 'number' ? { retryAfter: frame.retryAfter } : {}),
       });
     });
     socket.on('error', () => {});

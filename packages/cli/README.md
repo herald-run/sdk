@@ -51,7 +51,7 @@ herald fleet report --activity editing --file src/app.ts --task "Fix login"
 herald fleet daemon                # keep running: coalesces local updates on one socket per world
 ```
 
-`report` takes the repo from the `origin` remote, the branch from the checkout and the area from the files and the world file. `herald fleet hook` reads a Claude Code hook event on stdin, hands it to the daemon (or reports over HTTP at most every 15 s per session), always exits 0 and prints nothing. In `~/.claude/settings.json`:
+`report` takes the repo from the `origin` remote, the branch from the checkout and the area from the files and the world file; branches `origin` has are tracked, so they show without a PR. `herald fleet hook` reads a Claude Code hook event on stdin, hands it to the daemon (or reports over HTTP at most every 15 s per session; a held idle or waiting state follows from a short background process), always exits 0 and prints nothing. In `~/.claude/settings.json`:
 
 ```json
 {

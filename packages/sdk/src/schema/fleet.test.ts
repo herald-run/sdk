@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   areaOf,
   deriveWorld,
-  globToRegExp,
+  globMatch,
   unitBatchSchema,
   unitStateSchema,
   worldFileSchema,
@@ -27,9 +27,22 @@ describe('fleet world files', () => {
     expect(areaOf(world, 'lib/ui/a/x')).toBe('web');
     expect(areaOf(world, 'lib/ui/ab/x')).toBe('outskirts');
   });
-  it('escapes regex characters', () => {
-    expect(globToRegExp('a+b/(c).ts').test('a+b/(c).ts')).toBe(true);
-    expect(globToRegExp('a.ts').test('abts')).toBe(false);
+  it('matches globs literally and by segment', () => {
+    expect(globMatch('a+b/(c).ts', 'a+b/(c).ts')).toBe(true);
+    expect(globMatch('a.ts', 'abts')).toBe(false);
+    expect(globMatch('**/x/**', 'x/y')).toBe(true);
+    expect(globMatch('a/**/b', 'a/b')).toBe(true);
+    expect(globMatch('a/**/b', 'a/1/2/b')).toBe(true);
+    expect(globMatch('a/**', 'a')).toBe(false);
+    expect(globMatch('a*/b?', 'ax/bc')).toBe(true);
+    expect(globMatch('a*', 'a/b')).toBe(false);
+  });
+  it('matches pathological globs fast', () => {
+    const start = performance.now();
+    const glob = `${'*a'.repeat(30)}*b`;
+    expect(globMatch(glob, 'a'.repeat(250))).toBe(false);
+    expect(globMatch(`${'**/'.repeat(30)}b`, `${'a/'.repeat(250)}c`)).toBe(false);
+    expect(performance.now() - start).toBeLessThan(200);
   });
   it('defaults kinds and drops unknown keys', () => {
     const w = worldFileSchema.parse({

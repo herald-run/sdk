@@ -110,11 +110,13 @@ it('lists worlds and reports a unit with defaults from the checkout', async () =
     activity: 'editing',
     files: ['src/a.ts'],
   });
-  // A non-default branch is tracked; the key is stable.
+  // A non-default branch is tracked once pushed; the key is stable.
+  expect(seen.filter((s) => s.route.startsWith('PUT'))).toEqual([]);
+  execFileSync('git', ['-C', root, 'update-ref', 'refs/remotes/origin/feature', 'HEAD']);
+  await run(['fleet', 'report', '--json']);
   expect(seen.filter((s) => s.route.startsWith('PUT')).map((s) => s.body)).toEqual([
     { ref: 'feature' },
   ]);
-  await run(['fleet', 'report', '--json']);
   const keys = seen
     .filter((s) => s.route.startsWith('POST'))
     .map((s) => (s.body as typeof body).units[0].key);

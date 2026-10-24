@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { Socket } from 'node:net';
 import { expect, it, vi } from 'vitest';
-import { HeraldError, type FleetFrameError } from '@herald-run/sdk';
+import type { FleetFrameError } from '@herald-run/sdk';
 import { FleetDaemon, readLines, serveDaemon, type DaemonFleet } from './daemon';
 import { toDaemon } from './protocol';
 const world = {
@@ -24,7 +24,6 @@ function fake() {
     worlds: vi.fn(async () => [world]),
     remove: vi.fn(async () => {}),
     track: vi.fn(async () => {}),
-    report: vi.fn(async () => ({ units: [] })),
     reporter: vi.fn((_id: string, options) => {
       state.onError = options?.onError;
       return {
@@ -43,10 +42,11 @@ function fake() {
   } satisfies DaemonFleet;
   return { fleet, frames, state };
 }
-const unit = (key: string, state: object, ttl?: number) => ({
+const unit = (key: string, state: object, ttl?: number, pushed?: true) => ({
   repo: 'acme/app',
   key,
   ...(ttl ? { ttl } : {}),
+  ...(pushed ? { pushed } : {}),
   state: { name: key, ...state },
 });
 
@@ -84,7 +84,7 @@ it('stores on ref, area or activity changes and at least every 60 s; re-sends be
     [9000, { ref: 'feature' }, true],
   ] as const) {
     now = at;
-    daemon.update(unit('a', change));
+    daemon.update(unit('a', change, undefined, 'ref' in change || undefined));
     await daemon.tick();
     expect(frames.at(-1)?.persist, JSON.stringify(change)).toBe(persist);
   }
@@ -109,6 +109,14 @@ it('stores on ref, area or activity changes and at least every 60 s; re-sends be
   now += 600_000;
   await daemon.tick();
   expect(frames).toHaveLength(idle);
+});
+
+it('tracks only refs on the remote', async () => {
+  const { fleet } = fake();
+  const daemon = new FleetDaemon(fleet);
+  daemon.update(unit('a', { ref: 'local' }));
+  await daemon.tick();
+  expect(fleet.track).not.toHaveBeenCalled();
 });
 
 it('keeps units dirty while the socket is down and stops re-sending stale units', async () => {
@@ -137,11 +145,8 @@ it('pauses a world until a quota resets and resends after refused frames', async
   daemon.update(unit('a', { activity: 'running' }));
   await daemon.tick();
   const resetsAt = new Date(1_000_000).toISOString();
-  fleet.report.mockRejectedValueOnce(
-    new HeraldError('Used up.', 429, undefined, 60, 'FLEET_QUOTA', resetsAt),
-  );
-  state.onError!({ error: 'Used up.', code: 'FLEET_QUOTA' });
-  await vi.waitFor(() => expect(log).toHaveBeenCalledWith(expect.stringContaining('paused until')));
+  state.onError!({ error: 'Used up.', code: 'FLEET_QUOTA', resetsAt });
+  expect(log).toHaveBeenCalledWith(expect.stringContaining('paused until'));
   now = 999_000;
   daemon.update(unit('a', { activity: 'editing' }));
   await daemon.tick();
@@ -157,6 +162,14 @@ it('pauses a world until a quota resets and resends after refused frames', async
   now += 31_000;
   await daemon.tick();
   expect(frames).toHaveLength(3);
+  // A rate limit pauses for its retryAfter.
+  state.onError!({ error: 'Slow down.', code: 'FLEET_RATE', retryAfter: 5 });
+  now += 4000;
+  await daemon.tick();
+  expect(frames).toHaveLength(3);
+  now += 1000;
+  await daemon.tick();
+  expect(frames).toHaveLength(4);
   state.onError!({ error: 'Stale.', code: 'E2EE_STALE_KEY' });
   now += 2000;
   await daemon.tick();
