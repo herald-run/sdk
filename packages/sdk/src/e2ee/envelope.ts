@@ -32,6 +32,7 @@ const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid'>> = {
   result: { task: 'string' },
   secret: { message: 'string', field: 'string' },
   keyring: { device: 'string' },
+  'fleet-unit': { world: 'string', key: 'string' },
   teamkey: {},
   wskey: {},
 };
@@ -43,6 +44,7 @@ const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
   response: { team: 'string', member: 'string' },
   task: { team: 'string', member: 'string' },
   secret: { team: 'string', member: 'string' },
+  'fleet-unit': { team: 'string' },
   teamkey: { team: 'string', kv: 'number', member: 'string' },
   wskey: { n: 'number', member: 'string' },
 };

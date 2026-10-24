@@ -32,6 +32,7 @@ import { HeraldError, parseRetryAfter, readError, readJson, retryDelay, sleep } 
 import { version } from './version.js';
 import { LiveSocket, type LiveEvent } from './socket.js';
 import { idleBody, type UploadData } from './upload.js';
+import { Fleet } from './fleet.js';
 export type {
   Account,
   Answers,
@@ -63,6 +64,16 @@ export type { WorkspacePin } from './e2ee/index.js';
 export { backoff, LiveSocket } from './socket.js';
 export type { LiveEvent } from './socket.js';
 export type { UploadData } from './upload.js';
+export { Fleet, FleetReporter } from './fleet.js';
+export type {
+  FleetFrameError,
+  FleetReportOptions,
+  ReporterOptions,
+  ReporterSocket,
+  UnitReport,
+  UnitStateInput,
+} from './fleet.js';
+export type { FleetWorld, FleetRepo, UnitState } from './schema/index.js';
 export { version } from './version.js';
 /** `GET /api/ping`: a public liveness check. */
 export type Ping = { ok: true; channel: string; version: string };
@@ -177,6 +188,7 @@ export class Herald {
   readonly workspaceId?: string;
   #live?: LiveSocket;
   #keyed?: KeyedSession;
+  #fleet?: Fleet;
   constructor(options: HeraldOptions = {}) {
     this.base = (options.url || process.env.HERALD_URL || 'https://app.herald.run').replace(
       /\/$/,
@@ -565,6 +577,20 @@ export class Herald {
     if (result.locked || result.unverified)
       throw new HeraldError('The answer could not be verified.', 502, sent.id);
     return result;
+  }
+  /** Fleet reporting: worlds, sealed units over HTTP or a reporter socket (`fleet:write`). */
+  get fleet(): Fleet {
+    return (this.#fleet ??= new Fleet({
+      request: (path, body, options) => this.request(path, body, options),
+      seal: (world, key, state) => this.#keys.sealUnit(world, key, state),
+      sealed: (post) => this.#sealed(post),
+      refresh: () => this.#keys.state('force'),
+      connect: (path) =>
+        new WebSocket(this.base.replace(/^http/, 'ws') + '/api/v1' + path, {
+          headers: this.#headers(),
+          followRedirects: false,
+        }),
+    }));
   }
   /** The shared live socket; every `wait` and `watch` on this client subscribes to it. */
   get live(): LiveSocket {

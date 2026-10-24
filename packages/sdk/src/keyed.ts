@@ -16,6 +16,9 @@ import {
   sealedMessageInputSchema,
   sessionInputSchema,
   sessionValues,
+  unitEnvelopeChars,
+  unitKeySchema,
+  unitStateSchema,
   validateAnswers,
   type Attachment,
   type KeyDirectory,
@@ -23,8 +26,15 @@ import {
   type MessageRequest,
   type SealedMessageInput,
   type TaskLog,
+  type UnitActivity,
+  type UnitState,
 } from './schema/index.js';
 import { HeraldError } from './http.js';
+/** A unit's state as reporters pass it; invalid `kind` and `activity` read as `agent`, `idle`. */
+export type UnitStateInput = Omit<z.input<typeof unitStateSchema>, 'kind' | 'activity'> & {
+  kind?: string;
+  activity?: UnitActivity;
+};
 /** An attachment with its file key; keyed uploads return one and keyed messages carry them. */
 export type FileAttachment = Attachment & { key?: string };
 /** A task log line; sealed lines are opened, or flagged when they cannot be. */
@@ -535,6 +545,31 @@ export class KeyedSession {
       );
     if (error !== undefined) out.errorSealed = await seal({ error }, { t: 'result', task });
     return out;
+  }
+  /**
+   * Seals a Fleet unit's state for `world` under `key`, to the account inbox or, in a team
+   * workspace, to this connection's default team. Envelopes over 6,000 characters are refused.
+   */
+  async sealUnit(world: string, key: string, state: UnitStateInput): Promise<SealedEnvelope> {
+    if (!unitKeySchema.safeParse(key).success)
+      throw new HeraldError('Unit keys are 1-64 letters, digits, _ or -.', 400);
+    const parsed = unitStateSchema.safeParse(state);
+    if (!parsed.success) throw new HeraldError(z.prettifyError(parsed.error), 400);
+    const s = await this.state();
+    const team = this.#team(s);
+    const payload: UnitState = parsed.data;
+    const env = await e2ee.seal({
+      payload,
+      ctx: { t: 'fleet-unit', account: s.account, world, key, ...(team ? { team } : {}) },
+      signer: s.me,
+      to: this.#to(s, team),
+    });
+    if (JSON.stringify(env).length > unitEnvelopeChars)
+      throw new HeraldError(
+        `Unit ${key} is too large: its sealed state exceeds ${unitEnvelopeChars.toLocaleString('en')} characters. Shorten the task or file paths.`,
+        400,
+      );
+    return env;
   }
   /** A secret answer sealed by the account to this integration only. */
   /** A secret field's text, or a secret file field's attachments (their keys are learned). */
