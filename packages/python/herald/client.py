@@ -13,7 +13,7 @@ from . import e2ee
 from .http import HeraldError, chunks, idle_body, parse_retry_after, raise_error, read_json, retry_delay, retryable
 from .keyed import KeyedSession
 from .live import LiveSocket
-from .models import Account, ActionAnswer, Attachment, CreatedIntegration, Destination, Envelope, FileDownload, Integration, Lease, Message, Ping, SecretReceiver, TaskClaim, TaskLog, ThreadPage, TokenInfo, Tombstone
+from .models import Account, ActionAnswer, Attachment, CreatedIntegration, Destination, Envelope, FileDownload, FleetWorld, Integration, Lease, Message, Ping, SecretReceiver, TaskClaim, TaskLog, ThreadPage, TokenInfo, Tombstone
 
 RETRIES = 2
 UNKEYED = "This token has no end-to-end key. Create a new token in Herald (Settings → Connections) or run herald login."
@@ -311,6 +311,45 @@ class Herald:
     async def delete_integration(self, integration_id):
         """Human sessions only: revokes the token and removes the connection's destinations."""
         await self.request("/integrations/" + path(integration_id), method="DELETE")
+
+    async def fleet_worlds(self):
+        """The workspace's Fleet worlds (`fleet:write`)."""
+        return [FleetWorld.model_validate(w) for w in (await self.request("/fleet"))["worlds"]]
+
+    async def fleet_world(self, repo_or_id):
+        """A world by id or by its repo's `owner/repo` (case-insensitive); None when not linked."""
+        want = repo_or_id.lower()
+        return next((w for w in await self.fleet_worlds() if w.id == repo_or_id or w.repo.full_name.lower() == want), None)
+
+    async def fleet_units(self, world_id, units):
+        """Seals units (`{key, ttl?, state}`) for `world_id` into a batch of 1 to 50."""
+        if not 1 <= len(units) <= 50:
+            raise HeraldError("Report 1 to 50 units at once.", 400)
+        if len({u["key"] for u in units}) != len(units):
+            raise HeraldError("Unit keys must be unique.", 400)
+        out = []
+        for u in units:
+            ttl = u.get("ttl", 600)
+            if not isinstance(ttl, int) or isinstance(ttl, bool) or not 30 <= ttl <= 3600:
+                raise HeraldError("Unit ttl is 30 to 3600 seconds.", 400)
+            out.append({"key": u["key"], "ttl": ttl, "sealed": await self._keys.seal_unit(world_id, u["key"], u["state"])})
+        return out
+
+    async def fleet_report(self, world_id, units, *, retry=True):
+        """Writes sealed units over HTTP (each at most every 10 s); 429 errors carry `retry_after` (FLEET_RATE) or `resets_at` (FLEET_QUOTA)."""
+        async def seal():
+            return {"units": await self.fleet_units(world_id, units)}
+        return await self._sealed(seal, lambda body: self.request(f"/fleet/worlds/{path(world_id)}/units", body, retry=retry))
+
+    async def fleet_remove(self, world_id, key):
+        """Removes a unit this connection wrote."""
+        await self.request(f"/fleet/worlds/{path(world_id)}/units/{path(key)}", method="DELETE")
+
+    async def fleet_track(self, world_id, ref):
+        """Asks Herald to follow a branch without a pull request."""
+        if not isinstance(ref, str) or not 1 <= len(ref) <= 255:
+            raise HeraldError("Refs are 1 to 255 characters.", 400)
+        await self.request(f"/fleet/worlds/{path(world_id)}/refs", {"ref": ref}, method="PUT")
 
     def socket(self):
         return OriginConnection(self.url.replace("http", "ws", 1) + "/ws", additional_headers=self._headers, user_agent_header=self.user_agent, open_timeout=15)

@@ -218,3 +218,18 @@ class FileDownload(Model):
     name: str
     type: str
     data: bytes
+
+
+class FleetRepo(Model):
+    id: int
+    full_name: str
+    url: str
+    default_branch: str
+    private: bool
+
+
+class FleetWorld(Model):
+    """A linked GitHub repo shown in Fleet."""
+    id: str
+    repo: FleetRepo
+    created_at: str

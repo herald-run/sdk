@@ -32,8 +32,23 @@ const answer = await herald.askAction({
 console.log(answer.actionId);
 ```
 
+## Fleet
+
+`herald.fleet` reports what agents work on to Herald's Fleet view (needs `fleet:write`). Unit states are end-to-end encrypted.
+
+```ts
+const world = await herald.fleet.world('acme/app');
+await herald.fleet.report(world!.id, [
+  { key: 'ci-42', state: { name: 'CI', kind: 'ci', activity: 'running', ref: 'main' } },
+]);
+const reporter = herald.fleet.reporter(world!.id, { onError: (e) => console.error(e.error) });
+await reporter.send([{ key: 'ci-42', state: { name: 'CI', activity: 'done' } }], { persist: true });
+```
+
+HTTP writes each unit at most every 10 s; the reporter socket allows more frequent updates (`persist: false` only reaches live viewers). Also `worlds()`, `remove()` and `track()`.
+
 ## Schemas
 
 `@herald-run/sdk/schema` exports the API's Zod schemas and types (messages, forms, sessions, destinations) without the client, so it also runs in browsers. Message input may give `questions` (Claude Code's AskUserQuestion shape) instead of `fields`; `questionAnswers` maps the answer back by question text. `@herald-run/sdk/crypto` exports `createKeys`, `seal` and `unseal` for secret envelopes.
 
-Failures throw `HeraldError` with `status`, `code` (from the server, when sent), `messageId` and `retryAfter`. Documentation: [herald.run/docs/sdk](https://herald.run/docs/sdk/); API reference: [herald.run/docs/api](https://herald.run/docs/api/). MIT licensed.
+Failures throw `HeraldError` with `status`, `code` (from the server, when sent), `messageId`, `retryAfter` and `resetsAt` (a paused Fleet quota). Documentation: [herald.run/docs/sdk](https://herald.run/docs/sdk/); API reference: [herald.run/docs/api](https://herald.run/docs/api/). MIT licensed.

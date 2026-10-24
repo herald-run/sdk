@@ -7,7 +7,7 @@ from email.utils import parsedate_to_datetime
 
 
 class HeraldError(Exception):
-    def __init__(self, message, status, message_id=None, retry_after=None, code=None):
+    def __init__(self, message, status, message_id=None, retry_after=None, code=None, resets_at=None):
         super().__init__(message)
         self.status = status
         self.message_id = message_id
@@ -15,6 +15,8 @@ class HeraldError(Exception):
         self.retry_after = retry_after
         # Machine-readable code from the server's error body, e.g. "RATE_LIMITED".
         self.code = code
+        # When a paused quota resets (ISO time), e.g. on 429 FLEET_QUOTA.
+        self.resets_at = resets_at
 
 
 def retryable(error):
@@ -53,6 +55,11 @@ def error_code(data):
     return code if isinstance(code, str) else None
 
 
+def resets_at(data):
+    value = data.get("resetsAt") if isinstance(data, dict) else None
+    return value if isinstance(value, str) else None
+
+
 def json_body(response):
     if not re.match(r"application/([\w.-]+\+)?json\b", response.headers.get("Content-Type", ""), re.I):
         return False, None
@@ -65,14 +72,14 @@ def json_body(response):
 def raise_error(response, fallback):
     """Raises the failed response's error message and code."""
     _, data = json_body(response)
-    raise HeraldError(error_text(data) or fallback, response.status_code, retry_after=parse_retry_after(response.headers.get("Retry-After")), code=error_code(data))
+    raise HeraldError(error_text(data) or fallback, response.status_code, retry_after=parse_retry_after(response.headers.get("Retry-After")), code=error_code(data), resets_at=resets_at(data))
 
 
 def read_json(response, retry_after=None):
     """Checks status and content type before parsing, so proxies' HTML pages never reach JSON."""
     is_json, data = json_body(response)
     if response.is_error:
-        raise HeraldError(error_text(data) or f"Herald request failed ({response.status_code}).", response.status_code, retry_after=retry_after, code=error_code(data))
+        raise HeraldError(error_text(data) or f"Herald request failed ({response.status_code}).", response.status_code, retry_after=retry_after, code=error_code(data), resets_at=resets_at(data))
     if response.status_code == 204:
         return None
     if not is_json or data is None:
