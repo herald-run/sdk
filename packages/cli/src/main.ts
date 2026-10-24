@@ -13,6 +13,7 @@ import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
 import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
+import { fleet } from './fleet/command';
 import { collect, fileFailure, isSecret, sendSecret, secretFailure } from './secrets';
 import type { Field } from '@herald-run/sdk/schema';
 
@@ -54,9 +55,15 @@ export type Io = {
   open: (url: string) => boolean;
   /** All of stdin, for `-` paths. */
   stdin?: () => Promise<string>;
-  /** Ends `watch` and `listen`; SIGINT otherwise. */
+  /** Ends `watch`, `listen` and `fleet daemon`; SIGINT otherwise. */
   signal?: AbortSignal;
+  /** The working directory; defaults to the process's. */
+  cwd?: string;
+  /** Runs the CLI with `args` in a detached background process. */
+  spawn?: (args: string[]) => void;
 };
+/** `herald fleet hook` gives up after this long: it must never hold up the agent. */
+export const HOOK_TIMEOUT = 1500;
 /** Request outcomes as exit codes. */
 const outcome: Record<string, number> = { answered: 0, expired: 3, cancelled: 4 };
 const options = {
@@ -102,6 +109,13 @@ const options = {
   'safety-code': { type: 'string' },
   workspace: { type: 'string' },
   team: { type: 'string' },
+  force: { type: 'boolean' },
+  area: { type: 'string' },
+  activity: { type: 'string' },
+  task: { type: 'string' },
+  ref: { type: 'string' },
+  ttl: { type: 'string' },
+  repo: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
 /** A team workspace pin file: absent means no pin yet; anything else must be a valid pin. */
@@ -132,8 +146,23 @@ const failureFor = (fields: Field[]) =>
     : fields.some(isSecret)
       ? fileFailure
       : undefined;
-/** Runs one CLI invocation and returns its exit code. */
+/**
+ * Runs one CLI invocation and returns its exit code. `fleet hook` always exits 0 within
+ * `HOOK_TIMEOUT` and prints nothing on stdout (errors on stderr with HERALD_DEBUG).
+ */
 export async function main(argv: string[], io: Io): Promise<number> {
+  if (argv[0] !== 'fleet' || argv[1] !== 'hook') return run(argv, io);
+  const quiet: Io = { ...io, out: () => {}, write: () => {} };
+  if (!io.env.HERALD_DEBUG) quiet.err = () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    run(argv, quiet).catch((error: Error) => quiet.err(error.message)),
+    new Promise((resolve) => (timer = setTimeout(resolve, HOOK_TIMEOUT))),
+  ]);
+  clearTimeout(timer);
+  return 0;
+}
+async function run(argv: string[], io: Io): Promise<number> {
   // Secret transfers print fixed failures only: errors may carry untrusted values.
   let quiet = argv.some((v) => v === '--secret-file' || v.startsWith('--secret-file='))
     ? secretFailure
@@ -529,6 +558,29 @@ export async function main(argv: string[], io: Io): Promise<number> {
         print(format.accountSummary(account, info.account), account);
         return 0;
       }
+      case 'fleet':
+        return await fleet(positionals[1], {
+          values,
+          client,
+          directory,
+          profile,
+          env: io.env,
+          cwd: io.cwd ?? process.cwd(),
+          out: io.out,
+          err: io.err,
+          print,
+          stdin: io.stdin,
+          signal: io.signal,
+          defer:
+            io.spawn &&
+            ((args) =>
+              io.spawn!([
+                ...args,
+                ...(['profile', 'url', 'pin-file'] as const).flatMap((o) =>
+                  values[o] ? [`--${o}`, values[o]] : [],
+                ),
+              ])),
+        });
       case 'completion': {
         const script = completion(arg(1, 'bash|zsh|fish'));
         if (!script) throw new UsageError('Usage: herald completion bash|zsh|fish');

@@ -12,6 +12,7 @@ export * from './e2ee';
 export { jsonSchemaFields } from './json-schema';
 export * from './questions';
 export * from './team';
+export * from './fleet';
 export const limits = { fileBytes: 100_000_000, secretTTL: 15 * 60_000 };
 export const envelopeSchema = z
   .object({ key: z.string().max(1500), iv: z.string().max(30), data: z.string().max(90_000) })
@@ -87,6 +88,8 @@ export interface Account {
   credits?: number;
   devices?: number;
   storage: number;
+  /** Fleet unit-hours used in the current usage period. */
+  fleetUnitHours?: number;
   /** When the included allowance next resets: monthly on the billing date on paid plans, else at the UTC month start. */
   usageResetsAt?: string;
   /** @deprecated Same as `usageResetsAt`; removed after one release. */
@@ -98,6 +101,7 @@ export const scopes = [
   'destinations:manage',
   'events:read',
   'files:write',
+  'fleet:write',
 ] as const;
 export type Scope = (typeof scopes)[number];
 export { connectionColorSchema } from './connection-color';

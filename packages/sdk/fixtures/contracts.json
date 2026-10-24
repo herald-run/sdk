@@ -206,7 +206,8 @@
               "messages:read",
               "destinations:manage",
               "events:read",
-              "files:write"
+              "files:write",
+              "fleet:write"
             ],
             "color": {
               "mode": "auto"

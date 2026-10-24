@@ -173,7 +173,7 @@ it('requests the default scopes without asking and rejects unknown scopes before
   expect(created).toEqual([
     {
       name: expect.stringMatching(/^Herald CLI \(/),
-      scopes: expect.arrayContaining(['events:read', 'files:write']),
+      scopes: expect.arrayContaining(['events:read', 'files:write', 'fleet:write']),
       certificate,
     },
   ]);

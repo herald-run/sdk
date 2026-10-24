@@ -7,6 +7,8 @@ export class HeraldError extends Error {
     public retryAfter?: number,
     /** Machine-readable code from the server's error body, e.g. `RATE_LIMITED`. */
     public code?: string,
+    /** When a paused quota resets (ISO time), e.g. on 429 `FLEET_QUOTA`. */
+    public resetsAt?: string,
   ) {
     super(message);
     this.name = 'HeraldError';
@@ -39,10 +41,15 @@ type ErrorBody = {
   error?: string | { message?: string; code?: string };
   message?: string;
   code?: string;
+  resetsAt?: unknown;
 };
 const errorText = (data: unknown) => {
   const body = data as ErrorBody | undefined;
   return typeof body?.error === 'string' ? body.error : body?.error?.message || body?.message;
+};
+const resetsAt = (data: unknown) => {
+  const value = (data as ErrorBody | undefined)?.resetsAt;
+  return typeof value === 'string' ? value : undefined;
 };
 const errorCode = (data: unknown) => {
   const body = data as ErrorBody | undefined;
@@ -62,6 +69,7 @@ export async function readError(response: Response, fallback: string): Promise<n
     undefined,
     parseRetryAfter(response.headers.get('Retry-After')),
     errorCode(data),
+    resetsAt(data),
   );
 }
 export async function readJson<T>(response: Response, retryAfter?: number): Promise<T> {
@@ -76,6 +84,7 @@ export async function readJson<T>(response: Response, retryAfter?: number): Prom
       undefined,
       retryAfter,
       errorCode(data),
+      resetsAt(data),
     );
   if (response.status === 204) return undefined as T;
   if (!json || data === undefined)

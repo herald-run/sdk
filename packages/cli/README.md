@@ -40,6 +40,34 @@ Answers to secret and file fields go to new private files (`--out`, mode 0600) a
 
 Install the agent skills from [herald.run/skills](https://herald.run/skills); they run this CLI, so `herald login` is the only setup. Other MCP clients can use the [`@herald-run/mcp`](https://www.npmjs.com/package/@herald-run/mcp) server.
 
+## Fleet
+
+Fleet shows each linked GitHub repo as a world of areas and your agents as units moving between them. Units are end-to-end encrypted; reporting needs the `fleet:write` scope (logins before it: run `herald login` again).
+
+```sh
+herald fleet init                  # write .herald/world.json from the top-level directories
+herald fleet worlds                # list the account's worlds
+herald fleet report --activity editing --file src/app.ts --task "Fix login"
+herald fleet daemon                # keep running: coalesces local updates on one socket per world
+```
+
+`report` takes the repo from the `origin` remote, the branch from the checkout and the area from the files and the world file; branches `origin` has are tracked, so they show without a PR. `herald fleet hook` reads a Claude Code hook event on stdin, hands it to the daemon (or reports over HTTP at most every 15 s per session; a held idle or waiting state follows from a short background process), always exits 0 and prints nothing. In `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "herald fleet hook" }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "herald fleet hook" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "herald fleet hook" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "herald fleet hook" }] }],
+    "Notification": [{ "hooks": [{ "type": "command", "command": "herald fleet hook" }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "herald fleet hook" }] }]
+  }
+}
+```
+
+Reads, searches and listings show as reading, edits as editing, other tools and prompts as running; Stop is idle, Notification waiting, and SessionEnd removes the unit.
+
 ## Output
 
 Output is human-readable; add `--json` for machine output. Exit codes: 0 success or answered, 1 error, 2 usage, 3 expired, 4 cancelled. `herald help <command>` shows every option; `herald completion bash|zsh|fish` prints shell completion. Documentation: [herald.run/docs/cli](https://herald.run/docs/cli/); API reference: [herald.run/docs/api](https://herald.run/docs/api/). MIT licensed.
