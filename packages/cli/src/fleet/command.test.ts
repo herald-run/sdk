@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { worldFileSchema } from '@herald-run/sdk/schema';
+import { flattenAreas, worldFileSchema } from '@herald-run/sdk/schema';
 import * as sealed from '../../../sdk/fixtures/sealed';
 import { main, type Io } from '../main';
 let dir = '',
@@ -11,8 +11,10 @@ let dir = '',
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'herald-fleet-'));
   root = join(dir, 'app');
-  for (const d of ['src', 'docs', '.github']) await mkdir(join(root, d), { recursive: true });
-  for (const f of ['src/a.ts', 'docs/a.md', '.github/ci.yml']) await writeFile(join(root, f), '');
+  for (const d of ['src', 'docs', '.github', 'apps/site', 'apps/api', 'node_modules/x'])
+    await mkdir(join(root, d), { recursive: true });
+  for (const f of ['src/a.ts', 'docs/a.md', '.github/ci.yml', 'apps/site/a', 'apps/api/a'])
+    await writeFile(join(root, f), '');
   const git = (...args: string[]) =>
     execFileSync('git', [
       '-C',
@@ -66,11 +68,15 @@ function server(routes: Record<string, () => Response>) {
 
 it('init writes a derived world file at the git root and refuses to overwrite it', async () => {
   const first = await run(['fleet', 'init']);
-  expect(first).toMatchObject({ code: 0, out: 'Wrote .herald/world.json with 2 areas.' });
+  expect(first).toMatchObject({ code: 0, out: 'Wrote .herald/world.json with 5 areas.' });
   const path = join(root, '.herald/world.json');
   const text = await readFile(path, 'utf8');
   expect(text).toMatch(/^\{\n {2}"version": 1,/);
-  expect(worldFileSchema.parse(JSON.parse(text)).areas.map((a) => [a.id, a.kind])).toEqual([
+  const parsed = worldFileSchema.parse(JSON.parse(text));
+  expect(flattenAreas(parsed).map(({ area: a }) => [a.id, a.kind])).toEqual([
+    ['apps', 'ui'],
+    ['api', 'service'],
+    ['site', 'ui'],
     ['docs', 'docs'],
     ['src', 'service'],
   ]);

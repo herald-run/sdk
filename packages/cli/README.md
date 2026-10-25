@@ -45,7 +45,7 @@ Install the agent skills from [herald.run/skills](https://herald.run/skills); th
 Fleet shows each linked GitHub repo as a world of areas and your agents as units moving between them. Units are end-to-end encrypted; reporting needs the `fleet:write` scope (logins before it: run `herald login` again).
 
 ```sh
-herald fleet init                  # write .herald/world.json from the top-level directories
+herald fleet init                  # write .herald/world.json from two directory levels
 herald fleet worlds                # list the account's worlds
 herald fleet report --activity editing --file src/app.ts --task "Fix login"
 herald fleet daemon                # keep running: coalesces local updates on one socket per world

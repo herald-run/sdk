@@ -9,14 +9,25 @@ import {
   type WorldFile,
 } from '@herald-run/sdk/schema';
 import { git } from './git';
-/** Top-level directories git tracks, else those on disk (dot directories are skipped later). */
-export async function topDirectories(root: string): Promise<string[]> {
-  const tracked = await git(root, ['ls-tree', '-d', '--name-only', 'HEAD']);
-  if (tracked !== undefined) return tracked.split('\n').filter(Boolean);
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  return entries.filter((e) => e.isDirectory() && e.name !== 'node_modules').map((e) => e.name);
+const skip = (name: string) => name.startsWith('.') || name === 'node_modules';
+/** Directories two levels deep (`apps`, `apps/site`) git tracks at HEAD, else those on disk. */
+export async function directories(root: string): Promise<string[]> {
+  const top = await git(root, ['ls-tree', '-d', '--name-only', 'HEAD']);
+  if (top !== undefined) {
+    const dirs = top.split('\n').filter((d) => d && !skip(d));
+    const subs = dirs.length
+      ? await git(root, ['ls-tree', '-d', '--name-only', 'HEAD', '--', ...dirs.map((d) => `${d}/`)])
+      : '';
+    return [...dirs, ...(subs ?? '').split('\n').filter(Boolean)];
+  }
+  const list = async (dir: string) =>
+    (await readdir(join(root, dir), { withFileTypes: true }).catch(() => []))
+      .filter((e) => e.isDirectory() && !skip(e.name))
+      .map((e) => (dir ? `${dir}/${e.name}` : e.name));
+  const dirs = await list('');
+  return [...dirs, ...(await Promise.all(dirs.map(list))).flat()];
 }
-/** The checkout's world file, or one derived from its top-level directories. */
+/** The checkout's world file, or one derived from its directories. */
 export async function localWorld(root: string): Promise<WorldFile> {
   const text = await readFile(join(root, worldPath), 'utf8').catch(() => undefined);
   if (text !== undefined && text.length <= worldFileBytes) {
@@ -27,14 +38,14 @@ export async function localWorld(root: string): Promise<WorldFile> {
       /* Invalid JSON: derive instead. */
     }
   }
-  return deriveWorld(await topDirectories(root), basename(root));
+  return deriveWorld(await directories(root), basename(root));
 }
 /** The area of the first file, as a repo-relative path; undefined without files. */
 export const areaFor = (world: WorldFile, files: string[]) =>
   files.length ? areaOf(world, files[0]!) : undefined;
-/** Writes `.herald/world.json` derived from the top-level directories; false if it exists. */
+/** Writes `.herald/world.json` derived from two directory levels; undefined if it exists. */
 export async function initWorld(root: string, force = false) {
-  const world = deriveWorld(await topDirectories(root), basename(root));
+  const world = deriveWorld(await directories(root), basename(root));
   await mkdir(join(root, '.herald'), { recursive: true });
   const text = JSON.stringify(world, null, 2) + '\n';
   try {

@@ -17,40 +17,78 @@ export const areaKinds = [
   'other',
 ] as const;
 export type AreaKind = (typeof areaKinds)[number];
-const cell = z.number().int().min(0).max(63);
-export const areaSchema = z.object({
-  id: areaId,
-  label: z.string().trim().min(1).max(60),
-  kind: z.enum(areaKinds).catch('other'),
+const glob = z.string().min(1).max(200);
+/** A world area; groups hold `areas` and may keep `paths` as their subtree's catch-all. */
+export interface Area {
+  id: string;
+  label: string;
+  kind: AreaKind;
   /** Repo-relative globs (`**`, `*`, `?`); a trailing `/` means everything below. */
-  paths: z.array(z.string().min(1).max(200)).min(1).max(20),
-  /** A cell on an abstract grid; areas without one are placed beside `near`. */
-  at: z.tuple([cell, cell]).optional(),
-  near: z.array(areaId).max(8).default([]),
-});
-export type Area = z.infer<typeof areaSchema>;
+  paths: string[];
+  areas?: Area[];
+}
+type AreaInput = {
+  id: string;
+  label: string;
+  kind?: unknown;
+  paths?: string[];
+  areas?: AreaInput[];
+};
+/** Nesting, child and node limits; top-level areas are depth 1. */
+export const worldLimits = { depth: 3, children: 16, nodes: 128 } as const;
+export const areaSchema: z.ZodType<Area, AreaInput> = z
+  .object({
+    id: areaId,
+    label: z.string().trim().min(1).max(60),
+    kind: z.enum(areaKinds).catch('other'),
+    paths: z.array(glob).max(20).default([]),
+    areas: z.lazy(() => z.array(areaSchema).max(worldLimits.children)).optional(),
+  })
+  .refine((a) => a.areas?.length || a.paths.length, 'A leaf area needs a path.');
+/** Every area in preorder, with its parent's ID and its depth (top level: 1). */
+export function flattenAreas(world: { areas: Area[] }) {
+  const out: { area: Area; parent?: string; depth: number }[] = [];
+  const walk = (areas: Area[], depth: number, parent?: string) => {
+    for (const area of areas) {
+      out.push({ area, depth, ...(parent ? { parent } : {}) });
+      if (area.areas) walk(area.areas, depth + 1, area.id);
+    }
+  };
+  walk(world.areas, 1);
+  return out;
+}
+/** The IDs from a top-level area down to `id` (inclusive); empty when no area has it. */
+export function areaTrail(world: { areas: Area[] }, id: string): string[] {
+  const find = (areas: Area[]): string[] => {
+    for (const a of areas) {
+      if (a.id === id) return [a.id];
+      const below = a.areas ? find(a.areas) : [];
+      if (below.length) return [a.id, ...below];
+    }
+    return [];
+  };
+  return find(world.areas);
+}
 /**
- * A repo's world file. Unknown keys are dropped so newer files still parse; `render` holds
- * renderer-specific hints that other renderers ignore.
+ * A repo's world file: a tree of areas. Unknown keys are dropped so newer files still parse;
+ * `render` holds renderer-specific hints that other renderers ignore.
  */
 export const worldFileSchema = z
   .object({
     version: z.number().int().min(1).default(1),
     name: z.string().trim().min(1).max(80).optional(),
-    areas: z.array(areaSchema).min(1).max(64),
+    areas: z.array(areaSchema).min(1).max(worldLimits.children),
     render: z.record(z.string().max(40), z.record(z.string(), z.unknown())).optional(),
   })
   .superRefine((w, ctx) => {
-    const ids = new Set(w.areas.map((a) => a.id));
-    if (ids.size !== w.areas.length)
-      ctx.addIssue({ code: 'custom', message: 'Area IDs must be unique.' });
-    if (ids.has(outskirts))
-      ctx.addIssue({ code: 'custom', message: `"${outskirts}" is reserved.` });
-    if (w.areas.some((a) => a.near.some((n) => !ids.has(n))))
-      ctx.addIssue({ code: 'custom', message: '`near` must name areas of this world.' });
-    const cells = w.areas.flatMap((a) => (a.at ? [a.at.join(',')] : []));
-    if (new Set(cells).size !== cells.length)
-      ctx.addIssue({ code: 'custom', message: 'Two areas share a cell.' });
+    const all = flattenAreas(w);
+    const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (all.length > worldLimits.nodes) issue(`A world has at most ${worldLimits.nodes} areas.`);
+    if (all.some((a) => a.depth > worldLimits.depth))
+      issue(`Areas nest at most ${worldLimits.depth} deep.`);
+    const ids = new Set(all.map((a) => a.area.id));
+    if (ids.size !== all.length) issue('Area IDs must be unique.');
+    if (ids.has(outskirts)) issue(`"${outskirts}" is reserved.`);
   });
 export type WorldFile = z.infer<typeof worldFileSchema>;
 /** World files larger than this are refused. */
@@ -103,11 +141,19 @@ export function globMatch(glob: string, path: string): boolean {
   }
   return next[0] === 1;
 }
-/** The area owning a repo-relative path: the first with a matching glob, else `outskirts`. */
+/**
+ * The area owning a repo-relative path: depth-first in file order, children before their
+ * parent's own globs, so the deepest match wins; else `outskirts`.
+ */
 export function areaOf(world: WorldFile, path: string): string {
   const p = path.replace(/^\.?\/+/, '');
-  for (const area of world.areas) if (area.paths.some((g) => globMatch(g, p))) return area.id;
-  return outskirts;
+  const find = (areas: Area[]): string | undefined => {
+    for (const a of areas) {
+      const hit = (a.areas && find(a.areas)) || (a.paths.some((g) => globMatch(g, p)) && a.id);
+      if (hit) return hit;
+    }
+  };
+  return find(world.areas) ?? outskirts;
 }
 const kindHints: [RegExp, AreaKind][] = [
   [/^(docs?|documentation)$/, 'docs'],
@@ -118,26 +164,62 @@ const kindHints: [RegExp, AreaKind][] = [
   [/^(db|data|migrations|schema)$/, 'data'],
   [/^(server|api|backend|services?|src|lib|packages|pkg|cmd|internal)$/, 'service'],
 ];
-/** A world for repos without a world file: one area per top-level directory (dotfiles skipped). */
-export function deriveWorld(dirs: string[], name?: string): WorldFile {
-  const used = new Set<string>([outskirts]);
-  const areas = dirs
+const kindOf = (dir: string) => kindHints.find(([re]) => re.test(dir.toLowerCase()))?.[1];
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+const sorted = (names: Iterable<string>) =>
+  [...new Set(names)]
     .filter((d) => d && !d.startsWith('.'))
     .map((d) => [d.toLowerCase(), d] as const)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([, d]) => d)
-    .slice(0, 64)
-    .flatMap((dir) => {
-      const id = dir
-        .toLowerCase()
-        .replace(/[^a-z0-9-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 40);
-      if (!id || used.has(id)) return [];
-      used.add(id);
-      const kind = kindHints.find(([re]) => re.test(dir.toLowerCase()))?.[1] ?? 'other';
-      return [{ id, label: dir.slice(0, 60), kind, paths: [`${dir}/**`], near: [] }];
+    .map(([, d]) => d);
+/**
+ * A world for repos without a world file, from directory paths up to two levels deep (`apps`,
+ * `apps/site`; dot directories skipped). A top-level directory with 2+ subdirectories becomes a
+ * group with one child each; the others are leaves.
+ */
+export function deriveWorld(dirs: string[], name?: string): WorldFile {
+  const subs = new Map<string, string[]>();
+  for (const d of dirs) {
+    const [top, sub] = d.replace(/^\.?\/+|\/+$/g, '').split('/');
+    // Globs over 200 characters would not parse.
+    if (!top || `${top}/${sub ?? ''}/**`.length > 200) continue;
+    if (!subs.has(top)) subs.set(top, []);
+    if (sub) subs.get(top)!.push(sub);
+  }
+  const used = new Set<string>([outskirts]);
+  const claim = (...ids: string[]) => {
+    const id = ids.find((i) => i && !used.has(i));
+    if (id) used.add(id);
+    return id;
+  };
+  const top: { dir: string; id: string; kind: AreaKind; subs: string[] }[] = [];
+  for (const dir of sorted(subs.keys())) {
+    const id = top.length < worldLimits.children && claim(slug(dir));
+    if (id) top.push({ dir, id, kind: kindOf(dir) ?? 'other', subs: sorted(subs.get(dir)!) });
+  }
+  const groups = top.filter((t) => t.subs.length >= 2).length;
+  const per = Math.min(
+    worldLimits.children,
+    Math.floor((worldLimits.nodes - top.length) / Math.max(groups, 1)),
+  );
+  const areas = top.map(({ dir, id, kind, subs }): Area => {
+    const leaf = { id, label: dir.slice(0, 60), kind, paths: [`${dir}/**`] };
+    if (subs.length < 2) return leaf;
+    const children = subs.slice(0, per).flatMap((sub) => {
+      const child = claim(slug(sub), slug(`${id}-${sub}`));
+      const paths = [`${dir}/${sub}/**`];
+      return child
+        ? [{ id: child, label: sub.slice(0, 60), kind: kindOf(sub) ?? kind, paths }]
+        : [];
     });
+    return children.length ? { ...leaf, areas: children } : leaf;
+  });
   return worldFileSchema.parse({
     name,
     areas: areas.length ? areas : [{ id: 'root', label: 'Root', paths: ['**'] }],
@@ -224,7 +306,7 @@ export interface FleetRef {
   ref: string;
   sha: string;
   default: boolean;
-  /** The world file at this ref, or one derived from the top-level directories (`derived`). */
+  /** The world file at this ref, or one derived from its first two directory levels (`derived`). */
   world: WorldFile;
   derived: boolean;
   /** An invalid world file's error; `world` then falls back to the default branch's or a derived one. */

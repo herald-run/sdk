@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   areaOf,
+  areaTrail,
   deriveWorld,
+  flattenAreas,
   globMatch,
   unitBatchSchema,
   unitStateSchema,
@@ -44,33 +46,109 @@ describe('fleet world files', () => {
     expect(globMatch(`${'**/'.repeat(30)}b`, `${'a/'.repeat(250)}c`)).toBe(false);
     expect(performance.now() - start).toBeLessThan(200);
   });
-  it('defaults kinds and drops unknown keys', () => {
+  it('picks the deepest area, children before their parent', () => {
+    const w = worldFileSchema.parse({
+      areas: [
+        { id: 'md', label: 'Md', paths: ['*.md'] },
+        {
+          id: 'apps',
+          label: 'Apps',
+          paths: ['apps/**'],
+          areas: [
+            { id: 'site', label: 'Site', paths: ['apps/site/**'] },
+            {
+              id: 'srv',
+              label: 'Server',
+              areas: [{ id: 'api', label: 'API', paths: ['apps/srv/api/**'] }],
+            },
+          ],
+        },
+        { id: 'docs', label: 'Docs', paths: ['**/*.md'] },
+      ],
+    });
+    expect(areaOf(w, 'README.md')).toBe('md');
+    expect(areaOf(w, 'apps/site/README.md')).toBe('site');
+    expect(areaOf(w, 'apps/srv/api/x.ts')).toBe('api');
+    expect(areaOf(w, 'apps/srv/x.ts')).toBe('apps');
+    expect(areaOf(w, 'docs/a.md')).toBe('docs');
+    expect(areaOf(w, 'lib/x.ts')).toBe('outskirts');
+    expect(flattenAreas(w).map((a) => [a.area.id, a.parent, a.depth])).toEqual([
+      ['md', undefined, 1],
+      ['apps', undefined, 1],
+      ['site', 'apps', 2],
+      ['srv', 'apps', 2],
+      ['api', 'srv', 3],
+      ['docs', undefined, 1],
+    ]);
+    expect(areaTrail(w, 'api')).toEqual(['apps', 'srv', 'api']);
+    expect(areaTrail(w, 'nope')).toEqual([]);
+  });
+  it('defaults kinds and paths and drops unknown keys', () => {
     const w = worldFileSchema.parse({
       future: 1,
-      areas: [{ id: 'a', label: 'A', kind: 'castle', paths: ['a/'], extra: true }],
+      areas: [
+        { id: 'a', label: 'A', kind: 'castle', paths: ['a/'], extra: true, at: [1, 1] },
+        { id: 'g', label: 'G', areas: [{ id: 'b', label: 'B', paths: ['b/'] }] },
+      ],
     });
-    expect(w.areas[0]).toEqual({ id: 'a', label: 'A', kind: 'other', paths: ['a/'], near: [] });
+    expect(w.areas[0]).toEqual({ id: 'a', label: 'A', kind: 'other', paths: ['a/'] });
+    expect(w.areas[1]!.paths).toEqual([]);
     expect('future' in w).toBe(false);
   });
-  it('refuses duplicate, reserved, dangling and stacked areas', () => {
+  it('refuses duplicate, reserved, pathless, deep and oversized trees', () => {
     const area = (id: string, extra = {}) => ({ id, label: id, paths: ['x/'], ...extra });
+    const nest = (n: number): object => area(`d${n}`, n > 1 ? { areas: [nest(n - 1)] } : {});
+    const many = (n: number, p = 'a') => Array.from({ length: n }, (_, i) => area(`${p}${i}`));
+    expect(worldFileSchema.safeParse({ areas: [nest(3)] }).success).toBe(true);
     for (const areas of [
       [area('a'), area('a')],
+      [area('a', { areas: [area('a')] })],
       [area('outskirts')],
-      [area('a', { near: ['b'] })],
-      [area('a', { at: [1, 1] }), area('b', { at: [1, 1] })],
+      [{ id: 'a', label: 'a' }],
+      [area('a', { paths: [], areas: [] })],
+      [nest(4)],
+      many(17),
+      [area('a', { areas: many(17) })],
+      Array.from({ length: 8 }, (_, i) => area(`g${i}`, { areas: many(16, `c${i}-`) })),
     ])
       expect(worldFileSchema.safeParse({ areas }).success).toBe(false);
   });
-  it('derives a world from top-level directories', () => {
-    const w = deriveWorld(['apps', 'docs', '.github', 'My Lib', 'my-lib'], 'Repo');
+  it('derives a world from two directory levels', () => {
+    const w = deriveWorld(
+      [
+        'apps',
+        'apps/site',
+        'apps/api',
+        'apps/.cache',
+        'docs',
+        'docs/img',
+        '.github',
+        'My Lib',
+      ].concat(['my-lib', 'pkgs/docs', 'pkgs/Zed']),
+      'Repo',
+    );
     expect(w.name).toBe('Repo');
-    expect(w.areas.map((a) => [a.id, a.kind, a.paths[0]])).toEqual([
+    expect(flattenAreas(w).map((a) => [a.area.id, a.area.kind, a.area.paths[0]])).toEqual([
       ['apps', 'ui', 'apps/**'],
+      ['api', 'service', 'apps/api/**'],
+      ['site', 'ui', 'apps/site/**'],
       ['docs', 'docs', 'docs/**'],
       ['my-lib', 'other', 'My Lib/**'],
+      ['pkgs', 'other', 'pkgs/**'],
+      ['pkgs-docs', 'docs', 'pkgs/docs/**'],
+      ['zed', 'other', 'pkgs/Zed/**'],
     ]);
     expect(deriveWorld([]).areas[0]!.id).toBe('root');
+    expect(deriveWorld(['x'.repeat(250)]).areas[0]!.id).toBe('root');
+  });
+  it('keeps derived worlds within the limits', () => {
+    const dirs = Array.from({ length: 20 }, (_, i) =>
+      Array.from({ length: 20 }, (_, j) => `d${i}/s${j}`),
+    ).flat();
+    const w = deriveWorld(dirs);
+    expect(w.areas).toHaveLength(16);
+    expect(w.areas[0]!.areas).toHaveLength(7);
+    expect(flattenAreas(w).length).toBeLessThanOrEqual(128);
   });
 });
 

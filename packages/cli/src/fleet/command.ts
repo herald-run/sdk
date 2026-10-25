@@ -2,6 +2,7 @@ import { hostname } from 'node:os';
 import { basename, isAbsolute, relative, resolve } from 'node:path';
 import { HeraldError, type Herald } from '@herald-run/sdk';
 import {
+  flattenAreas,
   unitActivities,
   worldPath,
   type UnitActivity,
@@ -66,7 +67,7 @@ async function run(action: string | undefined, c: FleetContext): Promise<number>
         c.err(`${worldPath} exists; pass --force to replace it.`);
         return 1;
       }
-      c.print(`Wrote ${worldPath} with ${world.areas.length} areas.`, world);
+      c.print(`Wrote ${worldPath} with ${flattenAreas(world).length} areas.`, world);
       return 0;
     }
     case 'worlds': {

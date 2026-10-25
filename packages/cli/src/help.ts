@@ -117,7 +117,7 @@ export const commands: Record<string, Spec> = {
       kind: '--kind KIND        Unit kind: claude-code, codex, ci, human, ... (default: agent)',
       key: '--key KEY          Unit key (default: stable per host, checkout and name)',
     },
-    detail: `  init     Write .herald/world.json at the git root from the top-level directories (--force replaces it)
+    detail: `  init     Write .herald/world.json at the git root from two directory levels (--force replaces it)
   worlds   List the account's worlds
   report   Send one unit over HTTP; repo, branch and area default from the checkout
   hook     Read a Claude Code hook event on stdin and report it; always exits 0, prints nothing
