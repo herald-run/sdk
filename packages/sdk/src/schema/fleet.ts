@@ -333,18 +333,24 @@ export interface FleetWorld {
   repo: FleetRepo;
   createdAt: string;
 }
-/** `GET /fleet/worlds/:id`: refs and live units. */
+/**
+ * `GET /fleet/worlds/:id`: refs. `?limit=1-500` adds a page of units by key (`units`) and, when
+ * more follow, `next` for `?cursor=`. Viewer sockets get the units as `snapshot` frames instead.
+ */
 export interface FleetWorldDetail extends FleetWorld {
   refs: FleetRef[];
-  units: FleetUnit[];
+  units?: FleetUnit[];
+  next?: string;
   /** Set when the plan's unit-hours are used up; reporters get 429 `FLEET_QUOTA` until it resets. */
   paused?: boolean;
 }
 /**
- * Frames a viewer socket (`/fleet/ws?world=ID`) receives. `units` and `gone` are coalesced: each
- * key's latest state, about every 500 ms. `refs` means refetch the world.
+ * Frames a viewer socket (`/fleet/ws?world=ID`) receives. It opens with every unit in `snapshot`
+ * frames of up to 100 (`done` on the last), before live ones. `units` and `gone` are coalesced:
+ * each key's latest state, about every 500 ms. `refs` means refetch the world.
  */
 export type FleetFrame =
+  | { type: 'snapshot'; units: FleetUnit[]; done: boolean }
   | { type: 'units'; units: FleetUnit[] }
   | { type: 'gone'; keys: string[] }
   | { type: 'refs' }
