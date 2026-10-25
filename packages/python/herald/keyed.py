@@ -296,6 +296,62 @@ def check_files(files):
     return [{k: f[k] for k in ("id", "name", "type", "size", "key")} for f in files] if ok else e2ee._fail("Malformed attachments.")
 
 
+UNIT_ENVELOPE_CHARS = 6000
+UNIT_ACTIVITIES = ("idle", "reading", "editing", "running", "waiting", "blocked", "done")
+UNIT_KEY = re.compile(r"[A-Za-z0-9_-]{1,64}")
+UNIT_KIND = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
+AREA_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+
+
+def check_unit_key(key):
+    if not isinstance(key, str) or not UNIT_KEY.fullmatch(key):
+        _invalid("Unit keys are 1-64 letters, digits, _ or -.")
+    return key
+
+
+def check_unit_state(state):
+    """A Fleet unit state as `unitStateSchema` parses it: unknown keys dropped; an invalid kind or activity reads as `agent`, `idle`."""
+    if not isinstance(state, dict):
+        _invalid("Unit state must be an object.")
+    name = _trim(state["name"]) if isinstance(state.get("name"), str) else ""
+    if not name or not _fits(name, 80):
+        _invalid("Unit name must be 1 to 80 characters.")
+    kind = state.get("kind")
+    out = {"name": name, "kind": kind if isinstance(kind, str) and UNIT_KIND.fullmatch(kind) else "agent"}
+    ref = state.get("ref")
+    if ref is not None:
+        if not isinstance(ref, str) or not ref or not _fits(ref, 255):
+            _invalid("Unit ref must be 1 to 255 characters.")
+        out["ref"] = ref
+    area = state.get("area")
+    if area is not None:
+        if not isinstance(area, str) or not AREA_ID.fullmatch(area):
+            _invalid("Unit area must be an area id.")
+        out["area"] = area
+    out["activity"] = state["activity"] if state.get("activity") in UNIT_ACTIVITIES else "idle"
+    task = state.get("task")
+    if task is not None:
+        if not _fits(task, 200):
+            _invalid("Unit task holds at most 200 characters.")
+        out["task"] = task
+    files = state.get("files", [])
+    if not isinstance(files, list) or len(files) > 10 or not all(_fits(f, 300) for f in files):
+        _invalid("Unit files are at most 10 paths of 300 characters.")
+    out["files"] = list(files)
+    squad = state.get("squad")
+    if squad is not None:
+        squad = _trim(squad) if isinstance(squad, str) else ""
+        if not squad or not _fits(squad, 60):
+            _invalid("Unit squad must be 1 to 60 characters.")
+        out["squad"] = squad
+    parent = state.get("parent")
+    if parent is not None:
+        if not isinstance(parent, str) or not UNIT_KEY.fullmatch(parent):
+            _invalid("Unit parent must be a unit key.")
+        out["parent"] = parent
+    return out
+
+
 def _omit(value, *keys):
     return {k: v for k, v in value.items() if v is not None and k not in keys}
 
@@ -616,6 +672,16 @@ class KeyedSession:
         if update.get("error") is not None:
             out["errorSealed"] = await seal({"error": update["error"]}, {"t": "result", "task": task})
         return out
+
+    async def seal_unit(self, world, key, state):
+        """Seals a Fleet unit's state for `world` under `key`, to the account inbox or this connection's default team; envelopes over 6,000 characters are refused."""
+        check_unit_key(key)
+        payload = check_unit_state(state)
+        s = await self.state()
+        env = await self._seal(payload, {"t": "fleet-unit", "world": world, "key": key}, self._team(s))
+        if len(json.dumps(env, separators=(",", ":"), ensure_ascii=False)) > UNIT_ENVELOPE_CHARS:
+            _invalid(f"Unit {key} is too large: its sealed state exceeds 6,000 characters. Shorten the task or file paths.")
+        return env
 
     async def open_secret(self, message, field, env, record=None):
         """A secret field's text, or a secret file field's attachments (their keys are learned)."""

@@ -1,5 +1,12 @@
 /** Every command: arguments, summary and the options it accepts besides the global ones. */
-export type Spec = { args?: string; summary: string; options?: string[]; detail?: string };
+export type Spec = {
+  args?: string;
+  summary: string;
+  options?: string[];
+  detail?: string;
+  /** Option descriptions that differ from the shared ones. */
+  describe?: Record<string, string>;
+};
 const searchNote =
   'Content is end-to-end encrypted, so the server cannot search it: the newest five pages are decrypted and filtered locally.';
 const message = ['input', 'title', 'body', 'body-file', 'kind', 'field', 'action', 'block'].concat([
@@ -26,7 +33,7 @@ export const commands: Record<string, Spec> = {
     summary: 'Connect this device in the browser and store a token',
     options: ['name', 'scopes', 'no-browser', 'safety-code', 'workspace'],
     detail:
-      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write.\nThe approval also certifies an end-to-end key stored with the token. Confirm that the safety code matches the approval page, or pass it with --safety-code when not in a terminal.',
+      'Default scopes: messages:send, messages:read, destinations:manage, events:read, files:write, fleet:write.\nThe approval also certifies an end-to-end key stored with the token. Confirm that the safety code matches the approval page, or pass it with --safety-code when not in a terminal.',
   },
   logout: { summary: 'Revoke the stored token and delete it locally' },
   whoami: { summary: 'Show the token, its scopes, the account or workspace and its safety code' },
@@ -88,6 +95,40 @@ export const commands: Record<string, Spec> = {
   },
   watch: { summary: 'Print messages as they change', options: ['after'] },
   account: { summary: 'Show the account holder, this connection, plan and usage' },
+  fleet: {
+    args: 'init|worlds|report|hook|daemon',
+    summary: 'Report what agents work on to the Fleet view',
+    options: [
+      'force',
+      'repo',
+      'key',
+      'name',
+      'kind',
+      'activity',
+      'area',
+      'task',
+      'file',
+      'ref',
+      'ttl',
+      'squad',
+      'parent',
+    ],
+    describe: {
+      file: '--file PATH        A file the unit works on; repeatable (sets the area)',
+      name: '--name NAME        Unit name (default: the checkout directory)',
+      kind: '--kind KIND        Unit kind: claude-code, codex, ci, human, ... (default: agent)',
+      key: '--key KEY          Unit key (default: stable per host, checkout and name)',
+    },
+    detail: `  init     Write .herald/world.json at the git root from two directory levels (--force replaces it)
+  worlds   List the account's worlds
+  report   Send one unit over HTTP; repo, branch and area default from the checkout
+  hook     Read a Claude Code hook event on stdin and report it; always exits 0, prints nothing
+  daemon   Coalesce local updates on a unix socket and report them on one socket per world
+Units are end-to-end encrypted. Needs the fleet:write scope (run herald login again if missing).
+Claude Code: run herald fleet hook from PreToolUse, PostToolUse, UserPromptSubmit, Stop,
+Notification and SessionEnd hooks; keep herald fleet daemon running for live updates.
+HERALD_FLEET_SOCKET overrides the daemon socket path, e.g. one mounted from the host.`,
+  },
   completion: { args: 'bash|zsh|fish', summary: 'Print a shell completion script' },
   help: { args: '[command]', summary: 'Show help for a command' },
 };
@@ -129,6 +170,16 @@ const describe: Record<string, string> = {
   concurrency: '--concurrency N    Tasks at once (1-16)',
   label: '--label TEXT',
   message: '--message ID       Message with the attachment (decrypts it)',
+  force: '--force            Replace an existing world file (init)',
+  repo: '--repo OWNER/REPO  World by GitHub repo (default: the origin remote)',
+  activity: '--activity NAME    idle, reading, editing, running, waiting, blocked or done',
+  area: '--area ID          Area (default: from --file and the world file)',
+  task: '--task TEXT        What the unit is doing (200 characters)',
+  ref: '--ref BRANCH       Branch (default: the current one)',
+  ttl: '--ttl SECONDS      Fade to idle after this long without a report (30-3600, default 600)',
+  squad:
+    '--squad NAME       Group label, e.g. an orchestrator run (or HERALD_FLEET_SQUAD in hooks)',
+  parent: '--parent KEY       Unit key of the orchestrator (or HERALD_FLEET_PARENT in hooks)',
 };
 const globals = `Global options:
   --json             Machine-readable JSON output
@@ -148,7 +199,7 @@ export function usage(name?: string) {
 Exit codes: 0 success or answered, 1 error, 2 usage, 3 expired, 4 cancelled.
 HERALD_API_KEY or HERALD_TOKEN supplies a token. Run herald help <command> for details.`;
   }
-  const options = (spec.options || []).map((o) => '  ' + describe[o]);
+  const options = (spec.options || []).map((o) => '  ' + (spec.describe?.[o] ?? describe[o]));
   return [
     `Usage: herald ${name}${spec.args ? ' ' + spec.args : ''}${options.length ? ' [options]' : ''}`,
     '\n' + spec.summary + '.',

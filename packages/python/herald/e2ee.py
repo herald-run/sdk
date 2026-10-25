@@ -270,6 +270,7 @@ _CTX = {
     "result": {"task": str},
     "secret": {"message": str, "field": str},
     "keyring": {"device": str},
+    "fleet-unit": {"world": str, "key": str},
     "teamkey": {},
     "wskey": {},
 }
@@ -281,6 +282,7 @@ _WORKSPACE = {
     "response": {"team": str, "member": str},
     "task": {"team": str, "member": str},
     "secret": {"team": str, "member": str},
+    "fleet-unit": {"team": str},
     "teamkey": {"team": str, "kv": int, "member": str},
     "wskey": {"n": int, "member": str},
 }

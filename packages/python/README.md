@@ -33,4 +33,6 @@ async def main():
 asyncio.run(main())
 ```
 
-Without asyncio, use `SyncHerald`, which has the same methods: `SyncHerald().send(title="Hi")`. Failures raise `HeraldError` with `status`, `code`, `message_id` and `retry_after`. Methods are snake_case and return Pydantic models (`.wire()` gives the JSON). Documentation: [herald.run/docs/python](https://herald.run/docs/python/); API reference: [herald.run/docs/api](https://herald.run/docs/api/). MIT licensed.
+Without asyncio, use `SyncHerald`, which has the same methods: `SyncHerald().send(title="Hi")`. Failures raise `HeraldError` with `status`, `code`, `message_id`, `retry_after` and `resets_at`. Methods are snake_case and return Pydantic models (`.wire()` gives the JSON). Documentation: [herald.run/docs/python](https://herald.run/docs/python/); API reference: [herald.run/docs/api](https://herald.run/docs/api/). MIT licensed.
+
+Fleet: `fleet_worlds()`, `fleet_world("owner/repo")`, `fleet_report(world_id, [{"key": "ci-42", "state": {"name": "CI", "activity": "running"}}])`, `fleet_remove()` and `fleet_track()` report end-to-end encrypted unit states to Herald's Fleet view (needs `fleet:write`). States may carry `squad` and `parent` (an orchestrator's unit key).
