@@ -41,11 +41,16 @@ const world = await herald.fleet.world('acme/app');
 await herald.fleet.report(world!.id, [
   { key: 'ci-42', state: { name: 'CI', kind: 'ci', activity: 'running', ref: 'main' } },
 ]);
-const reporter = herald.fleet.reporter(world!.id, { onError: (e) => console.error(e.error) });
-await reporter.send([{ key: 'ci-42', state: { name: 'CI', activity: 'done' } }], { persist: true });
+const reporter = herald.fleet.reporter(world!.id, {
+  onError: (e) => console.error(e.error),
+  // A viewer joined: re-send live state.
+  onSync: () => void reporter.send([ci], { persist: false }),
+});
+const ci = { key: 'ci-42', state: { name: 'CI', activity: 'done' as const } };
+await reporter.send([ci], { persist: true });
 ```
 
-HTTP writes each unit at most every 10 s; the reporter socket allows more frequent updates (`persist: false` only reaches live viewers). Also `worlds()`, `remove()` and `track()`.
+HTTP writes each unit at most every 10 s; the reporter socket allows more frequent updates (`persist: false` only reaches live viewers). Orchestrators running many agents report them all on one reporter: store on structural changes, send activity live, and answer `onSync` by re-sending live state. States may carry `squad` (a label) and `parent` (an orchestrator's unit key). Also `worlds()`, `remove()` and `track()`.
 
 ## Schemas
 

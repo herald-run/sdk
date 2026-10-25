@@ -1,6 +1,6 @@
 import { lstat, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, relative, resolve } from 'node:path';
-import { areaOf, type UnitActivity, type UnitState } from '@herald-run/sdk/schema';
+import { areaOf, unitKeySchema, type UnitActivity, type UnitState } from '@herald-run/sdk/schema';
 import type { Fleet } from '@herald-run/sdk';
 import { checkout, shortHash } from './git';
 import { mergeState, type FleetUpdate } from './protocol';
@@ -43,8 +43,20 @@ function inside(root: string, cwd: string, path: unknown) {
   const rel = relative(root, resolve(cwd, path)).split('\\').join('/');
   return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : undefined;
 }
+/** `HERALD_FLEET_SQUAD` and `HERALD_FLEET_PARENT`, when set and valid. */
+export function squadOf(env: Record<string, string | undefined>): Partial<UnitState> {
+  const squad = env.HERALD_FLEET_SQUAD?.trim().slice(0, 60);
+  const parent = env.HERALD_FLEET_PARENT?.trim();
+  return {
+    ...(squad ? { squad } : {}),
+    ...(parent && unitKeySchema.safeParse(parent).success ? { parent } : {}),
+  };
+}
 /** The Fleet update a hook event stands for, or undefined when it has none. */
-export async function hookUpdate(input: HookInput): Promise<FleetUpdate | undefined> {
+export async function hookUpdate(
+  input: HookInput,
+  env: Record<string, string | undefined> = {},
+): Promise<FleetUpdate | undefined> {
   const activity = activityOf(input.hook_event_name, input.tool_name);
   if (!activity || !input.session_id || !input.cwd) return undefined;
   const repo = await checkout(input.cwd);
@@ -56,6 +68,7 @@ export async function hookUpdate(input: HookInput): Promise<FleetUpdate | undefi
     kind: 'claude-code',
     activity,
     ...(repo.branch ? { ref: repo.branch } : {}),
+    ...squadOf(env),
   };
   const raw = input.tool_input ?? {};
   const file = inside(repo.root, input.cwd, raw.file_path ?? raw.notebook_path);
@@ -71,7 +84,7 @@ export async function hookUpdate(input: HookInput): Promise<FleetUpdate | undefi
   return { repo: repo.repo, key, state, ...(repo.pushed ? { pushed: true } : {}) };
 }
 /** HTTP fallback writes per unit at most this often. */
-export const HTTP_EVERY = 15_000;
+export const HTTP_EVERY = 30_000;
 type HookState = {
   worlds: Record<string, { id: string | null; at: number }>;
   /** `pending`: merged but not yet sent. */
@@ -99,7 +112,7 @@ async function writeState(path: string, data: HookState, now: number) {
   await rename(temp, path);
 }
 /**
- * Reports an update over HTTP without a daemon: each unit at most every 15 s, merging what
+ * Reports an update over HTTP without a daemon: each unit at most every 30 s, merging what
  * arrives in between; world ids are cached in the 0600 state file. A held idle or waiting state
  * calls `defer`, which should run `flushOverHttp` once it is due.
  */

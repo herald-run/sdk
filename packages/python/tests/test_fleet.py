@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 from herald import FleetWorld, Herald, HeraldError, SyncHerald, e2ee
+from herald.keyed import check_unit_state
 from fixtures import SCENARIO, keyed
 
 V = json.loads((Path(__file__).parents[2] / "sdk/fixtures/e2ee-vectors.json").read_text())
@@ -48,6 +49,8 @@ class FleetTests(unittest.IsolatedAsyncioTestCase):
                 ([], "1 to 50"),
                 ([{"key": "k", "ttl": 5, "state": STATE}], "ttl"),
                 ([{"key": "k", "state": {**STATE, "area": "Bad Area"}}], "area"),
+                ([{"key": "k", "state": {**STATE, "squad": " "}}], "squad"),
+                ([{"key": "k", "state": {**STATE, "parent": "bad key"}}], "parent"),
                 ([{"key": "k", "state": {**STATE, "files": [f"{i}".ljust(300, "é") for i in range(10)]}}], "exceeds 6,000"),
             ]:
                 with self.subTest(text), self.assertRaisesRegex(HeraldError, text):
@@ -55,6 +58,7 @@ class FleetTests(unittest.IsolatedAsyncioTestCase):
             # Unknown kinds and activities read as viewers would.
             [unit] = await herald.fleet_units("fw_1", [{"key": "k", "state": {"name": "x", "kind": "Bad!", "activity": "dancing"}}])
             self.assertEqual(unit["sealed"]["ctx"]["key"], "k")
+            self.assertEqual(check_unit_state({**STATE, "squad": " run 7 ", "parent": "cc-1"})["squad"], "run 7")
         self.assertFalse([s for s in seen if s[0] == "POST"])
 
     async def test_worlds_remove_track_and_quota_errors(self):

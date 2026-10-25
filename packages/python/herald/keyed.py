@@ -338,6 +338,17 @@ def check_unit_state(state):
     if not isinstance(files, list) or len(files) > 10 or not all(_fits(f, 300) for f in files):
         _invalid("Unit files are at most 10 paths of 300 characters.")
     out["files"] = list(files)
+    squad = state.get("squad")
+    if squad is not None:
+        squad = _trim(squad) if isinstance(squad, str) else ""
+        if not squad or not _fits(squad, 60):
+            _invalid("Unit squad must be 1 to 60 characters.")
+        out["squad"] = squad
+    parent = state.get("parent")
+    if parent is not None:
+        if not isinstance(parent, str) or not UNIT_KEY.fullmatch(parent):
+            _invalid("Unit parent must be a unit key.")
+        out["parent"] = parent
     return out
 
 

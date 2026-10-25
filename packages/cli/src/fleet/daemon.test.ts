@@ -19,6 +19,7 @@ function fake() {
   const state = {
     connected: true,
     onError: undefined as ((e: FleetFrameError) => void) | undefined,
+    onSync: undefined as (() => void) | undefined,
   };
   const fleet = {
     worlds: vi.fn(async () => [world]),
@@ -26,6 +27,7 @@ function fake() {
     track: vi.fn(async () => {}),
     reporter: vi.fn((_id: string, options) => {
       state.onError = options?.onError;
+      state.onSync = options?.onSync;
       return {
         send: async (units: { key: string; state: { activity?: string } }[], o = {}) => {
           if (!state.connected) return false;
@@ -72,7 +74,7 @@ it('coalesces updates per unit and sends each at most every 2 s', async () => {
   expect(fleet.reporter).toHaveBeenCalledTimes(1);
 });
 
-it('stores on ref, area or activity changes and at least every 60 s; re-sends before the TTL', async () => {
+it('stores on ref, area or task changes and at least every 5 min; re-sends before the TTL', async () => {
   let now = 0;
   const { fleet, frames } = fake();
   const daemon = new FleetDaemon(fleet, { now: () => now });
@@ -81,7 +83,9 @@ it('stores on ref, area or activity changes and at least every 60 s; re-sends be
   for (const [at, change, persist] of [
     [3000, { area: 'docs' }, true],
     [6000, { files: ['x'] }, false],
-    [9000, { ref: 'feature' }, true],
+    [9000, { activity: 'editing' }, false],
+    [12000, { task: 'Fix it' }, true],
+    [15000, { ref: 'feature' }, true],
   ] as const) {
     now = at;
     daemon.update(unit('a', change, undefined, 'ref' in change || undefined));
@@ -91,14 +95,17 @@ it('stores on ref, area or activity changes and at least every 60 s; re-sends be
   expect(fleet.track).toHaveBeenCalledExactlyOnceWith('fw_1', 'feature');
   // Without updates an active unit is re-sent at 75% of its 40 s TTL…
   const count = frames.length;
-  now = 9000 + 29_000;
+  now = 15000 + 29_000;
   await daemon.tick();
   expect(frames).toHaveLength(count);
-  now = 9000 + 30_000;
+  now = 15000 + 30_000;
   await daemon.tick();
   expect(frames.at(-1)).toMatchObject({ keys: ['a'], persist: false });
-  // …and stored once 60 s passed since the last store.
-  now = 9000 + 60_000;
+  // …and stored once 5 min passed since the last store.
+  now = 15000 + 270_000;
+  await daemon.tick();
+  expect(frames.at(-1)).toMatchObject({ keys: ['a'], persist: false });
+  now = 15000 + 300_000;
   await daemon.tick();
   expect(frames.at(-1)).toMatchObject({ keys: ['a'], persist: true });
   // Idle units are sent once and left to fade.
@@ -109,6 +116,22 @@ it('stores on ref, area or activity changes and at least every 60 s; re-sends be
   now += 600_000;
   await daemon.tick();
   expect(frames).toHaveLength(idle);
+});
+
+it('re-sends live units on sync, not faded ones', async () => {
+  let now = 0;
+  const { fleet, frames, state } = fake();
+  const daemon = new FleetDaemon(fleet, { now: () => now });
+  daemon.update(unit('a', { activity: 'idle' }));
+  daemon.update(unit('b', { activity: 'idle' }, 30));
+  await daemon.tick();
+  expect(frames).toEqual([{ keys: ['a', 'b'], persist: true, activity: ['idle', 'idle'] }]);
+  now = 60_000;
+  state.onSync!();
+  await daemon.tick();
+  expect(frames.at(-1)).toEqual({ keys: ['a'], persist: false, activity: ['idle'] });
+  await daemon.tick();
+  expect(frames).toHaveLength(2);
 });
 
 it('tracks only refs on the remote', async () => {

@@ -110,6 +110,8 @@ export const commands: Record<string, Spec> = {
       'file',
       'ref',
       'ttl',
+      'squad',
+      'parent',
     ],
     describe: {
       file: '--file PATH        A file the unit works on; repeatable (sets the area)',
@@ -124,7 +126,8 @@ export const commands: Record<string, Spec> = {
   daemon   Coalesce local updates on a unix socket and report them on one socket per world
 Units are end-to-end encrypted. Needs the fleet:write scope (run herald login again if missing).
 Claude Code: run herald fleet hook from PreToolUse, PostToolUse, UserPromptSubmit, Stop,
-Notification and SessionEnd hooks; keep herald fleet daemon running for live updates.`,
+Notification and SessionEnd hooks; keep herald fleet daemon running for live updates.
+HERALD_FLEET_SOCKET overrides the daemon socket path, e.g. one mounted from the host.`,
   },
   completion: { args: 'bash|zsh|fish', summary: 'Print a shell completion script' },
   help: { args: '[command]', summary: 'Show help for a command' },
@@ -174,6 +177,9 @@ const describe: Record<string, string> = {
   task: '--task TEXT        What the unit is doing (200 characters)',
   ref: '--ref BRANCH       Branch (default: the current one)',
   ttl: '--ttl SECONDS      Fade to idle after this long without a report (30-3600, default 600)',
+  squad:
+    '--squad NAME       Group label, e.g. an orchestrator run (or HERALD_FLEET_SQUAD in hooks)',
+  parent: '--parent KEY       Unit key of the orchestrator (or HERALD_FLEET_PARENT in hooks)',
 };
 const globals = `Global options:
   --json             Machine-readable JSON output

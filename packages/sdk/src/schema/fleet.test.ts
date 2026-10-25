@@ -158,6 +158,15 @@ describe('fleet units', () => {
       unitStateSchema.parse({ name: 'a', kind: 'Bad Kind', activity: 'flying', mood: 'x' }),
     ).toEqual({ name: 'a', kind: 'agent', activity: 'idle', files: [] });
   });
+  it('trims squads and checks parent keys', () => {
+    expect(unitStateSchema.parse({ name: 'a', squad: '  run 7 ', parent: 'cc-1' })).toMatchObject({
+      squad: 'run 7',
+      parent: 'cc-1',
+    });
+    expect(unitStateSchema.safeParse({ name: 'a', squad: 'x'.repeat(61) }).success).toBe(false);
+    expect(unitStateSchema.safeParse({ name: 'a', squad: ' ' }).success).toBe(false);
+    expect(unitStateSchema.safeParse({ name: 'a', parent: 'not a key' }).success).toBe(false);
+  });
   it('refuses duplicate keys in a batch', () => {
     const sealed = {
       v: 1,

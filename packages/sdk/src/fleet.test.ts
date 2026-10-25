@@ -182,13 +182,19 @@ it('reporter sends frames while open, within the frame budget, and surfaces erro
   vi.useFakeTimers();
   const sockets: ReturnType<typeof fakeSocket>[] = [];
   const errors: unknown[] = [];
+  let syncs = 0;
   const reporter = new FleetReporter(
     () => {
       sockets.push(fakeSocket());
       return sockets.at(-1)! as unknown as ReporterSocket;
     },
     sealer,
-    { framesPerMinute: 2, delay: () => 1000, onError: (e) => errors.push(e) },
+    {
+      framesPerMinute: 2,
+      delay: () => 1000,
+      onError: (e) => errors.push(e),
+      onSync: () => syncs++,
+    },
   );
   const unit = { key: 'k1', state };
   expect(await reporter.send([unit])).toBe(false);
@@ -212,6 +218,8 @@ it('reporter sends frames while open, within the frame budget, and surfaces erro
     JSON.stringify({ type: 'error', error: 'Slow.', code: 'FLEET_RATE', retryAfter: 4 }),
   );
   sockets[0].emit('message', 'not json');
+  sockets[0].emit('message', JSON.stringify({ type: 'sync' }));
+  expect(syncs).toBe(1);
   expect(errors).toEqual([
     { error: 'Paused.', code: 'FLEET_QUOTA' },
     { error: 'Slow.', code: 'FLEET_RATE', retryAfter: 4 },

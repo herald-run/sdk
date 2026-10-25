@@ -32,12 +32,14 @@ export function mergeState(
   return { ...prev, ...defined, ...(files ? { files } : {}) };
 }
 const suffix = (profile: string) => (profile === 'default' ? '' : '-' + profile);
-/** Per-user runtime directory, else the Herald config directory. */
+/** `HERALD_FLEET_SOCKET`, else the per-user runtime directory, else the config directory. */
 export const socketPath = (
   env: Record<string, string | undefined>,
   config: string,
   profile: string,
-) => join(env.XDG_RUNTIME_DIR || config, `herald-fleet${suffix(profile)}.sock`);
+) =>
+  env.HERALD_FLEET_SOCKET ||
+  join(env.XDG_RUNTIME_DIR || config, `herald-fleet${suffix(profile)}.sock`);
 /** The hook's throttle state: per-user runtime directory, else the temp directory. */
 export const hookStatePath = (env: Record<string, string | undefined>, profile: string) =>
   env.XDG_RUNTIME_DIR

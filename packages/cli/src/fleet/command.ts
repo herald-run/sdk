@@ -4,6 +4,7 @@ import { HeraldError, type Herald } from '@herald-run/sdk';
 import {
   flattenAreas,
   unitActivities,
+  unitKeySchema,
   worldPath,
   type UnitActivity,
   type UnitState,
@@ -11,7 +12,7 @@ import {
 import { UsageError } from '../compose';
 import { FleetDaemon, serveDaemon } from './daemon';
 import { checkout, onOrigin, shortHash } from './git';
-import { flushOverHttp, hookUpdate, reportOverHttp, type HookInput } from './hook';
+import { flushOverHttp, hookUpdate, reportOverHttp, squadOf, type HookInput } from './hook';
 import { hookStatePath, socketPath, toDaemon } from './protocol';
 import { areaFor, initWorld, localWorld } from './world';
 export type FleetValues = {
@@ -26,6 +27,8 @@ export type FleetValues = {
   key?: string;
   ttl?: string;
   repo?: string;
+  squad?: string;
+  parent?: string;
 };
 export type FleetContext = {
   values: FleetValues;
@@ -84,7 +87,7 @@ async function run(action: string | undefined, c: FleetContext): Promise<number>
       return report(c);
     case 'hook': {
       const input = JSON.parse((await c.stdin?.()) || '{}') as HookInput;
-      const update = await hookUpdate(input);
+      const update = await hookUpdate(input, c.env);
       if (!update) return 0;
       if (await toDaemon(socketPath(c.env, c.directory, c.profile), update)) return 0;
       const defer = c.defer && (() => c.defer!(['fleet', 'flush', '--key', update.key]));
@@ -134,9 +137,12 @@ async function report(c: FleetContext) {
     ...(area ? { area } : {}),
     ...(activity ? { activity } : {}),
     ...(values.task ? { task: values.task } : {}),
+    ...squadOf({ HERALD_FLEET_SQUAD: values.squad, HERALD_FLEET_PARENT: values.parent }),
     files,
   };
   const key = values.key || 'cli-' + shortHash(hostname(), root, name);
+  if (values.parent !== undefined && !unitKeySchema.safeParse(values.parent).success)
+    throw new UsageError('--parent is a unit key: 1-64 letters, digits, _ or -.');
   const world = await c.client.fleet.world(full);
   if (!world) throw new Error(`No Fleet world for ${full}. Add the repo in Herald first.`);
   const result = await c.client.fleet.report(world.id, [{ key, ttl, state: state as UnitState }]);

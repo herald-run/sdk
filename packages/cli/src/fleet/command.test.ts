@@ -101,7 +101,18 @@ it('lists worlds and reports a unit with defaults from the checkout', async () =
     code: 0,
     out: 'fw_1  acme/app  private',
   });
-  const reported = await run(['fleet', 'report', '--file', 'a.ts', '--activity', 'editing']);
+  const reported = await run([
+    'fleet',
+    'report',
+    '--file',
+    'a.ts',
+    '--activity',
+    'editing',
+    '--squad',
+    'run 7',
+    '--parent',
+    'cc-lead',
+  ]);
   expect(reported).toMatchObject({
     code: 0,
     out: expect.stringMatching(/^Reported cli-\S+ to acme\/app\.$/),
@@ -115,6 +126,8 @@ it('lists worlds and reports a unit with defaults from the checkout', async () =
     area: 'src',
     activity: 'editing',
     files: ['src/a.ts'],
+    squad: 'run 7',
+    parent: 'cc-lead',
   });
   // A non-default branch is tracked once pushed; the key is stable.
   expect(seen.filter((s) => s.route.startsWith('PUT'))).toEqual([]);
@@ -136,6 +149,7 @@ it('reports usage errors and missing worlds or scopes', async () => {
   expect((await run(['fleet'])).code).toBe(2);
   expect((await run(['fleet', 'report', '--activity', 'dancing'])).code).toBe(2);
   expect((await run(['fleet', 'report', '--ttl', '5'])).code).toBe(2);
+  expect((await run(['fleet', 'report', '--parent', 'a b'])).code).toBe(2);
   expect(await run(['fleet', 'report'])).toMatchObject({
     code: 1,
     err: 'No Fleet world for acme/app. Add the repo in Herald first.',
@@ -158,6 +172,7 @@ it('documents the fleet actions and their options', async () => {
     'init|worlds|report|hook|daemon',
     '--file PATH        A file the unit',
     '--ttl SECONDS',
+    '--squad NAME',
   ])
     expect(out).toContain(text);
 });

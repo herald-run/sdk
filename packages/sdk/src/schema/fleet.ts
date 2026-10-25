@@ -236,6 +236,7 @@ export const unitActivities = [
   'done',
 ] as const;
 export type UnitActivity = (typeof unitActivities)[number];
+export const unitKeySchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 /** A unit's sealed state. Unknown keys are dropped so newer reporters still parse. */
 export const unitStateSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -250,9 +251,12 @@ export const unitStateSchema = z.object({
   activity: z.enum(unitActivities).catch('idle'),
   task: z.string().max(200).optional(),
   files: z.array(z.string().max(300)).max(10).default([]),
+  /** A group label, e.g. the orchestrator's run. */
+  squad: z.string().trim().min(1).max(60).optional(),
+  /** The unit key of the orchestrator that runs this one. */
+  parent: unitKeySchema.optional(),
 });
 export type UnitState = z.infer<typeof unitStateSchema>;
-export const unitKeySchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 /** Serialized sealed unit envelopes larger than this are refused. */
 export const unitEnvelopeChars = 6000;
 /**
@@ -336,9 +340,19 @@ export interface FleetWorldDetail extends FleetWorld {
   /** Set when the plan's unit-hours are used up; reporters get 429 `FLEET_QUOTA` until it resets. */
   paused?: boolean;
 }
-/** Frames a viewer socket (`/fleet/ws?world=ID`) receives. `refs` means refetch the world. */
+/**
+ * Frames a viewer socket (`/fleet/ws?world=ID`) receives. `units` and `gone` are coalesced: each
+ * key's latest state, about every 500 ms. `refs` means refetch the world.
+ */
 export type FleetFrame =
   | { type: 'units'; units: FleetUnit[] }
   | { type: 'gone'; keys: string[] }
   | { type: 'refs' }
   | { type: 'paused'; paused: boolean };
+/**
+ * Frames a reporter socket receives: a refused frame's `error`, or `sync` when a viewer joins,
+ * asking it to re-send its live units with `persist: false`.
+ */
+export type FleetReporterFrame =
+  | { type: 'error'; error: string; code?: string; retryAfter?: number; resetsAt?: string }
+  | { type: 'sync' };

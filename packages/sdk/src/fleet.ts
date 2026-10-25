@@ -42,6 +42,8 @@ export type ReporterOptions = {
   /** A refused frame; its units were neither stored nor shown. */
   onError?: (error: FleetFrameError) => void;
   onOpen?: () => void;
+  /** A viewer joined: re-send live units with `persist: false` so it sees current state. */
+  onSync?: () => void;
   /** The socket closed; it reconnects with jittered backoff until `close()`. */
   onClose?: (code: number, reason: string) => void;
   /** Reconnect delay by attempt; defaults to 1 s doubling to 30 s with jitter. */
@@ -268,6 +270,7 @@ export class FleetReporter {
       } catch {
         return;
       }
+      if (frame?.type === 'sync') return void this.#options.onSync?.();
       if (frame?.type !== 'error') return;
       this.#options.onError?.({
         error: typeof frame.error === 'string' ? frame.error : 'The frame was refused.',

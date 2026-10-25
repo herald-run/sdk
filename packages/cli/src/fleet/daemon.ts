@@ -37,13 +37,19 @@ type Unit = {
   persistedAt: number;
   /** What was last stored: a change of any of these is stored at once. */
   persisted?: string;
+  /** A viewer joined: re-send live on the next tick. */
+  resend?: boolean;
 };
+/** Default unit TTL (s); it outlasts the refresh, so active units never fade between sends. */
+export const UNIT_TTL = 900;
 type World = { id: string; defaultBranch: string; reporter: Reporter; pausedUntil: number };
-const snapshot = (s: Partial<UnitState>) => JSON.stringify([s.ref, s.area, s.activity]);
+// Activity is not here: its changes are live-only, and joining viewers get it from `sync`.
+const snapshot = (s: Partial<UnitState>) =>
+  JSON.stringify([s.ref, s.area, s.name, s.kind, s.task, s.squad, s.parent]);
 /**
  * Coalesces local unit updates and sends them on one reporter socket per world: each unit at
- * most every `sendEvery`, stored on a ref, area or activity change or every `persistEvery`, and
- * re-sent before its TTL while active.
+ * most every `sendEvery`, stored on a ref, area, name, kind, task or squad change or every
+ * `persistEvery`, re-sent before its TTL while active, and re-sent live on `sync`.
  */
 export class FleetDaemon {
   #fleet: DaemonFleet;
@@ -64,7 +70,7 @@ export class FleetDaemon {
     this.#now = options.now ?? Date.now;
     this.#log = options.log ?? (() => {});
     this.#sendEvery = options.sendEvery ?? 2000;
-    this.#persistEvery = options.persistEvery ?? 60_000;
+    this.#persistEvery = options.persistEvery ?? 300_000;
     this.#staleAfter = options.staleAfter ?? 1_800_000;
   }
   get units() {
@@ -81,7 +87,7 @@ export class FleetDaemon {
     const next: Unit = unit ?? {
       key: update.key,
       repo: update.repo,
-      ttl: 600,
+      ttl: UNIT_TTL,
       state: {},
       pushed: false,
       dirty: true,
@@ -135,9 +141,16 @@ export class FleetDaemon {
     world.reporter = this.#fleet.reporter(found.id, {
       onError: (error) => this.#refused(repo, world, error),
       onOpen: () => this.#log(`Reporting to ${repo}.`),
+      onSync: () => this.#sync(repo),
     });
     this.#worlds.set(repo, world);
     return world;
+  }
+  /** Units the server may still show are re-sent live on the next tick. */
+  #sync(repo: string) {
+    const now = this.#now();
+    for (const u of this.#units.values())
+      if (u.repo === repo && now - u.sentAt < u.ttl * 1000) u.resend = true;
   }
   /** A refused frame: its units are sent and stored again, after a pause where one applies. */
   #refused(repo: string, world: World, error: FleetFrameError) {
@@ -180,6 +193,7 @@ export class FleetDaemon {
       const active = !['idle', 'done'].includes(unit.state.activity ?? 'idle');
       const refresh = Math.min(this.#persistEvery, unit.ttl * 750);
       const ready =
+        unit.resend ||
         (unit.dirty && now - unit.sentAt >= this.#sendEvery) ||
         (active && now - unit.sentAt >= refresh);
       if (!ready || !unit.state.name) continue;
@@ -208,12 +222,12 @@ export class FleetDaemon {
     } catch (error) {
       // An invalid state is not retried until the unit changes.
       this.#log(`Could not seal units: ${(error as Error).message}`);
-      for (const u of units) Object.assign(u, { dirty: false, sentAt: now });
+      for (const u of units) Object.assign(u, { dirty: false, resend: false, sentAt: now });
       return;
     }
     if (!sent) return;
     for (const u of units) {
-      u.dirty = false;
+      u.dirty = u.resend = false;
       u.sentAt = now;
       if (persist) Object.assign(u, { persistedAt: now, persisted: snapshot(u.state) });
       const ref = u.state.ref;

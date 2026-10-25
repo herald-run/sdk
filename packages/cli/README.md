@@ -51,7 +51,7 @@ herald fleet report --activity editing --file src/app.ts --task "Fix login"
 herald fleet daemon                # keep running: coalesces local updates on one socket per world
 ```
 
-`report` takes the repo from the `origin` remote, the branch from the checkout and the area from the files and the world file; branches `origin` has are tracked, so they show without a PR. `herald fleet hook` reads a Claude Code hook event on stdin, hands it to the daemon (or reports over HTTP at most every 15 s per session; a held idle or waiting state follows from a short background process), always exits 0 and prints nothing. In `~/.claude/settings.json`:
+`report` takes the repo from the `origin` remote, the branch from the checkout and the area from the files and the world file; branches `origin` has are tracked, so they show without a PR. `herald fleet hook` reads a Claude Code hook event on stdin, hands it to the daemon (or reports over HTTP at most every 30 s per session; a held idle or waiting state follows from a short background process), always exits 0 and prints nothing. In `~/.claude/settings.json`:
 
 ```json
 {
@@ -67,6 +67,16 @@ herald fleet daemon                # keep running: coalesces local updates on on
 ```
 
 Reads, searches and listings show as reading, edits as editing, other tools and prompts as running; Stop is idle, Notification waiting, and SessionEnd removes the unit.
+
+The daemon stores a unit when its ref, area, name, kind or task changes, or every 5 minutes; activity changes only reach live viewers, and it re-sends live state when a viewer opens the world. Group units with `HERALD_FLEET_SQUAD` (a label) and `HERALD_FLEET_PARENT` (an orchestrator's unit key) in the agent's environment, or `--squad`/`--parent` on `report`.
+
+One daemon serves every agent on a host, containers included: put its socket in its own directory with `HERALD_FLEET_SOCKET` and mount that directory (not the socket file, which a restarted daemon replaces). The socket is mode 0600, so run containers as the same user. Agents in the container need no token while the daemon answers.
+
+```sh
+HERALD_FLEET_SOCKET=~/.herald-fleet/fleet.sock herald fleet daemon
+docker run --user "$(id -u):$(id -g)" -v ~/.herald-fleet:/run/herald-fleet \
+  -e HERALD_FLEET_SOCKET=/run/herald-fleet/fleet.sock -e HERALD_FLEET_SQUAD=batch-7 my-agent
+```
 
 ## Output
 

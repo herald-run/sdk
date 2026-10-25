@@ -116,6 +116,8 @@ const options = {
   ref: { type: 'string' },
   ttl: { type: 'string' },
   repo: { type: 'string' },
+  squad: { type: 'string' },
+  parent: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
 /** A team workspace pin file: absent means no pin yet; anything else must be a valid pin. */

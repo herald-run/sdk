@@ -128,10 +128,18 @@ it('builds updates from hook input: key, name, branch, area and files', async ()
     remove: true,
   });
   expect(await hookUpdate({ ...base, hook_event_name: 'PreCompact' })).toBeUndefined();
+  const squad = { HERALD_FLEET_SQUAD: ' run 7 ', HERALD_FLEET_PARENT: 'cc-lead' };
+  expect((await hookUpdate(update, squad))?.state).toMatchObject({
+    squad: 'run 7',
+    parent: 'cc-lead',
+  });
+  expect((await hookUpdate(update, { HERALD_FLEET_PARENT: 'bad key' }))?.state).not.toHaveProperty(
+    'parent',
+  );
   expect(await hookUpdate({ ...base, cwd: dir, hook_event_name: 'Stop' })).toBeUndefined();
 });
 
-it('reports over HTTP at most every 15 s per unit, merging what arrives between', async () => {
+it('reports over HTTP at most every 30 s per unit, merging what arrives between', async () => {
   const path = join(dir, 'state.json');
   const world = vi.fn(async () => ({ id: 'fw_1' }) as never);
   const report = vi.fn(async () => ({ units: [] }));
@@ -140,8 +148,9 @@ it('reports over HTTP at most every 15 s per unit, merging what arrives between'
   const update = (state: object) => ({ repo: 'acme/app', key: 'cc-1', state });
   await reportOverHttp(fleet, update({ name: 'app', activity: 'reading', files: ['a'] }), path, 0);
   await reportOverHttp(fleet, update({ activity: 'editing', files: ['b'] }), path, 5000);
+  await reportOverHttp(fleet, update({}), path, 29_000);
   expect(report).toHaveBeenCalledTimes(1);
-  await reportOverHttp(fleet, update({ activity: 'idle' }), path, 15_000);
+  await reportOverHttp(fleet, update({ activity: 'idle' }), path, 30_000);
   expect(report).toHaveBeenCalledTimes(2);
   expect(report.mock.lastCall).toEqual([
     'fw_1',
@@ -153,10 +162,12 @@ it('reports over HTTP at most every 15 s per unit, merging what arrives between'
   expect((await stat(path)).mode & 0o777).toBe(0o600);
   // A failed write still counts against the interval.
   report.mockRejectedValueOnce(new HeraldError('Slow down.', 429));
-  await expect(reportOverHttp(fleet, update({}), path, 30_000)).rejects.toThrow('Slow down.');
-  await reportOverHttp(fleet, update({}), path, 31_000);
+  await expect(reportOverHttp(fleet, update({}), path, 60_000)).rejects.toThrow('Slow down.');
+  await reportOverHttp(fleet, update({}), path, 61_000);
   expect(report).toHaveBeenCalledTimes(3);
-  await reportOverHttp(fleet, { repo: 'acme/app', key: 'cc-1', remove: true }, path, 31_000);
+  await reportOverHttp(fleet, update({}), path, 90_000);
+  expect(report).toHaveBeenCalledTimes(4);
+  await reportOverHttp(fleet, { repo: 'acme/app', key: 'cc-1', remove: true }, path, 90_000);
   expect(remove).toHaveBeenCalledWith('fw_1', 'cc-1', { retry: false, signal: undefined });
   expect(JSON.parse(await readFile(path, 'utf8')).units).toEqual({});
 });
@@ -178,7 +189,7 @@ it('sends a held idle or waiting state once the interval is up', async () => {
   vi.setSystemTime(106_000);
   const sleep = vi.fn(async (ms: number) => void vi.setSystemTime(Date.now() + ms));
   await flushOverHttp(fleet, 'cc-1', path, sleep);
-  expect(sleep).toHaveBeenCalledWith(9000);
+  expect(sleep).toHaveBeenCalledWith(24_000);
   expect(report).toHaveBeenLastCalledWith(
     'fw_1',
     [{ key: 'cc-1', state: { name: 'app', activity: 'idle' } }],
