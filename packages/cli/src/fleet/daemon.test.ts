@@ -15,7 +15,8 @@ const world = {
 type Frame = { keys: string[]; persist: boolean; activity: (string | undefined)[] };
 /** A fake fleet whose reporter records frames; `connected` toggles the socket. */
 function fake() {
-  const frames: Frame[] = [];
+  const frames: Frame[] = [],
+    ttls: number[][] = [];
   const state = {
     connected: true,
     onError: undefined as ((e: FleetFrameError) => void) | undefined,
@@ -29,8 +30,12 @@ function fake() {
       state.onError = options?.onError;
       state.onSync = options?.onSync;
       return {
-        send: async (units: { key: string; state: { activity?: string } }[], o = {}) => {
+        send: async (
+          units: { key: string; ttl?: number; state: { activity?: string } }[],
+          o = {},
+        ) => {
           if (!state.connected) return false;
+          ttls.push(units.map((u) => u.ttl ?? 0));
           frames.push({
             keys: units.map((u) => u.key),
             persist: (o as { persist?: boolean }).persist ?? true,
@@ -42,7 +47,7 @@ function fake() {
       };
     }),
   } satisfies DaemonFleet;
-  return { fleet, frames, state };
+  return { fleet, frames, ttls, state };
 }
 const unit = (key: string, state: object, ttl?: number, pushed?: true) => ({
   repo: 'acme/app',
@@ -132,6 +137,33 @@ it('re-sends live units on sync, not faded ones', async () => {
   expect(frames.at(-1)).toEqual({ keys: ['a'], persist: false, activity: ['idle'] });
   await daemon.tick();
   expect(frames).toHaveLength(2);
+});
+
+it('re-sends on sync with the TTL left, so viewers never extend a unit', async () => {
+  let now = 0;
+  const { fleet, frames, ttls, state } = fake();
+  const daemon = new FleetDaemon(fleet, { now: () => now });
+  daemon.update(unit('a', { activity: 'idle' }));
+  await daemon.tick();
+  for (const [at, ttl] of [
+    [600_000, 300],
+    [890_000, 30],
+  ] as const) {
+    now = at;
+    state.onSync!();
+    await daemon.tick();
+    expect(frames.at(-1)).toEqual({ keys: ['a'], persist: false, activity: ['idle'] });
+    expect(ttls.at(-1)).toEqual([ttl]);
+  }
+  now = 900_000;
+  state.onSync!();
+  await daemon.tick();
+  expect(frames).toHaveLength(3);
+  // A local change is a normal send with the full TTL.
+  daemon.update(unit('a', { activity: 'editing' }));
+  state.onSync!();
+  await daemon.tick();
+  expect(ttls.at(-1)).toEqual([900]);
 });
 
 it('tracks only refs on the remote', async () => {

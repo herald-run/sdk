@@ -37,7 +37,7 @@ type Unit = {
   persistedAt: number;
   /** What was last stored: a change of any of these is stored at once. */
   persisted?: string;
-  /** A viewer joined: re-send live on the next tick. */
+  /** A viewer joined: re-send live with the TTL left on the next tick. */
   resend?: boolean;
 };
 /** Default unit TTL (s); it outlasts the refresh, so active units never fade between sends. */
@@ -48,8 +48,9 @@ const snapshot = (s: Partial<UnitState>) =>
   JSON.stringify([s.ref, s.area, s.name, s.kind, s.task, s.squad, s.parent]);
 /**
  * Coalesces local unit updates and sends them on one reporter socket per world: each unit at
- * most every `sendEvery`, stored on a ref, area, name, kind, task or squad change or every
- * `persistEvery`, re-sent before its TTL while active, and re-sent live on `sync`.
+ * most every `sendEvery`, stored on a ref, area, name, kind, task, squad or parent change or every
+ * `persistEvery`, re-sent before its TTL while active, and re-sent live on `sync` with the TTL
+ * left, so viewers joining never extend it.
  */
 export class FleetDaemon {
   #fleet: DaemonFleet;
@@ -172,7 +173,12 @@ export class FleetDaemon {
     if (world.pausedUntil > now)
       this.#log(`${repo}: paused until ${new Date(world.pausedUntil).toISOString()}.`);
   }
-  #report = (u: Unit) => ({ key: u.key, ttl: u.ttl, state: u.state as UnitState });
+  /** A resend's TTL is what is left, at least the server's 30 s. */
+  #report = (u: Unit, now: number, resend: boolean) => ({
+    key: u.key,
+    ttl: resend ? Math.max(30, Math.ceil((u.sentAt + u.ttl * 1000 - now) / 1000)) : u.ttl,
+    state: u.state as UnitState,
+  });
   async #flush() {
     const now = this.#now();
     for (const [key, repo] of [...this.#removals]) {
@@ -184,7 +190,7 @@ export class FleetDaemon {
             this.#log(`Could not remove ${key}: ${e.message}`);
         });
     }
-    const due = new Map<World, { persist: Unit[]; live: Unit[] }>();
+    const due = new Map<World, Record<'persist' | 'live' | 'resend', Unit[]>>();
     for (const unit of [...this.#units.values()]) {
       if (now - unit.touched > this.#staleAfter) {
         this.#units.delete(unit.key);
@@ -192,11 +198,12 @@ export class FleetDaemon {
       }
       const active = !['idle', 'done'].includes(unit.state.activity ?? 'idle');
       const refresh = Math.min(this.#persistEvery, unit.ttl * 750);
-      const ready =
-        unit.resend ||
-        (unit.dirty && now - unit.sentAt >= this.#sendEvery) ||
+      const send =
+        // A resend with a local change is a normal send, which may store it.
+        (unit.dirty && (unit.resend || now - unit.sentAt >= this.#sendEvery)) ||
         (active && now - unit.sentAt >= refresh);
-      if (!ready || !unit.state.name) continue;
+      if (!send && unit.resend && now - unit.sentAt >= unit.ttl * 1000) unit.resend = false;
+      if (!(send || unit.resend) || !unit.state.name) continue;
       const world = await this.#world(unit.repo).catch((e: Error) => {
         this.#log(`Could not list Fleet worlds: ${e.message}`);
         return undefined;
@@ -204,31 +211,35 @@ export class FleetDaemon {
       if (!world || world.pausedUntil > now) continue;
       const persist =
         unit.persisted !== snapshot(unit.state) || now - unit.persistedAt >= this.#persistEvery;
-      const group = due.get(world) ?? { persist: [], live: [] };
-      group[persist ? 'persist' : 'live'].push(unit);
+      const group = due.get(world) ?? { persist: [], live: [], resend: [] };
+      group[!send ? 'resend' : persist ? 'persist' : 'live'].push(unit);
       due.set(world, group);
     }
     for (const [world, group] of due)
-      for (const persist of [true, false]) {
-        const list = group[persist ? 'persist' : 'live'];
-        for (let i = 0; i < list.length; i += 50)
-          await this.#send(world, list.slice(i, i + 50), persist, now);
-      }
+      for (const kind of ['persist', 'live', 'resend'] as const)
+        for (let i = 0; i < group[kind].length; i += 50)
+          await this.#send(world, group[kind].slice(i, i + 50), kind, now);
   }
-  async #send(world: World, units: Unit[], persist: boolean, now: number) {
+  async #send(world: World, units: Unit[], kind: 'persist' | 'live' | 'resend', now: number) {
+    const persist = kind === 'persist',
+      resend = kind === 'resend';
     let sent: boolean;
     try {
-      sent = await world.reporter.send(units.map(this.#report), { persist });
+      sent = await world.reporter.send(
+        units.map((u) => this.#report(u, now, resend)),
+        { persist },
+      );
     } catch (error) {
       // An invalid state is not retried until the unit changes.
       this.#log(`Could not seal units: ${(error as Error).message}`);
-      for (const u of units) Object.assign(u, { dirty: false, resend: false, sentAt: now });
+      for (const u of units)
+        Object.assign(u, { dirty: false, resend: false, sentAt: resend ? u.sentAt : now });
       return;
     }
     if (!sent) return;
     for (const u of units) {
       u.dirty = u.resend = false;
-      u.sentAt = now;
+      if (!resend) u.sentAt = now;
       if (persist) Object.assign(u, { persistedAt: now, persisted: snapshot(u.state) });
       const ref = u.state.ref;
       const id = `${world.id}:${ref}`;

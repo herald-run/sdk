@@ -68,7 +68,7 @@ herald fleet daemon                # keep running: coalesces local updates on on
 
 Reads, searches and listings show as reading, edits as editing, other tools and prompts as running; Stop is idle, Notification waiting, and SessionEnd removes the unit.
 
-The daemon stores a unit when its ref, area, name, kind or task changes, or every 5 minutes; activity changes only reach live viewers, and it re-sends live state when a viewer opens the world. Group units with `HERALD_FLEET_SQUAD` (a label) and `HERALD_FLEET_PARENT` (an orchestrator's unit key) in the agent's environment, or `--squad`/`--parent` on `report`.
+The daemon stores a unit when its ref, area, name, kind, task, squad or parent changes, or every 5 minutes; activity changes only reach live viewers, and it re-sends live state when a viewer opens the world. Group units with `HERALD_FLEET_SQUAD` (a label) and `HERALD_FLEET_PARENT` (an orchestrator's unit key) in the agent's environment, or `--squad`/`--parent` on `report`.
 
 One daemon serves every agent on a host, containers included: put its socket in its own directory with `HERALD_FLEET_SOCKET` and mount that directory (not the socket file, which a restarted daemon replaces). The socket is mode 0600, so run containers as the same user. Agents in the container need no token while the daemon answers.
 
