@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import example from '../../fixtures/questions.json';
 import {
+  destinationSchema,
   fieldAnswers,
   fieldsSchema,
   isOption,
@@ -195,5 +196,89 @@ describe('questions and Other answers', () => {
       expect(valid({ questions: example.questions, ...extra })).toBe(false);
     const values = { q1: 'Postgres', q2: ['Lint'], q3: 'Any' };
     expect(valid({ questions: example.questions, actions: [{ ...action, values }] })).toBe(true);
+  });
+});
+describe('PDF annotations', () => {
+  const pdf = { ...attachment, name: 'plan.pdf', type: 'application/pdf' };
+  const field = { id: 'comments', label: 'Comments', type: 'annotations', attachmentId: pdf.id };
+  const box = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 };
+  const note = { page: 4, anchor: 'page' as const, text: 'Check this' };
+  const text = { ...note, anchor: 'text' as const, quote: 'Open', boxes: [box, box] };
+  const image = { ...note, anchor: 'image' as const, boxes: [box] };
+  const fields = fieldsSchema.parse([field]);
+  it('keeps annotations fields out of destination types', () => {
+    const types = [{ id: 'review', label: 'Review', fields: [field] }];
+    expect(destinationSchema.safeParse({ key: 'pdf', types }).success).toBe(false);
+  });
+  it('needs an annotations field to name an attached PDF', () => {
+    expect(valid({ kind: 'form', attachments: [pdf], fields: [field] })).toBe(true);
+    expect(valid({ kind: 'form', fields: [field] })).toBe(false);
+    expect(valid({ kind: 'form', attachments: [attachment], fields: [field] })).toBe(false);
+    expect(
+      valid({
+        kind: 'form',
+        attachments: [pdf],
+        fields: [{ ...field, attachmentId: '00000000-0000-4000-8000-000000000002' }],
+      }),
+    ).toBe(false);
+  });
+  it('allows attachmentId only on annotations fields, which cannot have defaults', () => {
+    const { attachmentId, ...bare } = field;
+    for (const bad of [bare, { ...field, default: [] }, { ...field, attachmentId: 'nope' }])
+      expect(fieldsSchema.safeParse([bad]).success).toBe(false);
+    for (const type of ['text', 'file'])
+      expect(fieldsSchema.safeParse([{ ...field, type }]).success).toBe(false);
+    expect(attachmentId).toBe(pdf.id);
+  });
+  it('validates annotation answers', () => {
+    const good: Answers[] = [{}, { comments: [] }, { comments: [note, text, image] }];
+    for (const values of good) expect(validateAnswers(fields, values)).toEqual({});
+    for (const bad of [
+      { ...note, page: 0 },
+      { ...note, page: 1.5 },
+      { ...note, anchor: 'line' },
+      { ...text, quote: undefined },
+      { ...text, quote: ' ' },
+      { ...note, boxes: [box] },
+      { ...image, boxes: [box, box] },
+      { ...image, quote: 'Open' },
+      { ...image, boxes: [{ ...box, x: 1.1 }] },
+      { ...image, boxes: [{ ...box, y: -0.1 }] },
+      { ...text, boxes: Array(101).fill(box) },
+      { ...text, boxes: [] },
+      { ...image, boxes: [{ x: 0.1, y: 0.2, w: 0.3 }] },
+      { ...note, text: '  ' },
+      { ...note, extra: 1 },
+      'text',
+      { page: 1 },
+    ])
+      expect(Object.keys(validateAnswers(fields, { comments: [bad] as never }))).toEqual([
+        'comments',
+      ]);
+    for (const bad of ['text', 5, true, { page: 1 }])
+      expect(Object.keys(validateAnswers(fields, { comments: bad as never }))).toEqual([
+        'comments',
+      ]);
+    expect(Object.keys(validateAnswers(fields, { comments: Array(501).fill(note) }))).toEqual([
+      'comments',
+    ]);
+  });
+  it('requires a comment when the field is required and keeps other fields strict', () => {
+    const required = fieldsSchema.parse([{ ...field, required: true }]);
+    expect(Object.keys(validateAnswers(required, { comments: [] }))).toEqual(['comments']);
+    expect(Object.keys(validateAnswers(required, {}))).toEqual(['comments']);
+    expect(validateAnswers(required, { comments: [note] })).toEqual({});
+    const multi = fieldsSchema.parse([
+      { id: 'm', label: 'M', type: 'multiselect', options: [{ value: 'a', label: 'A' }] },
+    ]);
+    expect(validateAnswers(multi, { m: ['a'] })).toEqual({});
+    expect(Object.keys(validateAnswers(multi, { m: [note] as never }))).toEqual(['m']);
+    const text = fieldsSchema.parse([{ id: 't', label: 'T', type: 'text' }]);
+    expect(Object.keys(validateAnswers(text, { t: [note] as never }))).toEqual(['t']);
+  });
+  it('lets an action answer a form whose annotations are optional', () => {
+    const base = { kind: 'form', attachments: [pdf], actions: [action] };
+    expect(valid({ ...base, fields: [field] })).toBe(true);
+    expect(valid({ ...base, fields: [{ ...field, required: true }] })).toBe(false);
   });
 });

@@ -116,18 +116,19 @@ export async function collect(
         await output.sync();
       } else {
         if (!Array.isArray(value) || value.length > (f.maxItems ?? 10)) throw new Error(failure);
+        const files = value as Upload[];
         const name = (file: Upload) =>
           typeof file === 'string'
             ? message.attachments.find((a) => a.id === file)?.name || ''
             : file.name;
-        if (value.length === 1) await save(client, value[0], output);
+        if (files.length === 1) await save(client, files[0], output);
         else {
           await output.close();
           handles.delete(f.id);
           await unlink(path);
           await mkdir(path, { mode: 0o700 });
           const taken = new Set<string>();
-          for (const [n, file] of value.entries()) {
+          for (const [n, file] of files.entries()) {
             const handle = await open(join(path, safeName(name(file), n, taken)), 'wx', 0o600);
             try {
               await save(client, file, handle);

@@ -723,3 +723,73 @@ it('keeps an env token pinned with --pin-file and HERALD_PIN', async () => {
   const env = await run(['whoami'], { HERALD_TOKEN: token, HERALD_PIN: newer });
   expect(env.out + env.err).toMatch(/Stale roster epoch/);
 });
+it('sends --annotate with the PDF and prints comments as lines, raw with --json', async () => {
+  const pdf = join(home, 'plan.pdf');
+  await writeFile(pdf, '%PDF-');
+  const id = crypto.randomUUID();
+  const record = await message();
+  const seen = server({
+    'POST /api/v1/files': ({ body }) => Response.json({ id, ...(body as object) }, { status: 201 }),
+    [`PUT /api/v1/files/${id}`]: () => Response.json({ ok: true }),
+    'POST /api/v1/messages': () => Response.json(record, { status: 201 }),
+  });
+  const comments = [
+    {
+      page: 3,
+      anchor: 'image',
+      boxes: [{ x: 0.12, y: 0.3, w: 0.4, h: 0.2 }],
+      text: 'Blurry\nscreen',
+    },
+    {
+      page: 2,
+      anchor: 'text',
+      quote: 'Undeployed and open\nsource, '.padEnd(80, 'x'),
+      boxes: [{ x: 0.1, y: 0.1, w: 0.5, h: 0.03 }],
+      text: 'Title should be bigger.',
+    },
+    { page: 1, anchor: 'page', text: 'Whole page: good flow.' },
+  ];
+  const fields = [{ id: 'comments', label: 'Comments', type: 'annotations', attachmentId: id }];
+  const answered = {
+    ...record,
+    fields,
+    status: 'answered',
+    response: { values: { comments }, secretFields: [], createdAt: record.createdAt },
+  } as never;
+  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue(answered);
+  const result = await run(['ask', '--title', 'Plan', '--annotate', pdf]);
+  expect(result).toMatchObject({
+    code: 0,
+    out: [
+      'comments  p.1  page  Whole page: good flow.',
+      `          p.2  text  "Undeployed and open source, ${'x'.repeat(31)}\u2026"  Title should be bigger.`,
+      '          p.3  image  12%,30%  Blurry screen',
+    ].join('\n'),
+  });
+  expect(await sent(seen)).toMatchObject({
+    kind: 'form',
+    attachments: [{ id, name: 'plan.pdf', type: 'application/pdf' }],
+    fields: [{ id: 'comments', type: 'annotations', required: false, attachmentId: id }],
+  });
+  const json = JSON.parse((await run(['ask', '--json', '--annotate', pdf])).out);
+  expect(json.response.values.comments).toEqual(comments);
+  const none = {
+    ...(answered as object),
+    response: { values: { comments: [] }, secretFields: [] },
+  };
+  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue(none as never);
+  expect((await run(['ask', '--annotate', pdf])).out).toBe('comments  none');
+});
+it('rejects a non-PDF --annotate and refuses it with --secret-file', async () => {
+  const seen = server({});
+  const text = join(home, 'plan.txt');
+  await writeFile(text, 'x');
+  expect(await run(['send', '--annotate', text])).toMatchObject({
+    code: 2,
+    err: expect.stringContaining('use a PDF file'),
+  });
+  const secret = await run(['send', '--secret-file', '/nonexistent', '--annotate', 'a.pdf']);
+  expect(secret).toMatchObject({ code: 2, err: expect.stringContaining('Secret transfer failed') });
+  expect(seen.some((s) => s.method === 'POST')).toBe(false);
+  expect((await run(['help', 'ask'])).out).toContain('--annotate PDF');
+});

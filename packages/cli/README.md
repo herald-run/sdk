@@ -28,11 +28,14 @@ herald messages --search deploy
 ```sh
 herald ask --title 'Release?' --field 'env?:select:Environment:staging,prod' --action 'ship:Ship it'
 herald send --title 'Review' --block code=src/app.ts --block table=results.csv --block image=shot.png --review
+herald ask --title 'Review the plan' --annotate plan.pdf
 herald ask --field 'token:secret:GitHub token' --out ~/.config/gh/token
 herald ask --field 'kubeconfig:secret-file:Staging kubeconfig' --out ~/.kube/staging
 herald send --secret-file ./api-key --title 'Staging API key'
 herald register --target laptop --type 'deploy:Deploy' --field 'env:select:Env:staging,prod'
 ```
+
+`--annotate PDF` (once per message, with `--field` and `--action`) attaches the PDF and adds an optional `comments` field: the user comments on selected text, an image or a whole page, and the answer lists one comment per line as `p.2  text  "quote"  comment`, `p.3  image  12%,30%  comment` or `p.1  page  comment`. `--json` keeps `page`, `anchor`, `quote`, `boxes` (page fractions) and `text`. In `-i` input an `annotations` field may give `"file": "plan.pdf"` instead of `attachmentId`.
 
 Answers to secret and file fields go to new private files (`--out`, mode 0600) and are never printed; secret files reach this connection only and Herald deletes them 15 minutes after the answer.
 

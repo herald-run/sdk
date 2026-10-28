@@ -12,8 +12,8 @@ from .http import HeraldError
 NO_ENTRY = "No recipient entry for these keys."
 CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group")
 ENVELOPE_LIMIT = 20000
-FIELD_TYPES = ("text", "textarea", "number", "select", "multiselect", "boolean", "date", "secret", "file")
-FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "secret", "help", "placeholder", "options", "header", "other")
+FIELD_TYPES = ("text", "textarea", "number", "select", "multiselect", "boolean", "date", "secret", "file", "annotations")
+FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "attachmentId", "secret", "help", "placeholder", "options", "header", "other")
 FIELD_ID = re.compile(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}")
 FILE_KEY = re.compile(r"[A-Za-z0-9_-]{43}")
 
@@ -74,6 +74,8 @@ def check_fields(fields):
             _invalid("Only choice fields can offer Other.")
         if "header" in field and not (isinstance(field["header"], str) and 0 < len(field["header"]) <= 24):
             _invalid("Field headers hold 1 to 24 characters.")
+        if (field["type"] == "annotations") != bool(field.get("attachmentId")) or (field["type"] == "annotations" and ("default" in field or not _uuid(field["attachmentId"]))):
+            _invalid("Only annotations fields name a PDF, and must; they have no defaults.")
         out.append({"required": False, **{k: v for k, v in field.items() if k in FIELD_KEYS and v is not None}})
     if len({f["id"] for f in out}) != len(out):
         _invalid("Field IDs must be unique.")
@@ -222,9 +224,29 @@ def check_secret_offer(message):
     return m
 
 
+def _annotation(a):
+    share = lambda n: _number(n) and 0 <= n <= 1
+    box = lambda b: isinstance(b, dict) and set(b) == {"x", "y", "w", "h"} and all(share(v) for v in b.values())
+    if not (
+        isinstance(a, dict) and set(a) <= {"page", "anchor", "quote", "boxes", "text"} and {"page", "anchor", "text"} <= set(a)
+        and isinstance(a["page"], int) and not isinstance(a["page"], bool) and 1 <= a["page"] <= 10000
+        and a["anchor"] in ("page", "text", "image")
+        and isinstance(a["text"], str) and 0 < len(_trim(a["text"])) <= 4000
+    ):
+        return False
+    quote, boxes = a.get("quote"), a.get("boxes")
+    if (a["anchor"] == "text") != ("quote" in a) or (a["anchor"] == "page") != ("boxes" not in a):
+        return False
+    if "quote" in a and not (isinstance(quote, str) and 0 < len(_trim(quote)) <= 2000):
+        return False
+    if "boxes" in a and not (isinstance(boxes, list) and 1 <= len(boxes) <= 100 and all(box(b) for b in boxes)):
+        return False
+    return a["anchor"] != "image" or len(boxes) == 1
+
+
 def check_answers(values):
     ok = isinstance(values, dict) and all(
-        isinstance(k, str) and len(k) <= 64 and (v is None or isinstance(v, bool) or _number(v) or (isinstance(v, str) and len(v) <= 16000) or (isinstance(v, list) and len(v) <= 50 and all(isinstance(x, str) and len(x) <= 100 for x in v)))
+        isinstance(k, str) and len(k) <= 64 and (v is None or isinstance(v, bool) or _number(v) or (isinstance(v, str) and len(v) <= 16000) or (isinstance(v, list) and len(v) <= 50 and all(isinstance(x, str) and len(x) <= 100 for x in v)) or (isinstance(v, list) and len(v) <= 500 and all(_annotation(x) for x in v)))
         for k, v in values.items()
     )
     return values if ok else e2ee._fail("Malformed answer.")
@@ -251,9 +273,11 @@ def validate_answers(fields, values, secret_ids=()):
         if isinstance(v, str):
             bad |= not f.get("minLength", 0) <= len(v) <= f.get("maxLength", len(v))
         if isinstance(v, list):
-            bad |= not f.get("minItems", 0) <= len(v) <= f.get("maxItems", len(v)) or (bool(f.get("uniqueItems")) and len(set(v)) != len(v))
+            bad |= not f.get("minItems", 0) <= len(v) <= f.get("maxItems", len(v)) or (bool(f.get("uniqueItems")) and kind != "annotations" and len(set(v)) != len(v))
         if kind == "file":
             bad |= not isinstance(v, list) or len(v) > 10 or not all(_uuid(x) for x in v)
+        elif kind == "annotations":
+            bad |= not isinstance(v, list) or len(v) > 500 or not all(_annotation(x) for x in v)
         elif kind == "number":
             bad |= not _number(v)
         elif kind == "boolean":
@@ -478,6 +502,9 @@ class KeyedSession:
             if not known.get("key"):
                 e2ee._fail(f"Attachment {file['id']} was not uploaded by this keyed client.")
             files.append({k: known[k] for k in ("id", "name", "type", "size", "key")})
+        pdfs = {f["id"] for f in files if f["type"] == "application/pdf"}
+        if any(f["type"] == "annotations" and f["attachmentId"] not in pdfs for f in m["fields"]):
+            _invalid("Annotations fields require an attached PDF.")
         payload = {"attachments": files, **{k: m[k] for k in CONTENT if k in m}}
         body = {"id": record_id, "kind": "message", "sealed": await self._seal(payload, {"t": "message", "id": record_id}, team), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": m["kind"] == "form" or bool(m["fields"]) or bool(m.get("actions")), "attachments": [{"id": f["id"]} for f in files]}
         return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}

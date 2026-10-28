@@ -63,6 +63,8 @@ export const destinationSchema = z
       ctx.addIssue({ code: 'custom', message: 'Type IDs must be unique.' });
     if (d.types.some((t) => t.fields.some((f) => ['secret', 'file'].includes(f.type))))
       ctx.addIssue({ code: 'custom', message: 'Use a dedicated secret request for credentials.' });
+    if (d.types.some((t) => t.fields.some((f) => f.type === 'annotations')))
+      ctx.addIssue({ code: 'custom', message: 'Annotations fields need a message with a PDF.' });
   });
 /** A destination takes its connection's name; a sent `name` is ignored. */
 export type DestinationRegistration = z.input<typeof destinationSchema>;
