@@ -192,7 +192,7 @@ export function validateAnswers(
       f.type === 'annotations' &&
       (!Array.isArray(v) || v.length > 500 || v.some((a) => !annotationSchema.safeParse(a).success))
     )
-      errors[f.id] = 'Comments must name a page and a point on it.';
+      errors[f.id] = 'Comments must name a page and the text or image they discuss.';
     if (f.type === 'number' && (typeof v !== 'number' || !Number.isFinite(v)))
       errors[f.id] = 'Enter a number.';
     else if (f.type === 'boolean' && typeof v !== 'boolean') errors[f.id] = 'Choose yes or no.';
