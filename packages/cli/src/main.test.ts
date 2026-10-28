@@ -734,8 +734,20 @@ it('sends --annotate with the PDF and prints comments as lines, raw with --json'
     'POST /api/v1/messages': () => Response.json(record, { status: 201 }),
   });
   const comments = [
-    { page: 4, x: 0.42, y: 0.608, text: 'Wrong\nnumber' },
-    { page: 7, x: 0.1, y: 0.2, w: 0.3, h: 0.25, text: 'Rewrite' },
+    {
+      page: 3,
+      anchor: 'image',
+      boxes: [{ x: 0.12, y: 0.3, w: 0.4, h: 0.2 }],
+      text: 'Blurry\nscreen',
+    },
+    {
+      page: 2,
+      anchor: 'text',
+      quote: 'Undeployed and open\nsource, '.padEnd(80, 'x'),
+      boxes: [{ x: 0.1, y: 0.1, w: 0.5, h: 0.03 }],
+      text: 'Title should be bigger.',
+    },
+    { page: 1, anchor: 'page', text: 'Whole page: good flow.' },
   ];
   const fields = [{ id: 'comments', label: 'Comments', type: 'annotations', attachmentId: id }];
   const answered = {
@@ -748,7 +760,11 @@ it('sends --annotate with the PDF and prints comments as lines, raw with --json'
   const result = await run(['ask', '--title', 'Plan', '--annotate', pdf]);
   expect(result).toMatchObject({
     code: 0,
-    out: 'comments  p.4  42%,61%  Wrong number\n          p.7  10%,20%  30%x25%  Rewrite',
+    out: [
+      'comments  p.1  page  Whole page: good flow.',
+      `          p.2  text  "Undeployed and open source, ${'x'.repeat(31)}\u2026"  Title should be bigger.`,
+      '          p.3  image  12%,30%  Blurry screen',
+    ].join('\n'),
   });
   expect(await sent(seen)).toMatchObject({
     kind: 'form',

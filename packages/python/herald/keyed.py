@@ -226,12 +226,22 @@ def check_secret_offer(message):
 
 def _annotation(a):
     share = lambda n: _number(n) and 0 <= n <= 1
-    return (
-        isinstance(a, dict) and set(a) <= {"page", "x", "y", "w", "h", "text"} and {"page", "x", "y", "text"} <= set(a)
+    box = lambda b: isinstance(b, dict) and set(b) == {"x", "y", "w", "h"} and all(share(v) for v in b.values())
+    if not (
+        isinstance(a, dict) and set(a) <= {"page", "anchor", "quote", "boxes", "text"} and {"page", "anchor", "text"} <= set(a)
         and isinstance(a["page"], int) and not isinstance(a["page"], bool) and 1 <= a["page"] <= 10000
-        and share(a["x"]) and share(a["y"]) and all(share(a[k]) for k in ("w", "h") if k in a)
+        and a["anchor"] in ("page", "text", "image")
         and isinstance(a["text"], str) and 0 < len(_trim(a["text"])) <= 4000
-    )
+    ):
+        return False
+    quote, boxes = a.get("quote"), a.get("boxes")
+    if (a["anchor"] == "text") != ("quote" in a) or (a["anchor"] == "page") != ("boxes" not in a):
+        return False
+    if "quote" in a and not (isinstance(quote, str) and 0 < len(_trim(quote)) <= 2000):
+        return False
+    if "boxes" in a and not (isinstance(boxes, list) and 1 <= len(boxes) <= 100 and all(box(b) for b in boxes)):
+        return False
+    return a["anchor"] != "image" or len(boxes) == 1
 
 
 def check_answers(values):

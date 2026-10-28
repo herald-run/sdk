@@ -4,7 +4,7 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 ## Unreleased
 
-- Forms: an `annotations` field type for commenting on an attached PDF. It names the PDF in `attachmentId`, and its answer is a list of `{page, x, y, w?, h?, text}` (1-based page, positions as page fractions); exported `annotationSchema`, `Annotation`. Python keyed clients accept it too.
+- Forms: an `annotations` field type for commenting on an attached PDF. It names the PDF in `attachmentId`, and its answer is a list of `{page, anchor, quote?, boxes?, text}`: a comment anchored to selected text (`quote`, one box per line), an image (one box) or a whole page (1-based page, boxes as page fractions); exported `annotationSchema`, `Annotation`, `AnnotationBox`. Python keyed clients accept it too.
 - CLI: `send`/`ask --annotate PDF` attaches a PDF and adds a `comments` field; human output prints one comment per line. In `-i` input an annotations field may give a local `file`.
 - SDKs: while the live socket is open, `wait` (and Python `watch`) falls back to polling every 5 minutes instead of 30 s (30 s while it is down); TypeScript `wait` checks only on sync events newer than the last one it saw, and a check that overlaps an event runs once more.
 - CLI: `herald listen` flushes task logs every 10 s instead of 2 s; a task's final logs still flush before its completion update.

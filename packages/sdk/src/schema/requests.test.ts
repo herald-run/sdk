@@ -200,7 +200,10 @@ describe('questions and Other answers', () => {
 describe('PDF annotations', () => {
   const pdf = { ...attachment, name: 'plan.pdf', type: 'application/pdf' };
   const field = { id: 'comments', label: 'Comments', type: 'annotations', attachmentId: pdf.id };
-  const note = { page: 4, x: 0.42, y: 0.61, text: 'Check this' };
+  const box = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 };
+  const note = { page: 4, anchor: 'page' as const, text: 'Check this' };
+  const text = { ...note, anchor: 'text' as const, quote: 'Open', boxes: [box, box] };
+  const image = { ...note, anchor: 'image' as const, boxes: [box] };
   const fields = fieldsSchema.parse([field]);
   it('needs an annotations field to name an attached PDF', () => {
     expect(valid({ kind: 'form', attachments: [pdf], fields: [field] })).toBe(true);
@@ -223,18 +226,22 @@ describe('PDF annotations', () => {
     expect(attachmentId).toBe(pdf.id);
   });
   it('validates annotation answers', () => {
-    const good: Answers[] = [
-      {},
-      { comments: [] },
-      { comments: [note, { ...note, w: 0.1, h: 0.2 }] },
-    ];
+    const good: Answers[] = [{}, { comments: [] }, { comments: [note, text, image] }];
     for (const values of good) expect(validateAnswers(fields, values)).toEqual({});
     for (const bad of [
       { ...note, page: 0 },
       { ...note, page: 1.5 },
-      { ...note, x: 1.1 },
-      { ...note, y: -0.1 },
-      { ...note, w: 2 },
+      { ...note, anchor: 'line' },
+      { ...text, quote: undefined },
+      { ...text, quote: ' ' },
+      { ...note, boxes: [box] },
+      { ...image, boxes: [box, box] },
+      { ...image, quote: 'Open' },
+      { ...image, boxes: [{ ...box, x: 1.1 }] },
+      { ...image, boxes: [{ ...box, y: -0.1 }] },
+      { ...text, boxes: Array(101).fill(box) },
+      { ...text, boxes: [] },
+      { ...image, boxes: [{ x: 0.1, y: 0.2, w: 0.3 }] },
       { ...note, text: '  ' },
       { ...note, extra: 1 },
       'text',

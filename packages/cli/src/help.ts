@@ -17,7 +17,7 @@ connection only). LABEL (no colons) defaults to the ID; select and multiselect n
 a=Label,b. Actions: ID[:LABEL] answers in one tap; every field must be optional, none secret or file.
 Blocks: code, diff, json and table (CSV) read PATH (- for stdin); image attaches the file.
 --annotate PDF attaches the PDF and adds an optional field "comments" (annotations): the answer
-lists the user's comments as page and position (fractions of the page) with text; once per message.
+lists the user's comments, each on a page, selected text or an image, with text; once per message.
 --out [FIELD=]PATH writes a secret or file answer to a new 0600 file (several files: a 0700
 directory); every secret needs one, and values are never printed. PATH alone fits a single field.
 With -i, flags win for title, body and kind and add fields, actions, blocks and files; an image

@@ -2,19 +2,34 @@ import type { Account, Destination, Message, TokenInfo, WorkspaceInfo } from '@h
 // Human-readable output; `--json` prints the API records instead.
 // Choice lists read as "A, B", including an Other answer; PDF comments one per line.
 const percent = (n: number) => `${Math.round(n * 100)}%`;
-const comment = (c: Record<string, unknown>) =>
-  [
+const flat = (v: unknown) => String(v).replace(/\s+/g, ' ').trim();
+const comment = (c: Record<string, unknown>) => {
+  const [box] = (c.boxes as { x: number; y: number }[] | undefined) || [];
+  const quote = flat(c.quote);
+  return [
     `p.${c.page}`,
-    `${percent(c.x as number)},${percent(c.y as number)}`,
-    ...(typeof c.w === 'number' && typeof c.h === 'number'
-      ? [`${percent(c.w)}x${percent(c.h)}`]
+    c.anchor,
+    ...(c.anchor === 'text'
+      ? [`"${quote.length > 60 ? quote.slice(0, 59).trimEnd() + '\u2026' : quote}"`]
       : []),
-    String(c.text).replace(/\s+/g, ' ').trim(),
+    ...(c.anchor === 'image' && box ? [`${percent(box.x)},${percent(box.y)}`] : []),
+    flat(c.text),
   ].join('  ');
+};
+// Reading order: page, then the first box top to bottom and left to right; whole pages lead.
+const order = (c: Record<string, unknown>) => {
+  const [box] = (c.boxes as { x: number; y: number }[] | undefined) || [];
+  return [c.page as number, box ? box.y : -1, box ? box.x : -1];
+};
+const byReading = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+  const [p, q] = [order(a), order(b)];
+  return p[0] - q[0] || p[1] - q[1] || p[2] - q[2];
+};
 const isComment = (x: unknown) =>
   typeof x === 'object' &&
   x !== null &&
   typeof (x as { page?: unknown }).page === 'number' &&
+  typeof (x as { anchor?: unknown }).anchor === 'string' &&
   typeof (x as { text?: unknown }).text === 'string';
 const value = (v: unknown) =>
   typeof v === 'string'
@@ -22,7 +37,7 @@ const value = (v: unknown) =>
     : Array.isArray(v) && v.length && v.every((x) => typeof x === 'string')
       ? v.join(', ')
       : Array.isArray(v) && v.length && v.every(isComment)
-        ? v.map(comment).join('\n')
+        ? [...v].sort(byReading).map(comment).join('\n')
         : JSON.stringify(v);
 const pairs = (rows: [string, unknown][]) => {
   const shown = rows.filter(([, v]) => v !== undefined && v !== null && v !== '');

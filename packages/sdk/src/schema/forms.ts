@@ -12,18 +12,27 @@ export const optionSchema = z.object({
 });
 export type FieldOption = z.infer<typeof optionSchema>;
 const share = z.number().min(0).max(1);
-/** A comment on an attached PDF: a 1-based page and a point or area as page fractions. */
+const box = z.object({ x: share, y: share, w: share, h: share }).strict();
+/** A comment on an attached PDF, anchored to selected text, an image or a whole 1-based page. Boxes are page fractions. */
 export const annotationSchema = z
   .object({
     page: z.number().int().min(1).max(10_000),
-    x: share,
-    y: share,
-    w: share.optional(),
-    h: share.optional(),
+    anchor: z.enum(['page', 'text', 'image']),
+    quote: z.string().trim().min(1).max(2000).optional(),
+    boxes: z.array(box).min(1).max(100).optional(),
     text: z.string().trim().min(1).max(4000),
   })
-  .strict();
+  .strict()
+  .superRefine((a, ctx) => {
+    const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if ((a.anchor === 'text') !== (a.quote !== undefined))
+      issue('Only text comments carry a quote, and must.');
+    if ((a.anchor === 'page') !== (a.boxes === undefined))
+      issue('Only page comments have no boxes.');
+    if (a.anchor === 'image' && a.boxes?.length !== 1) issue('Image comments have one box.');
+  });
 export type Annotation = z.infer<typeof annotationSchema>;
+export type AnnotationBox = z.infer<typeof box>;
 export const fieldSchema = z.object({
   id: key,
   label: z.string().min(1).max(120),
