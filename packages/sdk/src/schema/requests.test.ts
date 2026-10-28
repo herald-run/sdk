@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import example from '../../fixtures/questions.json';
 import {
+  destinationSchema,
   fieldAnswers,
   fieldsSchema,
   isOption,
@@ -205,6 +206,10 @@ describe('PDF annotations', () => {
   const text = { ...note, anchor: 'text' as const, quote: 'Open', boxes: [box, box] };
   const image = { ...note, anchor: 'image' as const, boxes: [box] };
   const fields = fieldsSchema.parse([field]);
+  it('keeps annotations fields out of destination types', () => {
+    const types = [{ id: 'review', label: 'Review', fields: [field] }];
+    expect(destinationSchema.safeParse({ key: 'pdf', types }).success).toBe(false);
+  });
   it('needs an annotations field to name an attached PDF', () => {
     expect(valid({ kind: 'form', attachments: [pdf], fields: [field] })).toBe(true);
     expect(valid({ kind: 'form', fields: [field] })).toBe(false);
