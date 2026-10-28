@@ -64,7 +64,8 @@ class KeyedTests(unittest.IsolatedAsyncioTestCase):
         seen = []
         routes = {"GET /api/v1/keys": DIRECTORY, "POST /api/v1/messages": SENT, "GET /api/v1/messages/": answered({"approve": "yes"})}
         async with client(routes, seen) as herald:
-            for bad in [{"title": ""}, {"title": "x", "fields": [{"id": "a", "type": "select", "label": "A"}]}]:
+            review = {"id": "c", "type": "annotations", "label": "C", "attachmentId": "00000000-0000-4000-8000-000000000001"}
+            for bad in [{"title": ""}, {"title": "x", "fields": [{"id": "a", "type": "select", "label": "A"}]}, {"title": "x", "fields": [review]}]:
                 with self.assertRaises(HeraldError):
                     await herald.send(**bad)
             with self.assertRaisesRegex(e2ee.E2eeError, "too large to encrypt"):

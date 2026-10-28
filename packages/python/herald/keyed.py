@@ -74,7 +74,7 @@ def check_fields(fields):
             _invalid("Only choice fields can offer Other.")
         if "header" in field and not (isinstance(field["header"], str) and 0 < len(field["header"]) <= 24):
             _invalid("Field headers hold 1 to 24 characters.")
-        if (field["type"] == "annotations") != bool(field.get("attachmentId")) or (field["type"] == "annotations" and "default" in field):
+        if (field["type"] == "annotations") != bool(field.get("attachmentId")) or (field["type"] == "annotations" and ("default" in field or not _uuid(field["attachmentId"]))):
             _invalid("Only annotations fields name a PDF, and must; they have no defaults.")
         out.append({"required": False, **{k: v for k, v in field.items() if k in FIELD_KEYS and v is not None}})
     if len({f["id"] for f in out}) != len(out):
@@ -502,6 +502,9 @@ class KeyedSession:
             if not known.get("key"):
                 e2ee._fail(f"Attachment {file['id']} was not uploaded by this keyed client.")
             files.append({k: known[k] for k in ("id", "name", "type", "size", "key")})
+        pdfs = {f["id"] for f in files if f["type"] == "application/pdf"}
+        if any(f["type"] == "annotations" and f["attachmentId"] not in pdfs for f in m["fields"]):
+            _invalid("Annotations fields require an attached PDF.")
         payload = {"attachments": files, **{k: m[k] for k in CONTENT if k in m}}
         body = {"id": record_id, "kind": "message", "sealed": await self._seal(payload, {"t": "message", "id": record_id}, team), "digest": e2ee.idempotency_digest(self.seed, payload, idempotency_key), "asks": m["kind"] == "form" or bool(m["fields"]) or bool(m.get("actions")), "attachments": [{"id": f["id"]} for f in files]}
         return {**body, **{k: m[k] for k in ("taskId", "replyTo", "expiresAt", "expiresIn") if k in m}}

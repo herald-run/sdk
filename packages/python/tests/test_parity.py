@@ -133,7 +133,7 @@ class AnnotationTests(unittest.TestCase):
         for bad in bads:
             self.assertEqual(list(forms.validate_answers(fields, {"c": [bad]})), ["c"])
         self.assertEqual(list(forms.validate_answers(forms.check_fields([{**field, "required": True}]), {"c": []})), ["c"])
-        for bad in [{k: v for k, v in field.items() if k != "attachmentId"}, {**field, "default": []}, {**field, "type": "text"}]:
+        for bad in [{k: v for k, v in field.items() if k != "attachmentId"}, {**field, "default": []}, {**field, "type": "text"}, {**field, "attachmentId": "plan.pdf"}]:
             with self.assertRaises(HeraldError):
                 forms.check_fields([bad])
 
