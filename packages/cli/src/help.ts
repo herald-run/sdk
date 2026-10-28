@@ -4,6 +4,7 @@ const searchNote =
   'Content is end-to-end encrypted, so the server cannot search it: the newest five pages are decrypted and filtered locally.';
 const message = ['input', 'title', 'body', 'body-file', 'kind', 'field', 'action', 'block'].concat([
   'file',
+  'annotate',
   'review',
   'reply-to',
   'deadline',
@@ -15,10 +16,12 @@ number, boolean, select, multiselect, date, secret, file or secret-file (one fil
 connection only). LABEL (no colons) defaults to the ID; select and multiselect need CHOICES: a,b or
 a=Label,b. Actions: ID[:LABEL] answers in one tap; every field must be optional, none secret or file.
 Blocks: code, diff, json and table (CSV) read PATH (- for stdin); image attaches the file.
+--annotate PDF attaches the PDF and adds an optional field "comments" (annotations): the answer
+lists the user's comments as page and position (fractions of the page) with text; once per message.
 --out [FIELD=]PATH writes a secret or file answer to a new 0600 file (several files: a 0700
 directory); every secret needs one, and values are never printed. PATH alone fits a single field.
 With -i, flags win for title, body and kind and add fields, actions, blocks and files; an image
-block there may give "file": PATH instead of attachmentId. Instead of fields, -i input may give
+block there may give "file": PATH instead of attachmentId, as may an annotations field (a PDF). Instead of fields, -i input may give
 "questions": [{question, header?, options: [{label, description?, preview?}], multiSelect?}],
 answered as q1, q2… (each also accepts Other text).`;
 export const commands: Record<string, Spec> = {
@@ -104,6 +107,7 @@ const describe: Record<string, string> = {
   review: '--review           Mark the request as needing review',
   'secret-file': '--secret-file PATH Offer the secret in a private file instead',
   file: '--file PATH        Attach a file; repeatable',
+  annotate: '--annotate PDF      Attach a PDF for the user to comment on; once',
   'reply-to': '--reply-to ID      Reply in a thread',
   deadline: '--deadline 10m     Server deadline for the request',
   key: '--key KEY          Idempotency key for safe retries',

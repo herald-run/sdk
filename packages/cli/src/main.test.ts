@@ -723,3 +723,57 @@ it('keeps an env token pinned with --pin-file and HERALD_PIN', async () => {
   const env = await run(['whoami'], { HERALD_TOKEN: token, HERALD_PIN: newer });
   expect(env.out + env.err).toMatch(/Stale roster epoch/);
 });
+it('sends --annotate with the PDF and prints comments as lines, raw with --json', async () => {
+  const pdf = join(home, 'plan.pdf');
+  await writeFile(pdf, '%PDF-');
+  const id = crypto.randomUUID();
+  const record = await message();
+  const seen = server({
+    'POST /api/v1/files': ({ body }) => Response.json({ id, ...(body as object) }, { status: 201 }),
+    [`PUT /api/v1/files/${id}`]: () => Response.json({ ok: true }),
+    'POST /api/v1/messages': () => Response.json(record, { status: 201 }),
+  });
+  const comments = [
+    { page: 4, x: 0.42, y: 0.608, text: 'Wrong\nnumber' },
+    { page: 7, x: 0.1, y: 0.2, w: 0.3, h: 0.25, text: 'Rewrite' },
+  ];
+  const fields = [{ id: 'comments', label: 'Comments', type: 'annotations', attachmentId: id }];
+  const answered = {
+    ...record,
+    fields,
+    status: 'answered',
+    response: { values: { comments }, secretFields: [], createdAt: record.createdAt },
+  } as never;
+  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue(answered);
+  const result = await run(['ask', '--title', 'Plan', '--annotate', pdf]);
+  expect(result).toMatchObject({
+    code: 0,
+    out: 'comments  p.4  42%,61%  Wrong number\n          p.7  10%,20%  30%x25%  Rewrite',
+  });
+  expect(await sent(seen)).toMatchObject({
+    kind: 'form',
+    attachments: [{ id, name: 'plan.pdf', type: 'application/pdf' }],
+    fields: [{ id: 'comments', type: 'annotations', required: false, attachmentId: id }],
+  });
+  const json = JSON.parse((await run(['ask', '--json', '--annotate', pdf])).out);
+  expect(json.response.values.comments).toEqual(comments);
+  const none = {
+    ...(answered as object),
+    response: { values: { comments: [] }, secretFields: [] },
+  };
+  vi.spyOn(Herald.prototype, 'wait').mockResolvedValue(none as never);
+  expect((await run(['ask', '--annotate', pdf])).out).toBe('comments  none');
+});
+it('rejects a non-PDF --annotate and refuses it with --secret-file', async () => {
+  const seen = server({});
+  const text = join(home, 'plan.txt');
+  await writeFile(text, 'x');
+  expect(await run(['send', '--annotate', text])).toMatchObject({
+    code: 2,
+    err: expect.stringContaining('use a PDF file'),
+  });
+  const secret = await run(['send', '--secret-file', '/nonexistent', '--annotate', 'a.pdf']);
+  expect(secret).toMatchObject({ code: 2, err: expect.stringContaining('Secret transfer failed') });
+  expect(seen.some((s) => s.method === 'POST')).toBe(false);
+  expect((await run(['help', 'ask'])).out).toContain('--annotate PDF');
+});

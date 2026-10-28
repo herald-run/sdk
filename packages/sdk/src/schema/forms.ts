@@ -11,6 +11,19 @@ export const optionSchema = z.object({
   preview: z.string().max(4000).optional(),
 });
 export type FieldOption = z.infer<typeof optionSchema>;
+const share = z.number().min(0).max(1);
+/** A comment on an attached PDF: a 1-based page and a point or area as page fractions. */
+export const annotationSchema = z
+  .object({
+    page: z.number().int().min(1).max(10_000),
+    x: share,
+    y: share,
+    w: share.optional(),
+    h: share.optional(),
+    text: z.string().trim().min(1).max(4000),
+  })
+  .strict();
+export type Annotation = z.infer<typeof annotationSchema>;
 export const fieldSchema = z.object({
   id: key,
   label: z.string().min(1).max(120),
@@ -26,6 +39,7 @@ export const fieldSchema = z.object({
     'date',
     'secret',
     'file',
+    'annotations',
   ]),
   default: z
     .union([
@@ -48,6 +62,8 @@ export const fieldSchema = z.object({
   minItems: z.number().int().min(0).max(50).optional(),
   maxItems: z.number().int().min(0).max(50).optional(),
   required: z.boolean().default(false),
+  /** Annotations fields only: the attached PDF the answer comments on. */
+  attachmentId: z.string().uuid().optional(),
   /** File fields only: the files go to the asker alone, like a secret, and leave no history. */
   secret: z.boolean().optional(),
   help: z.string().max(300).optional(),
@@ -81,6 +97,10 @@ export const fieldsSchema = z
         });
       if ((f.type === 'secret' || f.secret) && f.default !== undefined)
         ctx.addIssue({ code: 'custom', message: 'Secrets cannot have defaults.' });
+      if ((f.type === 'annotations') !== !!f.attachmentId)
+        ctx.addIssue({ code: 'custom', message: 'Only annotations fields name a PDF, and must.' });
+      if (f.type === 'annotations' && f.default !== undefined)
+        ctx.addIssue({ code: 'custom', message: 'Annotations cannot have defaults.' });
       if (f.secret && f.type !== 'file')
         ctx.addIssue({ code: 'custom', message: 'Only file fields can be secret.' });
       if (['select', 'multiselect'].includes(f.type) && !f.options?.length)
@@ -94,7 +114,7 @@ export const fieldsSchema = z
         ctx.addIssue({ code: 'custom', message: `${f.label} has an invalid default.` });
     }
   });
-export type Answers = Record<string, string | number | boolean | string[] | null>;
+export type Answers = Record<string, string | number | boolean | string[] | Annotation[] | null>;
 export const answersSchema = z.record(
   z.string().max(64),
   z.union([
@@ -103,6 +123,7 @@ export const answersSchema = z.record(
     z.boolean(),
     z.null(),
     z.array(z.string().max(100)).max(50),
+    z.array(annotationSchema).max(500),
   ]),
 );
 export function validateAnswers(
@@ -143,7 +164,7 @@ export function validateAnswers(
         (f.maxLength !== undefined && [...v].length > f.maxLength))
     )
       errors[f.id] = 'Text length is outside the allowed range.';
-    if (Array.isArray(v) && f.uniqueItems && new Set(v).size !== v.length)
+    if (Array.isArray(v) && f.uniqueItems && new Set<unknown>(v).size !== v.length)
       errors[f.id] = 'Values must be unique.';
     if (
       Array.isArray(v) &&
@@ -158,15 +179,24 @@ export function validateAnswers(
         v.some((id) => !z.string().uuid().safeParse(id).success))
     )
       errors[f.id] = 'Select valid uploaded files.';
+    if (
+      f.type === 'annotations' &&
+      (!Array.isArray(v) || v.length > 500 || v.some((a) => !annotationSchema.safeParse(a).success))
+    )
+      errors[f.id] = 'Comments must name a page and a point on it.';
     if (f.type === 'number' && (typeof v !== 'number' || !Number.isFinite(v)))
       errors[f.id] = 'Enter a number.';
     else if (f.type === 'boolean' && typeof v !== 'boolean') errors[f.id] = 'Choose yes or no.';
     else if (f.type === 'multiselect') {
       // Other adds at most one free-text item.
-      const custom = Array.isArray(v) ? v.filter((x) => !isOption(f, x)) : [];
-      if (!Array.isArray(v) || custom.length > (f.other ? 1 : 0))
+      const custom = Array.isArray(v) ? (v as unknown[]).filter((x) => !isOption(f, x)) : [];
+      if (
+        !Array.isArray(v) ||
+        custom.length > (f.other ? 1 : 0) ||
+        custom.some((x) => typeof x !== 'string')
+      )
         errors[f.id] = 'Choose from the available options.';
-      else if (custom.length && !custom[0].trim()) errors[f.id] = 'Enter your answer.';
+      else if (custom.length && !(custom[0] as string).trim()) errors[f.id] = 'Enter your answer.';
     } else if (f.type === 'select' && !isOption(f, v)) {
       if (!f.other || typeof v !== 'string') errors[f.id] = 'Choose an available option.';
       else if (!v.trim()) errors[f.id] = 'Enter your answer.';

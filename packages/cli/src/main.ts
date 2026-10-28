@@ -69,6 +69,7 @@ const options = {
   input: { type: 'string', short: 'i' },
   out: { type: 'string', short: 'o', multiple: true },
   file: { type: 'string', multiple: true },
+  annotate: { type: 'string', multiple: true },
   'body-file': { type: 'string' },
   kind: { type: 'string' },
   field: { type: 'string', multiple: true },
@@ -325,7 +326,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
       case 'ask': {
         if (values['secret-file']) {
           const used = ['input', 'body-file', 'kind', 'field', 'action', 'block', 'file']
-            .concat(['review', 'key', 'wait', 'out'])
+            .concat(['annotate', 'review', 'key', 'wait', 'out'])
             .find((name) => values[name as keyof typeof values] !== undefined);
           if (used) throw new UsageError(`--secret-file does not take --${used}.`);
           const result = await sendSecret(client, values['secret-file'], {

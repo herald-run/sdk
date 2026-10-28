@@ -27,6 +27,7 @@ export type Flags = {
   action?: string[];
   block?: string[];
   file?: string[];
+  annotate?: string[];
   review?: boolean;
   'reply-to'?: string;
   team?: string;
@@ -191,7 +192,27 @@ export async function composeMessage(
       throw new UsageError('--kind is message, report or files.');
     input.kind = flags.kind;
   }
-  const fields = [...((input.fields as Field[]) || []), ...(flags.field || []).map(fieldSpec)];
+  // In -i input, an annotations field may name a local PDF `file`, relative to the input file.
+  const from = flags.input ? dirname(resolve(flags.input)) : '.';
+  const pdfs: { field: Json; path: string }[] = [];
+  const pdf = (path: string, where: string) => {
+    if (fileType(path) !== 'application/pdf') throw new UsageError(`${where}: use a PDF file.`);
+    return path;
+  };
+  const named = ((input.fields as Json[]) || []).map((field) => {
+    if (field.type !== 'annotations' || typeof field.file !== 'string') return field;
+    const { file, ...rest } = field;
+    const copy = { ...rest };
+    pdfs.push({ field: copy, path: resolve(from, pdf(file as string, `fields.${field.id}`)) });
+    return copy;
+  });
+  if ((flags.annotate?.length ?? 0) > 1) throw new UsageError('Use --annotate once per message.');
+  const fields = [...(named as Field[]), ...(flags.field || []).map(fieldSpec)];
+  for (const path of flags.annotate || []) {
+    const field = { id: 'comments', type: 'annotations', label: 'Comments', required: false };
+    fields.push(field as Field);
+    pdfs.push({ field, path: pdf(path, `--annotate ${path}`) });
+  }
   const actions = [...((input.actions as Json[]) || []), ...(flags.action || []).map(actionSpec)];
   if (waiting && !fields.length && !actions.length && !input.schema && !input.questions)
     fields.push({ id: 'reply', type: 'textarea', label: 'Your reply', required: true });
@@ -204,7 +225,6 @@ export async function composeMessage(
   if (actions.length) input.actions = actions;
   if (fields.length || actions.length || input.questions || waiting) input.kind = 'form';
   // In -i input, an image block may name a local `file` to upload, relative to the input file.
-  const from = flags.input ? dirname(resolve(flags.input)) : '.';
   const images: { block: Json; path: string }[] = [];
   const blocks = ((input.blocks as Json[]) || []).map((block) => {
     if (block.type !== 'image' || typeof block.file !== 'string') return block;
@@ -226,14 +246,19 @@ export async function composeMessage(
       throw new UsageError('Use --deadline or expiresAt, not both.');
     input.expiresIn = duration(flags.deadline);
   }
-  // Each path uploads once, even when it is both a --file and an image block.
+  // Each path uploads once, even when it is a --file and an image block or annotated PDF.
   const paths = [
-    ...new Set([...(flags.file || []), ...images.map((i) => i.path)].map((p) => resolve(p))),
+    ...new Set(
+      [...(flags.file || []), ...images.map((i) => i.path), ...pdfs.map((p) => p.path)].map((p) =>
+        resolve(p),
+      ),
+    ),
   ];
   const attached = (input.attachments as Attachment[]) || [];
   const fill = (files: Attachment[]) => {
     for (const { block, path } of images)
       block.attachmentId = files[paths.indexOf(resolve(path))].id;
+    for (const { field, path } of pdfs) field.attachmentId = files[paths.indexOf(resolve(path))].id;
     input.attachments = [...attached, ...files];
   };
   fill(
@@ -244,7 +269,7 @@ export async function composeMessage(
   return {
     input: input as MessageRequest,
     fields: parsed.data.kind === 'secret' ? [] : parsed.data.fields,
-    /** Uploads the files and points image blocks at them. */
+    /** Uploads the files and points image blocks and annotations fields at them. */
     async attach(client: Herald) {
       const files: Attachment[] = [];
       for (const path of paths) files.push(await uploadPath(client, path));

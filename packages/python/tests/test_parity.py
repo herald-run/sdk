@@ -111,6 +111,23 @@ class QuestionTests(unittest.TestCase):
             forms.check_secret_offer({"title": "Key", "questions": fx["questions"]})
 
 
+class AnnotationTests(unittest.TestCase):
+    def test_annotations_fields_and_answers(self):
+        pdf = "00000000-0000-4000-8000-000000000001"
+        field = {"id": "c", "label": "C", "type": "annotations", "attachmentId": pdf}
+        fields = forms.check_fields([field])
+        note = {"page": 4, "x": 0.42, "y": 0.61, "text": "Check"}
+        for values in [{}, {"c": []}, {"c": [note, {**note, "w": 0.1, "h": 0.2}]}]:
+            self.assertEqual(forms.validate_answers(fields, values), {})
+            forms.check_answers(values)
+        for bad in [{**note, "page": 0}, {**note, "x": 1.1}, {**note, "text": " "}, {**note, "extra": 1}, "text"]:
+            self.assertEqual(list(forms.validate_answers(fields, {"c": [bad]})), ["c"])
+        self.assertEqual(list(forms.validate_answers(forms.check_fields([{**field, "required": True}]), {"c": []})), ["c"])
+        for bad in [{k: v for k, v in field.items() if k != "attachmentId"}, {**field, "default": []}, {**field, "type": "text"}]:
+            with self.assertRaises(HeraldError):
+                forms.check_fields([bad])
+
+
 class SyncTests(unittest.TestCase):
     def test_blocking_methods_and_iterators(self):
         def handle(request):

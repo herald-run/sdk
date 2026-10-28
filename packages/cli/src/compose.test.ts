@@ -80,3 +80,61 @@ it('composes questions input without a reply field or flag actions', async () =>
     'not several',
   );
 });
+it('adds a comments field for --annotate and uploads a shared PDF once', async () => {
+  const stdin = async () => '';
+  const draft = await composeMessage(
+    { annotate: ['/tmp/plan.pdf'], file: ['/tmp/plan.pdf'], action: ['ok'] },
+    undefined,
+    true,
+    stdin,
+  );
+  const [pdf, ...rest] = draft.input.attachments!;
+  expect(rest).toEqual([]);
+  expect(pdf).toMatchObject({ name: 'plan.pdf', type: 'application/pdf' });
+  expect(draft.input).toMatchObject({ kind: 'form' });
+  expect(draft.input.fields).toEqual([
+    {
+      id: 'comments',
+      type: 'annotations',
+      label: 'Comments',
+      required: false,
+      attachmentId: pdf.id,
+    },
+  ]);
+  // No reply field is added next to the comments.
+  const wait = await composeMessage({ annotate: ['/tmp/plan.pdf'] }, undefined, true, stdin);
+  expect(wait.fields.map((f) => f.id)).toEqual(['comments']);
+  const more = await composeMessage(
+    { annotate: ['/tmp/plan.pdf'], field: ['note?:text'] },
+    undefined,
+    false,
+    stdin,
+  );
+  expect(more.fields.map((f) => f.id)).toEqual(['note', 'comments']);
+});
+it('refuses --annotate with a non-PDF or more than once', async () => {
+  const stdin = async () => '';
+  for (const annotate of [['/tmp/a.png'], ['/tmp/a'], ['/tmp/a.pdf', '/tmp/b.pdf']])
+    await expect(composeMessage({ annotate }, undefined, false, stdin)).rejects.toThrow(/PDF|once/);
+});
+it('lets -i name a local PDF for an annotations field, relative to the input file', async () => {
+  const stdin = async () => '';
+  const base = {
+    title: 'Review',
+    fields: [{ id: 'notes', label: 'Notes', type: 'annotations', file: 'docs/plan.pdf' }],
+  };
+  const draft = await composeMessage({ input: '/work/in.json' }, base, false, stdin);
+  const [pdf] = draft.input.attachments!;
+  expect(pdf).toMatchObject({ name: 'plan.pdf', type: 'application/pdf' });
+  expect(draft.input.fields).toEqual([
+    { id: 'notes', label: 'Notes', type: 'annotations', attachmentId: pdf.id },
+  ]);
+  const bad = { fields: [{ ...base.fields[0], file: 'plan.txt' }] };
+  await expect(composeMessage({}, bad, false, stdin)).rejects.toThrow('use a PDF file');
+  // A field naming an attachment needs no file.
+  const named = {
+    title: 'T',
+    fields: [{ id: 'n', label: 'N', type: 'annotations', attachmentId: pdf.id }],
+  };
+  await expect(composeMessage({}, named, false, stdin)).rejects.toThrow('attached PDF');
+});

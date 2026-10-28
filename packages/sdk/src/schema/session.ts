@@ -58,7 +58,7 @@ export const sessionOptionsSchema = z
     for (const command of options.commands || []) {
       if (
         command.arguments.some(
-          (field) => ['file', 'secret'].includes(field.type) || field.id.length > 40,
+          (field) => ['file', 'secret', 'annotations'].includes(field.type) || field.id.length > 40,
         )
       )
         ctx.addIssue({
@@ -238,7 +238,7 @@ export function taskPayload(
     values: Object.fromEntries(Object.entries(values).filter(([id]) => !reservedSessionField(id))),
     session: {
       ...session,
-      ...(Array.isArray(files) && files.length ? { attachments: files } : {}),
+      ...(Array.isArray(files) && files.length ? { attachments: files as string[] } : {}),
     },
   };
 }

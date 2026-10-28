@@ -114,6 +114,17 @@ export const messageInputSchema = z
           });
       }
     }
+    m.fields.forEach((field, index) => {
+      if (
+        field.type === 'annotations' &&
+        m.attachments.find((file) => file.id === field.attachmentId)?.type !== 'application/pdf'
+      )
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fields', index, 'attachmentId'],
+          message: 'Annotations fields require an attached PDF.',
+        });
+    });
     if (m.actions?.length) {
       if (new Set(m.actions.map((a) => a.id)).size !== m.actions.length)
         ctx.addIssue({ code: 'custom', message: 'Action IDs must be unique.' });
