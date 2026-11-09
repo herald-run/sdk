@@ -202,10 +202,21 @@ export async function verifyChatRoom(
   }
 }
 /** Every head a message in this room may legitimately sign. */
-export async function roomHeads(room: ChatRoom): Promise<Set<string>> {
-  if (room.kind !== 'group') return new Set([room.id]);
-  return new Set(await Promise.all((room.chain ?? []).map((link) => headHash(link.head))));
+export async function roomHeads(room: ChatRoom): Promise<Map<string, string[]>> {
+  if (room.kind !== 'group') return new Map([[room.id, room.members.map((m) => m.principal)]]);
+  const chain = room.chain ?? [];
+  return new Map(
+    await Promise.all(chain.map(async (l) => [await headHash(l.head), l.head.members] as const)),
+  );
 }
+/**
+ * Whether a verified message vouches for the head it names: only from a person on that head. A
+ * head missing from the chain still counts, so a caller can see the chain was cut back.
+ */
+export const vouches = (heads: ReadonlyMap<string, string[]>, head: string, sender: string) => {
+  const members = heads.get(head);
+  return !members || (humanP(sender) && members.includes(sender));
+};
 /** May this agent be in a room of `team`? Unknown teams count as outside it. */
 export const inTeam = (keys: ChatKeys, principal: string, team: string | undefined) =>
   !team || humanP(principal) || !keys.teamsOf || !!keys.teamsOf(principal)?.includes(team);
@@ -295,13 +306,16 @@ export async function openChat(
   keys: ChatKeys,
   roomOf: string,
   record: ChatRecord,
-  options: { heads?: ReadonlySet<string> } = {},
+  options: { heads?: ReadonlyMap<string, string[]> } = {},
 ): Promise<OpenedChat> {
   const envelope = record.envelope ?? fail('The message has no content.');
   const who = keys.verifier(record.sender) ?? fail(`Unverified sender ${record.sender}.`);
   if (envelope.from !== who.kid) fail('The message has the wrong signer.');
-  if (options.heads && !options.heads.has(String(envelope.ctx.head)))
-    fail('The message names an unknown room head.');
+  if (options.heads) {
+    const members = options.heads.get(String(envelope.ctx.head));
+    if (!members) fail('The message names an unknown room head.');
+    if (!members!.includes(record.sender)) fail('The sender is not on that room head.');
+  }
   const payload = await open<ChatPayload>(envelope, {
     recipients: keys.openers,
     signers: (kid) => (kid === who.kid ? who.sign : undefined),

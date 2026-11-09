@@ -143,6 +143,22 @@ it('seals to admins under the policy, never to agents outside the team, and shar
   expect(envelope.to.map((r) => r.kid).sort()).toEqual(
     ['h:ann', 'h:ben', 'a:red', 'h:boss'].map(kid).sort(),
   );
+  // Opening checks the sender is on the head the message names; only people on it vouch.
+  const said = { id: crypto.randomUUID(), sender: 'h:ann', sub: '', at: 0, seq: 1 } as const;
+  const sent = await e2ee.sealChat(ann, room, { id: said.id, text: 'on head' });
+  const msg = { ...said, kind: 'message', audience: 'all', envelope: sent } as const;
+  const heads = await e2ee.roomHeads(room);
+  const benKeys = keysFor('h:ben', sets);
+  await expect(e2ee.openChat(benKeys, id, msg, { heads })).resolves.toMatchObject({
+    text: 'on head',
+  });
+  const without = new Map([[tip, members.filter((p) => p !== 'h:ann')]]);
+  await expect(e2ee.openChat(benKeys, id, msg, { heads: without })).rejects.toThrow('not on that');
+  expect([e2ee.vouches(heads, tip, 'h:ann'), e2ee.vouches(heads, tip, 'a:red')]).toEqual([
+    true,
+    false,
+  ]);
+  expect(e2ee.vouches(heads, 'cut', 'a:red')).toBe(true);
   // A manager outside the room opens it only as an observer.
   const boss = keysFor('h:boss', sets);
   await expect(e2ee.verifyChatRoom(boss, room)).rejects.toThrow();

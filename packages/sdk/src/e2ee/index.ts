@@ -7,6 +7,7 @@ export {
   openChat,
   openChatSecrets,
   roomHeads,
+  vouches,
   pairKey,
   roomId,
   sealChat,

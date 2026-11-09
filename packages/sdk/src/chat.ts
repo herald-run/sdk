@@ -94,7 +94,7 @@ export class ChatClient {
   #raw: Raw;
   /** Newest head verified per group, so the server cannot roll one back during this process. */
   #pins = new Map<string, { version: number; hash: string }>();
-  #heads = new Map<string, ReadonlySet<string> | null>();
+  #heads = new Map<string, ReadonlyMap<string, string[]> | null>();
   #recent = new Map<string, Set<string>>();
   constructor(request: Request, keyed: () => KeyedSession, connect: () => EventSocket, raw: Raw) {
     this.#request = request;
@@ -163,14 +163,17 @@ export class ChatClient {
       `${path(room.id)}/messages?limit=${RECENT}`,
     );
     const keys = await this.#keys();
+    const named = await e2ee.roomHeads(room);
     const heads = new Set<string>();
     for (const record of page.messages) {
       if (!record.envelope) continue;
+      const head = String(record.envelope.ctx.head);
+      if (!e2ee.vouches(named, head, record.sender)) continue;
       const opened = await e2ee.openChat(keys, room.id, record).then(
         () => true,
         () => false,
       );
-      if (opened) heads.add(String(record.envelope.ctx.head));
+      if (opened) heads.add(head);
     }
     this.#recent.set(room.id, heads);
     return heads;
