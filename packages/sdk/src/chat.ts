@@ -37,6 +37,8 @@ export type ChatWake = {
   first: number;
   seq: number;
   reason: WakeReason;
+  /** The runtime subagent a message tagged, when this connection owns it. */
+  subagent?: string;
   context: e2ee.ContextMode;
   contextFrom: number;
   messages: ChatMessage[];
