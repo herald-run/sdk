@@ -127,6 +127,35 @@ class KeyTests(unittest.TestCase):
 MSG_ID = "6f1c1a4e-58d3-4f9c-9a38-7f0d1c2b3a4d"
 
 
+class ChatTests(unittest.TestCase):
+    def test_room_id(self):
+        chat = V["chat"]
+        self.assertEqual(e2ee.room_id(list(reversed(chat["members"])), chat["nonce"]), chat["room"])
+        self.assertEqual(e2ee.pair_key(chat["members"]), chat["pairKey"])
+
+    def test_reproduces_and_opens_chat_envelopes(self):
+        for case in V["chat"]["envelopes"]:
+            with draws(case["random"]):
+                env = e2ee.seal(payload=case["payload"], ctx=case["ctx"], signer=S.signer_keys[case["signer"]], to=[S.recipients[n] for n in case["to"]])
+            self.assertEqual(env, case["envelope"])
+            got = e2ee.open(case["envelope"], recipients=[S.openers["inbox"]], signers=S.signers(ALL), expect=case["ctx"])
+            self.assertEqual(got, {"v": 1, **case["payload"]})
+
+    def test_chat_cap_and_empty_sub(self):
+        ctx = dict(V["chat"]["envelopes"][0]["ctx"])
+        target = S.recipients["inbox"]
+        with self.assertRaises(E2eeError):
+            e2ee.seal(payload={}, ctx=ctx, signer=S.signer_keys["integration"], to=[target] * 65)
+        self.assertEqual(len(e2ee.seal(payload={}, ctx=ctx, signer=S.signer_keys["integration"], to=[target] * 64)["to"]), 64)
+        with self.assertRaises(E2eeError):
+            e2ee.seal(payload={}, ctx={**ctx, "room": ""}, signer=S.signer_keys["integration"], to=[target])
+
+    def test_labelled_certificate_verifies(self):
+        cert = V["chat"]["certificate"]
+        self.assertEqual(cert["certificate"]["name"], "Build agent")
+        self.assertEqual(e2ee.verify_certificate(cert, S.info.identity, ACCOUNT)["sign"], cert["certificate"]["sign"])
+
+
 class EnvelopeTests(unittest.TestCase):
     def test_reproduces_and_opens_every_context_type(self):
         for case in V["envelopes"]:

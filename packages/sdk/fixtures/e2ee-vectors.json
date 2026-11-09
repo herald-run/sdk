@@ -2620,5 +2620,77 @@
       },
       "sig": "aHLbqYgPeCKB-XILpFHjlbrprN6ev0cbxP4MdQeNzeCrUPeyBhpdvR7p3f5PA8XRkMAyyDt3hcK6J5oRs3tEDw"
     }
+  },
+  "chat": {
+    "members": ["h:user-owner", "a:agent-one"],
+    "nonce": "dGVzdC1vbmx5LW5vbmNlLTE",
+    "room": "LvuVuRSCmFcSTZRRQT4eLVfJWZLq5A1zyt3j2RE_7cM",
+    "pairKey": "a:agent-one|h:user-owner",
+    "envelopes": [
+      {
+        "name": "chat",
+        "ctx": {
+          "t": "chat",
+          "account": "acct-vectors",
+          "room": "LvuVuRSCmFcSTZRRQT4eLVfJWZLq5A1zyt3j2RE_7cM",
+          "id": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+          "audience": "all",
+          "sub": "",
+          "head": "LvuVuRSCmFcSTZRRQT4eLVfJWZLq5A1zyt3j2RE_7cM"
+        },
+        "signer": "integration",
+        "to": ["integration", "inbox"],
+        "payload": {
+          "text": "Deploy finished."
+        },
+        "random": [
+          "tFh6IHsaK8Vc-RVJmb16Z7hidtemTfvyj14bAbRR1lQ",
+          "874wt-tGcvmziCWz",
+          "thsT9VhczLFCuH4R55pd_aErx2bSd6AymT8q7m9jv-c",
+          "o-IoG1sIVbtp7y-2E76sr0rSM6vqTzyYV0oKAsmp8to"
+        ],
+        "envelope": {
+          "v": 1,
+          "ctx": {
+            "t": "chat",
+            "account": "acct-vectors",
+            "room": "LvuVuRSCmFcSTZRRQT4eLVfJWZLq5A1zyt3j2RE_7cM",
+            "id": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+            "audience": "all",
+            "sub": "",
+            "head": "LvuVuRSCmFcSTZRRQT4eLVfJWZLq5A1zyt3j2RE_7cM"
+          },
+          "from": "zvBQxct5ooE560WWTP5tBA",
+          "to": [
+            {
+              "kid": "zvBQxct5ooE560WWTP5tBA",
+              "enc": "tg9FX5dLEcSKvIBBal3ac_5imsdsg8xwQI1TUFpTPwc",
+              "key": "6aEs8vhw0Tlj89Tms8h7-ZtX4mWgwFzuV7nl8F-eaBoaIP20ruDCbMOIjPFCnM2T"
+            },
+            {
+              "kid": "jB8ewtaFv1sVOQSpn2Oaeg",
+              "enc": "0sL5brX52JDWqdcUeAvHfJml1CT9H4l5jXKFFfBB4Hc",
+              "key": "c_dn0acqjz4_hKGDkNyOumVDm-4QTEFuptnnwziXKBUYeymFa2GyMa-aygNB5Mos"
+            }
+          ],
+          "iv": "874wt-tGcvmziCWz",
+          "ct": "xUJnxlh0bYhCT_BlGlxiJ3aQsY2cmg5W8Yk73kYFBFVWfXLEnBVyo9XRYNzcEFcl7g",
+          "sig": "4KTmIhO-jtsTfX2tJlXGipw81Rh3KzFWV7eVjVCvDnRE6pQIlH1i6usfPW_eDwlVZWud0-hoqG1Xqz1EYiQ9Dw"
+        }
+      }
+    ],
+    "certificate": {
+      "certificate": {
+        "v": 1,
+        "account": "acct-vectors",
+        "kid": "zvBQxct5ooE560WWTP5tBA",
+        "sign": "HBpFs0EGLhEMU_6bqHi_5bIevIErkGoPaeQLHUMo62s",
+        "box": "xqxzOfUq74UMWaLUMFQ8Q_QZgUzmsMxbz9o1z5X0Jio",
+        "created": "2026-01-01T00:00:00.000Z",
+        "connection": "0b7f8e2a-4c1d-4e5f-9a6b-3c2d1e0f9a8b",
+        "name": "Build agent"
+      },
+      "sig": "qXVZk6JQjenbbbfrFovoEAdV-ezBKG65UA6GguRAAoXzycddrisDjS0Pk82bndKZlDjC8lpS1YBOh0t9hOgSCg"
+    }
   }
 }

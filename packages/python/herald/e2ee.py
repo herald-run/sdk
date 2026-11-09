@@ -272,6 +272,7 @@ _CTX = {
     "keyring": {"device": str},
     "teamkey": {},
     "wskey": {},
+    "chat": {"room": str, "id": "uuid", "audience": str, "sub": "text", "head": str},
 }
 # Fields a `ws_` (team workspace) account's contexts add; forbidden elsewhere.
 _WORKSPACE = {
@@ -283,7 +284,18 @@ _WORKSPACE = {
     "secret": {"team": str, "member": str},
     "teamkey": {"team": str, "kv": int, "member": str},
     "wskey": {"n": int, "member": str},
+    "chat": {"member": str},
 }
+
+
+def pair_key(principals: list) -> str:
+    """Unique key of a two-person room."""
+    return "|".join(sorted(principals))
+
+
+def room_id(principals: list, nonce: str) -> str:
+    """A chat room id commits to its members and a nonce."""
+    return b64u_encode(H("room", canon({"members": sorted(principals), "nonce": nonce})))
 
 
 def is_workspace(account) -> bool:
@@ -312,6 +324,8 @@ def _check_ctx(ctx, expect=None):
         elif kind == "uuid":
             # The record's UUID, chosen by the sender, so the server cannot replay content elsewhere.
             ok = isinstance(value, str) and _UUID.fullmatch(value) is not None
+        elif kind == "text":
+            ok = isinstance(value, str)
         else:
             ok = isinstance(value, str) and value != ""
         if not ok:
@@ -384,8 +398,9 @@ def _wrap_key(head, cek, to):
 
 def seal(*, payload: dict, ctx: dict, signer, to: list) -> dict:
     """Encrypts and signs `payload` from `signer` (`.kid`, `.sign_priv`) to `{kid, box}` recipients. `message` and `task` contexts carry the record's `id`."""
-    if not 1 <= len(to) <= 16:
-        _fail("Seal to 1 to 16 recipients.")
+    cap = 64 if isinstance(ctx, dict) and ctx.get("t") == "chat" else 16
+    if not 1 <= len(to) <= cap:
+        _fail(f"Seal to 1 to {cap} recipients.")
     _check_ctx(ctx)
     payload = _with_version(payload)
     plain = _dump(payload, False).encode()
@@ -567,10 +582,15 @@ def verify_account(keys: dict, pinned_fp: str, account: Optional[str] = None) ->
     return AccountInfo(statement["identity"], statement["inbox"], _kid(identity), _kid(identity, _bytes(statement["inbox"], 32)))
 
 
-def certify(keyring: dict, *, sign: str, box: str) -> dict:
+def _label(connection, name):
+    """A certificate's optional signed connection id and name."""
+    return {**({} if connection is None else {"connection": connection}), **({} if name is None else {"name": name})}
+
+
+def certify(keyring: dict, *, sign: str, box: str, connection: Optional[str] = None, name: Optional[str] = None) -> dict:
     """The owner's approval of an integration key set."""
     identity = keyring_keys(keyring).identity
-    body = {"v": 1, "account": keyring["account"], "kid": _kid(_bytes(sign, 32), _bytes(box, 32)), "sign": sign, "box": box, "created": _now()}
+    body = {"v": 1, "account": keyring["account"], "kid": _kid(_bytes(sign, 32), _bytes(box, 32)), "sign": sign, "box": box, "created": _now(), **_label(connection, name)}
     return {"certificate": body, "sig": b64u_encode(identity.sign_priv.sign(H("cert", canon(body))))}
 
 
@@ -989,9 +1009,9 @@ def verify_workspace(directory: dict, pinned_fp: str, *, workspace: Optional[str
     return verify_roster(directory.get("roster"), chain, pin=pin, min_epoch=min_epoch)
 
 
-def certify_workspace(*, workspace: str, sign: str, box: str, teams: list, epoch: int, signer, by: Optional[str] = None) -> dict:
+def certify_workspace(*, workspace: str, sign: str, box: str, teams: list, epoch: int, signer, by: Optional[str] = None, connection: Optional[str] = None, name: Optional[str] = None) -> dict:
     """Certifies an integration key set in a workspace; `signer` is the head identity, or with `by` that member's personal identity."""
-    body = {"v": 1, "account": workspace, "kid": _kid(_bytes(sign, 32), _bytes(box, 32)), "sign": sign, "box": box, "created": _now(), "teams": teams, "epoch": epoch}
+    body = {"v": 1, "account": workspace, "kid": _kid(_bytes(sign, 32), _bytes(box, 32)), "sign": sign, "box": box, "created": _now(), "teams": teams, "epoch": epoch, **_label(connection, name)}
     if by is not None:
         body["by"] = by
     return {"certificate": body, "sig": b64u_encode(signer.sign_priv.sign(H("cert", canon(body))))}
@@ -1036,7 +1056,7 @@ def recertify_workspace(cert: dict, *, previous: VerifiedWorkspace, current: Ver
     teams = [t for t in checked["teams"] if t in current.teams]
     if not teams:
         _fail("The certificate covers no team.")
-    return certify_workspace(workspace=current.workspace, sign=checked["sign"], box=checked["box"], teams=teams, epoch=current.epoch, signer=identity)
+    return certify_workspace(workspace=current.workspace, sign=checked["sign"], box=checked["box"], teams=teams, epoch=current.epoch, signer=identity, connection=cert["certificate"].get("connection"), name=cert["certificate"].get("name"))
 
 
 def team_member(ws: VerifiedWorkspace, user, team) -> dict:

@@ -1,6 +1,7 @@
 /** End-to-end encryption for Herald: key sets, signed envelopes, sealed files and keyring backups. */
 export { b64u, E2eeError, type Bytes } from './bytes';
 export { canon } from './canon';
+export { chatContext, pairKey, roomId, type ChatContextInput, type RoomKind } from './chat';
 export { H } from './hash';
 export { fingerprint, keySet, safetyCode, type KeySet } from './keys';
 export {
@@ -9,7 +10,9 @@ export {
   grant,
   isWorkspace,
   idempotencyDigest,
+  MAX_CHAT_RECIPIENTS,
   MAX_PAYLOAD_BYTES,
+  MAX_RECIPIENTS,
   open,
   openKey,
   seal,

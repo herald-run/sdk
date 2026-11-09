@@ -346,6 +346,50 @@ export async function generateVectors() {
       { token: 'hdr_legacy-only', parsed: e2ee.parseToken('hdr_legacy-only') },
     ];
     const workspace = await workspaceVectors(random, take, { sets, flip });
+    const members = ['h:user-owner', 'a:agent-one'];
+    const nonce = 'dGVzdC1vbmx5LW5vbmNlLTE';
+    const room = await e2ee.roomId(members, nonce);
+    const chatCases: Case[] = [
+      {
+        name: 'chat',
+        ctx: e2ee.chatContext({
+          account: ACCOUNT,
+          room,
+          id: ID,
+          audience: 'all',
+          sub: '',
+          head: room,
+        }),
+        signer: 'integration',
+        to: ['integration', 'inbox'],
+        payload: { text: 'Deploy finished.' },
+      },
+    ];
+    const chatEnvelopes: (Case & { random: string[]; envelope: SealedEnvelope })[] = [];
+    for (const c of chatCases) {
+      const envelope = await e2ee.seal({
+        payload: c.payload,
+        ctx: c.ctx,
+        signer: signers[c.signer],
+        to: c.to.map((n) => recipients[n]),
+      });
+      chatEnvelopes.push({ ...c, random: take(), envelope });
+    }
+    const labelled = await e2ee.certify(keyring, {
+      sign: sets.integration.signPub,
+      box: sets.integration.boxPub,
+      connection: ID,
+      name: 'Build agent',
+    });
+    take();
+    const chat = {
+      members,
+      nonce,
+      room,
+      pairKey: e2ee.pairKey(members),
+      envelopes: chatEnvelopes,
+      certificate: labelled,
+    };
     return {
       _comment:
         'Test-only keys and deterministic randomness. Each case lists its random draws in order.',
@@ -375,6 +419,7 @@ export async function generateVectors() {
       receiver,
       tokens,
       workspace,
+      chat,
     };
   } finally {
     setTestHooks();

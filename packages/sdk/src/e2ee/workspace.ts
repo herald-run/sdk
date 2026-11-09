@@ -1,5 +1,5 @@
 import type { Certificate, SealedEnvelope } from '../schema/e2ee';
-import type { Keyring } from './keyring';
+import { label, type Keyring } from './keyring';
 import { b64u, bytesOf, fail, utf8, type Bytes } from './bytes';
 import { canon } from './canon';
 import { H, hkdf, hmac } from './hash';
@@ -399,7 +399,7 @@ export async function verifyWorkspace(
 export async function certifyWorkspace(
   input: {
     workspace: string;
-    keys: { sign: string; box: string };
+    keys: { sign: string; box: string; connection?: string; name?: string };
     teams: string[];
     epoch: number;
     by?: string;
@@ -417,6 +417,7 @@ export async function certifyWorkspace(
     teams: input.teams,
     epoch: input.epoch,
     ...(input.by === undefined ? {} : { by: input.by }),
+    ...label(keys),
   };
   return { certificate, sig: await sign(signer.signPriv, await H('cert', canon(certificate))) };
 }
@@ -474,7 +475,7 @@ export async function recertifyWorkspace(
   const checked = await verifyWorkspaceCertificate(cert, previous);
   const teams = checked.teams.filter((team) => current.teams.has(team));
   if (!teams.length) fail('The certificate covers no team.');
-  const keys = { sign: checked.sign, box: checked.box };
+  const keys = { sign: checked.sign, box: checked.box, ...label(cert.certificate) };
   return certifyWorkspace(
     { workspace: current.workspace, keys, teams, epoch: current.epoch },
     identity,

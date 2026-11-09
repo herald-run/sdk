@@ -24,7 +24,7 @@ export interface Opener {
 }
 export type Expect = { t: string; account: string } & Record<string, string | number>;
 /** Extra context fields per type; `t` and `account` are always present. */
-const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid'>> = {
+const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid' | 'text'>> = {
   message: { id: 'uuid' },
   response: { message: 'string', request: 'string' },
   task: { id: 'uuid', destination: 'string', type: 'string' },
@@ -34,6 +34,7 @@ const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid'>> = {
   keyring: { device: 'string' },
   teamkey: {},
   wskey: {},
+  chat: { room: 'string', id: 'uuid', audience: 'string', sub: 'text', head: 'string' },
 };
 /** Fields a `ws_` (team workspace) account's contexts add; forbidden elsewhere. */
 const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
@@ -45,6 +46,7 @@ const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
   secret: { team: 'string', member: 'string' },
   teamkey: { team: 'string', kv: 'number', member: 'string' },
   wskey: { n: 'number', member: 'string' },
+  chat: { member: 'string' },
 };
 /** Team workspace ids start with `ws_`; personal account ids never do. */
 export const isWorkspace = (account: unknown) =>
@@ -53,6 +55,9 @@ const KEY_INFO = utf8('herald/e2ee/v1 key');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Largest payload JSON, in UTF-8 bytes, whose ciphertext fits the envelope schema. */
 export const MAX_PAYLOAD_BYTES = 134_984;
+/** Recipient caps: chat rooms address every member device; everything else stays at 16. */
+export const MAX_RECIPIENTS = 16;
+export const MAX_CHAT_RECIPIENTS = 64;
 export function checkCtx(ctx: Ctx, expect?: Expect) {
   if (!ctx || typeof ctx !== 'object' || !Object.hasOwn(CTX, ctx.t)) fail('Unknown context type.');
   const ws = isWorkspace(ctx.account);
@@ -68,7 +73,7 @@ export function checkCtx(ctx: Ctx, expect?: Expect) {
         ? Number.isSafeInteger(value) && (value as number) >= 0
         : type === 'uuid'
           ? typeof value === 'string' && UUID.test(value)
-          : typeof value === 'string' && value !== '';
+          : typeof value === 'string' && (type === 'text' || value !== '');
     if (!ok) fail(`Invalid ctx.${key}.`);
   }
   if (!expect) return;
@@ -150,8 +155,9 @@ export async function seal(input: {
   to: RecipientKey[];
 }): Promise<SealedEnvelope> {
   const { signer, to } = input;
-  if (!to.length || to.length > 16) fail('Seal to 1 to 16 recipients.');
   const { ctx } = input;
+  const cap = ctx?.t === 'chat' ? MAX_CHAT_RECIPIENTS : MAX_RECIPIENTS;
+  if (!to.length || to.length > cap) fail(`Seal to 1 to ${cap} recipients.`);
   checkCtx(ctx);
   const payload = withVersion(input.payload);
   const plain = utf8(JSON.stringify(payload));

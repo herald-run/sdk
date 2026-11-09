@@ -95,9 +95,14 @@ export async function verifyAccount(
   };
 }
 /** The owner's approval of an integration key set. */
+/** The optional signed connection id and name of a certificate. */
+export const label = (keys: { connection?: string; name?: string }) => ({
+  ...(keys.connection === undefined ? {} : { connection: keys.connection }),
+  ...(keys.name === undefined ? {} : { name: keys.name }),
+});
 export async function certify(
   keyring: Keyring,
-  keys: { sign: string; box: string },
+  keys: { sign: string; box: string; connection?: string; name?: string },
 ): Promise<Certificate> {
   const { identity } = await keyringKeys(keyring);
   const certificate = {
@@ -107,6 +112,7 @@ export async function certify(
     sign: keys.sign,
     box: keys.box,
     created: now(),
+    ...label(keys),
   };
   return { certificate, sig: await sign(identity.signPriv, await H('cert', canon(certificate))) };
 }

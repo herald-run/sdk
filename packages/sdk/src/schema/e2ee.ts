@@ -25,6 +25,10 @@ export const sealedEnvelopeSchema = z
   })
   .strict();
 export type SealedEnvelope = z.infer<typeof sealedEnvelopeSchema>;
+/** A chat room seals to every member's keys, so its recipient cap is higher. */
+export const chatEnvelopeSchema = sealedEnvelopeSchema.extend({
+  to: z.array(recipientSchema).min(1).max(64),
+});
 const iso = z.string().datetime();
 export const accountStatementSchema = z
   .object({
@@ -51,6 +55,9 @@ export const certificateBodySchema = z
     teams: z.array(z.string().min(1).max(200)).min(1).max(100).optional(),
     epoch: z.number().int().nonnegative().optional(),
     by: z.string().min(1).max(200).optional(),
+    /** The connection this key belongs to and its name, when the signer knew them. */
+    connection: z.string().uuid().optional(),
+    name: z.string().min(1).max(100).optional(),
   })
   .strict();
 export const certificateSchema = z
