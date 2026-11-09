@@ -3,7 +3,10 @@ export { b64u, E2eeError, type Bytes } from './bytes';
 export { canon } from './canon';
 export {
   chatContext,
+  groupHead,
   openChat,
+  openChatSecrets,
+  roomHeads,
   pairKey,
   roomId,
   sealChat,
@@ -14,7 +17,15 @@ export {
   type ChatPayload,
   type ChatRecord,
   type ChatRoom,
+  type ChatAttachment,
+  type ChatEvent,
+  type ChatSealInput,
+  type ContextMode,
+  type FormState,
+  type NotifyRule,
+  type OpenedChat,
   type RoomKind,
+  type RoomTrust,
 } from './chat';
 export { H } from './hash';
 export { fingerprint, keySet, safetyCode, type KeySet } from './keys';
@@ -125,3 +136,15 @@ export type {
   SealedEnvelope,
   WrappedKeyring,
 } from '../schema/e2ee';
+export {
+  checkPin,
+  groupRoomId,
+  headHash,
+  maySign,
+  signChatHead,
+  verifyHeadChain,
+  type ChatHead,
+  type HeadKeys,
+  type HeadPins,
+  type SignedChatHead,
+} from './chat-head';
