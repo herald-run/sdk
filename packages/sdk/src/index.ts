@@ -27,6 +27,7 @@ import {
   sealFile,
   type WorkspacePin,
 } from './e2ee/index.js';
+import { ChatClient } from './chat.js';
 import { KeyedSession, type FileAttachment, type OpenedLog, type WorkspaceInfo } from './keyed.js';
 import { HeraldError, parseRetryAfter, readError, readJson, retryDelay, sleep } from './http.js';
 import { version } from './version.js';
@@ -60,6 +61,8 @@ export { HeraldError, parseRetryAfter } from './http.js';
 export { E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
+export { ChatClient } from './chat.js';
+export type { ChatMessage, ChatPage, ChatRoom, ChatSendOptions } from './chat.js';
 export { backoff, LiveSocket } from './socket.js';
 export type { LiveEvent } from './socket.js';
 export type { UploadData } from './upload.js';
@@ -177,6 +180,7 @@ export class Herald {
   readonly workspaceId?: string;
   #live?: LiveSocket;
   #keyed?: KeyedSession;
+  #chat?: ChatClient;
   constructor(options: HeraldOptions = {}) {
     this.base = (options.url || process.env.HERALD_URL || 'https://app.herald.run').replace(
       /\/$/,
@@ -565,6 +569,18 @@ export class Herald {
     if (result.locked || result.unverified)
       throw new HeraldError('The answer could not be verified.', 502, sent.id);
     return result;
+  }
+  /** End-to-end encrypted chat rooms: list, read, send, wait and listen. */
+  get chat(): ChatClient {
+    return (this.#chat ??= new ChatClient(
+      (path, body, options) => this.request(path, body, options),
+      () => this.#keys,
+      () =>
+        new WebSocket(this.base.replace(/^http/, 'ws') + '/api/v1/chats/stream', {
+          headers: this.#headers(),
+          followRedirects: false,
+        }),
+    ));
   }
   /** The shared live socket; every `wait` and `watch` on this client subscribes to it. */
   get live(): LiveSocket {

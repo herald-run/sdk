@@ -11,6 +11,7 @@ import { removeLogin, saveLogin, tokenPath } from './config';
 import { composeDestination, composeMessage, outputs, UsageError } from './compose';
 import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
+import { chat } from './chat';
 import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
 import { collect, fileFailure, isSecret, sendSecret, secretFailure } from './secrets';
@@ -103,6 +104,10 @@ const options = {
   'safety-code': { type: 'string' },
   workspace: { type: 'string' },
   team: { type: 'string' },
+  exec: { type: 'string' },
+  session: { type: 'boolean' },
+  humans: { type: 'boolean' },
+  limit: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
 /** A team workspace pin file: absent means no pin yet; anything else must be a valid pin. */
@@ -509,6 +514,23 @@ export async function main(argv: string[], io: Io): Promise<number> {
         );
         return 0;
       }
+      case 'chat':
+        return await chat(
+          client,
+          positionals.slice(1),
+          {
+            json: values.json,
+            exec: values.exec,
+            session: values.session,
+            humans: values.humans,
+            after: integer(values.after, '--after'),
+            before: integer(values.before, '--before'),
+            limit: integer(values.limit, '--limit'),
+            timeout,
+            bodyFile: values['body-file'],
+          },
+          io,
+        );
       case 'watch': {
         const stop = new AbortController();
         const done = new Promise<void>((resolve) =>

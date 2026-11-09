@@ -272,6 +272,67 @@ export function createServer(client: () => Promise<Herald>) {
     true,
   );
 
+  const chatTarget = z
+    .string()
+    .min(1)
+    .describe('Room id, or "owner", "h:<user>" or "a:<integration>" for a direct chat');
+  tool(
+    'chat_list',
+    'List the end-to-end encrypted chat rooms this connection belongs to, newest first.',
+    { limit: z.number().int().min(1).max(100).optional() },
+    async (input, herald) => json(await herald.chat.list(input)),
+    true,
+  );
+  tool(
+    'chat_read',
+    'Read one page of a chat, decrypted, oldest first. Use after to read forward from a seq.',
+    {
+      room: chatTarget,
+      after: z.number().int().nonnegative().optional(),
+      before: z.number().int().positive().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+    async ({ room, ...options }, herald) => json(await herald.chat.read(room, options)),
+    true,
+  );
+  tool(
+    'chat_send',
+    'Send an end-to-end encrypted chat message; creates the direct chat if needed.',
+    {
+      to: chatTarget,
+      text: z.string().min(1),
+      session: z.boolean().optional().describe('Start a new session room with this principal'),
+      humansOnly: z.boolean().optional().describe('Seal to humans only'),
+      replyTo: z.number().int().positive().optional(),
+    },
+    async (input, herald) => {
+      const target = input.session ? (await herald.chat.session(input.to)).id : input.to;
+      return json(
+        await herald.chat.send(target, input.text, {
+          audience: input.humansOnly ? 'humans' : undefined,
+          replyTo: input.replyTo,
+        }),
+      );
+    },
+  );
+  tool(
+    'chat_wait',
+    'Wait for new messages from others in a chat, decrypted, and acknowledge them. Returns an empty list on timeout.',
+    {
+      room: chatTarget,
+      after: z.number().int().nonnegative().optional(),
+      wait: time.optional().describe('How long this call blocks (default 10m)'),
+    },
+    async (input, herald) =>
+      json({
+        messages: await herald.chat.wait(input.room, {
+          after: input.after,
+          timeout: duration(input.wait || '10m'),
+        }),
+      }),
+    true,
+  );
+
   tool(
     'upload_file',
     'Upload a local file to Herald and return its attachment ({id, name, size, type}) for use in a later message.',

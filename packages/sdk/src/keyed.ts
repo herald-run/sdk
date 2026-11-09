@@ -39,6 +39,8 @@ type State = {
   /** Certified integration kids → signing keys, and integration IDs → kids. */
   signers: Map<string, string>;
   kids: Map<string, string>;
+  /** Certified kid → X25519 key, for sealing to a connection directly. */
+  boxes: Map<string, string>;
   /** Team workspaces: the verified chain and roster, certificates by kid, and this token's. */
   ws?: VerifiedWorkspace;
   certs: Map<string, CheckedCertificate>;
@@ -160,11 +162,13 @@ export class KeyedSession {
     const info = await e2ee.verifyAccount(directory.account!, this.fingerprint);
     const account = directory.account!.statement.account;
     const signers = new Map<string, string>(),
-      kids = new Map<string, string>();
+      kids = new Map<string, string>(),
+      boxes = new Map<string, string>();
     for (const cert of directory.certificates) {
       const checked = await e2ee.verifyCertificate(cert, info.identity, account).catch(() => {});
       if (!checked) continue;
       signers.set(checked.kid, checked.sign);
+      boxes.set(checked.kid, checked.box);
       kids.set(cert.integrationId, checked.kid);
     }
     if (signers.get(me.kid) !== me.signPub)
@@ -178,6 +182,7 @@ export class KeyedSession {
       inbox: { kid: info.inboxKid, box: info.inbox },
       signers,
       kids,
+      boxes,
       certs: new Map(),
     };
   }
@@ -188,11 +193,13 @@ export class KeyedSession {
     });
     const signers = new Map<string, string>(),
       kids = new Map<string, string>(),
+      boxes = new Map<string, string>(),
       certs = new Map<string, CheckedCertificate>();
     for (const cert of directory.certificates) {
       const checked = await e2ee.verifyWorkspaceCertificate(cert, ws).catch(() => {});
       if (!checked) continue;
       signers.set(checked.kid, checked.sign);
+      boxes.set(checked.kid, checked.box);
       kids.set(cert.integrationId, checked.kid);
       certs.set(checked.kid, checked);
     }
@@ -213,9 +220,45 @@ export class KeyedSession {
       inbox: { kid: ws.head.boxKid, box: ws.head.box },
       signers,
       kids,
+      boxes,
       ws,
       certs,
       mine,
+    };
+  }
+  /** This connection's verified view of chat principals, for sealing and opening rooms. */
+  async chatKeys(refresh: boolean | 'force' = false): Promise<e2ee.ChatKeys> {
+    const s = await this.state(refresh);
+    const id = [...s.kids].find(([, kid]) => kid === s.me.kid)?.[0];
+    if (!id) fail("This token's key is not certified.");
+    const user = (p: string) => (s.ws ? s.ws.members.get(p.slice(2)) : undefined);
+    const owner = (p: string) => !s.ws && p === 'h:' + s.account;
+    const agent = (p: string) => (p.startsWith('a:') ? s.kids.get(p.slice(2)) : undefined);
+    return {
+      account: s.account,
+      principal: 'a:' + id,
+      signer: s.me,
+      openers: [s.me],
+      recipient: (p) => {
+        const kid = agent(p);
+        if (kid) return s.boxes.has(kid) ? { kid, box: s.boxes.get(kid)! } : undefined;
+        const member = user(p);
+        return member
+          ? { kid: member.inboxKid, box: member.inbox }
+          : owner(p)
+            ? s.inbox
+            : undefined;
+      },
+      verifier: (p) => {
+        const kid = agent(p);
+        if (kid) return { kid, sign: s.signers.get(kid)! };
+        const member = user(p);
+        return member
+          ? { kid: member.kid, sign: member.identity }
+          : owner(p)
+            ? { kid: s.identityKid, sign: s.identity }
+            : undefined;
+      },
     };
   }
   /** The team workspace this token belongs to, or undefined for a personal account. */

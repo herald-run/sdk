@@ -89,6 +89,13 @@ export const commands: Record<string, Spec> = {
     options: ['target', 'config', 'concurrency'],
     detail: 'The runner config may omit destinationId; --target then names the destination key.',
   },
+  chat: {
+    args: 'list|read|send|wait|listen [ROOM] [TEXT]',
+    summary: 'Read, send and wait on end-to-end encrypted chats',
+    options: ['session', 'humans', 'after', 'before', 'limit', 'timeout', 'exec', 'body-file'],
+    detail:
+      'send takes a room id, owner, h:ID or a:ID. wait exits 3 when nothing arrives before --timeout. listen prints each new message, or with --exec runs a shell command per message: the message as JSON on stdin, HERALD_CHAT_ROOM, HERALD_CHAT_SEQ and HERALD_CHAT_SENDER in its environment. A message is acknowledged once its handler exits 0.',
+  },
   watch: { summary: 'Print messages as they change', options: ['after'] },
   account: { summary: 'Show the account holder, this connection, plan and usage' },
   completion: { args: 'bash|zsh|fish', summary: 'Print a shell completion script' },
@@ -133,6 +140,10 @@ const describe: Record<string, string> = {
   concurrency: '--concurrency N    Tasks at once (1-16)',
   label: '--label TEXT',
   message: '--message ID       Message with the attachment (decrypts it)',
+  session: '--session          Start a new session room',
+  humans: '--humans           Seal to humans only',
+  limit: '--limit N          Page size',
+  exec: '--exec CMD         Shell command to run per message',
 };
 const globals = `Global options:
   --json             Machine-readable JSON output
