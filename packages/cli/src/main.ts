@@ -110,6 +110,9 @@ const options = {
   exec: { type: 'string' },
   session: { type: 'boolean' },
   humans: { type: 'boolean' },
+  mention: { type: 'string', multiple: true },
+  attach: { type: 'string', multiple: true },
+  remove: { type: 'boolean' },
   limit: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
@@ -538,6 +541,9 @@ export async function main(argv: string[], io: Io): Promise<number> {
             exec: values.exec,
             session: values.session,
             humans: values.humans,
+            mention: values.mention,
+            attach: values.attach,
+            remove: values.remove,
             after: integer(values.after, '--after'),
             before: integer(values.before, '--before'),
             limit: integer(values.limit, '--limit'),

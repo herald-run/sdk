@@ -155,6 +155,7 @@ it('opens messages and locks forged ones', async () => {
       through_seq: 4,
       hasMore: false,
     },
+    [`GET /api/v1/chats/${room.id}`]: room,
   });
   const { messages } = await client().read(room.id);
   expect(messages.map((m) => [m.text, !!m.locked])).toEqual([
@@ -165,11 +166,36 @@ it('opens messages and locks forged ones', async () => {
   ]);
   expect(JSON.stringify(messages)).not.toContain('envelope');
 });
+it('wait with an explicit cursor still reads past it', async () => {
+  const room = await makeRoom();
+  const m1 = await fromOwner(room, 1, 'one');
+  const seen = serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/ack`]: null,
+    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
+    [`GET /api/v1/chats/${room.id}/messages`]: { messages: [m1], through_seq: 1, hasMore: false },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const got = await client().wait(room.id, { after: 0, timeout: 1 });
+  expect(got.map((m) => m.text)).toEqual(['one']);
+  expect(seen.some((s) => s.route.endsWith('/lease'))).toBe(false);
+});
 it('wait returns pending messages from others and acks them', async () => {
   const room = await makeRoom({ readSeq: 1 });
   const m2 = await fromOwner(room, 2, 'two');
   const seen = serve({
     ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/lease`]: {
+      wake: {
+        room: room.id,
+        first: 2,
+        seq: 2,
+        reason: 'message',
+        context: 'message',
+        contextFrom: 2,
+      },
+    },
+    [`POST /api/v1/chats/${room.id}/ack`]: null,
     [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 2 },
     [`GET /api/v1/chats/${room.id}/messages`]: {
       messages: [m2],
@@ -211,6 +237,7 @@ it('listen delivers each message once, catches up on wake and gaps, and acks', a
   let after = 0;
   const seen = serve({
     ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/ack`]: null,
     [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
     [`GET /api/v1/chats/${room.id}/messages`]: () => {
       const page = after === 0 ? [m1] : [m4];
@@ -224,6 +251,7 @@ it('listen delivers each message once, catches up on wake and gaps, and acks', a
     (p, b, o) => h.request(p, b, o),
     () => session,
     () => socket,
+    () => Promise.reject(new Error('unused')),
   );
   const got: ChatMessage[] = [];
   const stop = new AbortController();
@@ -242,4 +270,105 @@ it('listen delivers each message once, catches up on wake and gaps, and acks', a
   expect(got.map((m) => m.text)).toEqual(['one', 'two', 'four']);
   const acks = seen.filter((s) => s.route.endsWith('/read')).map((s) => s.body!.seq);
   expect(acks).toEqual([1, 2, 4]);
+});
+async function groupOf(over: Partial<e2ee.ChatRoom> = {}) {
+  const owner = await ownerKeys();
+  const id = await e2ee.groupRoomId(human, nonce);
+  const signed = await e2ee.signChatHead(owner, {
+    room: id,
+    version: 1,
+    prev: '',
+    owners: [human],
+    members: [human, agent],
+  });
+  const dm = await makeRoom();
+  const room: e2ee.ChatRoom = {
+    ...dm,
+    id,
+    kind: 'group',
+    head: await e2ee.headHash(signed.head),
+    chain: [signed],
+    ...over,
+  };
+  return { room, signed, owner };
+}
+it('wakes runs once per lease, then acks and re-leases the rest', async () => {
+  const { room } = await groupOf({ lastSeq: 2 });
+  const first = await fromOwner(room, 1, 'one');
+  const h = new Herald({ apiKey: token, url });
+  const parsed = e2ee.parseToken(token);
+  const session = new KeyedSession(parsed.seed!, parsed.fingerprint!, () => h.request('/keys'));
+  let leases = 0;
+  const seen = serve({
+    ...keysRoute,
+    'GET /api/v1/chats/wakes': { wakes: [{ room: room.id }] },
+    [`POST /api/v1/chats/${room.id}/lease`]: () => ({
+      wake:
+        leases++ === 0
+          ? {
+              room: room.id,
+              first: 1,
+              seq: 1,
+              reason: 'mention',
+              context: 'message',
+              contextFrom: 1,
+            }
+          : null,
+    }),
+    [`POST /api/v1/chats/${room.id}/ack`]: null,
+    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [first],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const socket = new FakeSocket();
+  const chat = new ChatClient(
+    (p, b, o) => h.request(p, b, o),
+    () => session,
+    () => socket,
+    () => Promise.reject(new Error('unused')),
+  );
+  const got: string[] = [];
+  const stop = new AbortController();
+  const done = chat.wakes((w) => void got.push(w.reason + ':' + w.messages[0].text), {
+    signal: stop.signal,
+  });
+  await flush();
+  socket.handlers.get('open')?.();
+  await flush();
+  stop.abort();
+  await done;
+  expect(got).toEqual(['mention:one']);
+  expect(seen.filter((s) => s.route.endsWith('/ack')).map((s) => s.body!.seq)).toEqual([1]);
+});
+it('refuses a group whose recent messages name a head missing from its chain', async () => {
+  const { room, signed, owner } = await groupOf();
+  const v2 = await e2ee.signChatHead(owner, {
+    ...signed.head,
+    version: 2,
+    prev: room.head,
+  });
+  const newest = {
+    ...room,
+    head: await e2ee.headHash(v2.head),
+    headVersion: 2,
+    chain: [signed, v2],
+  };
+  const message = await fromOwner(newest, 1, 'on v2');
+  const page = { messages: [message], through_seq: 1, hasMore: false };
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: page,
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  await expect(client().open(room.id)).rejects.toThrow('rolled back');
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: page,
+    [`GET /api/v1/chats/${room.id}`]: newest,
+  });
+  await expect(client().open(room.id)).resolves.toMatchObject({ headVersion: 2 });
 });

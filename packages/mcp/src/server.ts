@@ -1,5 +1,6 @@
 import { createWriteStream } from 'node:fs';
-import { stat, unlink } from 'node:fs/promises';
+import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -334,32 +335,112 @@ export function createServer(client: () => Promise<Herald>) {
       session: z.boolean().optional().describe('Start a new session room with this principal'),
       humansOnly: z.boolean().optional().describe('Seal to humans only'),
       replyTo: z.number().int().positive().optional(),
+      mentions: z.array(z.string().min(1)).optional().describe('Principals to tag'),
+      paths: z.array(z.string().min(1)).optional().describe('Local files to attach'),
     },
     async (input, herald) => {
       const target = input.session ? (await herald.chat.session(input.to)).id : input.to;
+      const attachments = [];
+      for (const file of input.paths ?? [])
+        attachments.push(
+          await herald.chat.attach(target, basename(file), new Uint8Array(await readFile(file))),
+        );
       return json(
         await herald.chat.send(target, input.text, {
           audience: input.humansOnly ? 'humans' : undefined,
           replyTo: input.replyTo,
+          mentions: input.mentions,
+          attachments: attachments.length ? attachments : undefined,
         }),
       );
     },
   );
+  const seq = z.number().int().positive();
+  tool(
+    'chat_react',
+    'Add or remove an emoji reaction on a chat message. Wakes nobody.',
+    { room: chatTarget, seq, emoji: z.string().min(1).max(32), remove: z.boolean().optional() },
+    async (input, herald) =>
+      json(await herald.chat.react(input.room, input.seq, input.emoji, input.remove)),
+  );
+  tool(
+    'chat_edit',
+    'Replace the text of a message this connection sent. Wakes nobody.',
+    { room: chatTarget, seq, text: z.string().min(1) },
+    async (input, herald) => json(await herald.chat.edit(input.room, input.seq, input.text)),
+  );
+  tool(
+    'chat_delete',
+    'Delete a chat message this connection sent, leaving a tombstone.',
+    { room: chatTarget, seq },
+    async (input, herald) => {
+      await herald.chat.delete(input.room, input.seq);
+      return json({ deleted: true });
+    },
+  );
+  tool(
+    'chat_ask',
+    'Post a form in a chat. Humans answer by default; the first answer closes it and wakes only the asker.',
+    {
+      room: chatTarget,
+      form: z.record(z.string(), z.unknown()).describe('Form definition, as in the Inbox'),
+      deadline: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Epoch milliseconds, within 30 days'),
+      anyone: z.boolean().optional().describe('Let agents answer as well'),
+    },
+    async ({ room, form, deadline, anyone }, herald) =>
+      json(await herald.chat.ask(room, form, { deadline, answerers: anyone ? 'any' : undefined })),
+  );
+  tool(
+    'chat_answer',
+    'Answer a form in a chat. Secret values are sealed to the asker alone.',
+    {
+      room: chatTarget,
+      seq,
+      answers: z.record(z.string(), z.unknown()),
+      secrets: z.record(z.string(), z.unknown()).optional(),
+    },
+    async ({ room, seq: form, answers, secrets }, herald) =>
+      json(await herald.chat.answer(room, form, answers, { secrets })),
+  );
+  tool(
+    'chat_download',
+    'Decrypt a chat attachment to a new local file (the path must not exist yet).',
+    {
+      room: chatTarget,
+      seq,
+      attachment: z.string().describe('Attachment id from the message'),
+      path: z.string().min(1),
+    },
+    async (input, herald) => {
+      const { messages } = await herald.chat.read(input.room, { after: input.seq - 1, limit: 1 });
+      const file = messages[0]?.attachments?.find((a) => a.id === input.attachment);
+      if (!file) throw new Error('No such attachment on that message.');
+      const data = await herald.chat.download(input.room, file);
+      await writeFile(input.path, data, { flag: 'wx', mode: 0o600 });
+      return json({ path: input.path, name: file.name, size: file.size });
+    },
+  );
   tool(
     'chat_wait',
-    'Wait for new messages from others in a chat, decrypted, and acknowledge them. Returns an empty list on timeout.',
+    'Wait for the next wake in a chat (or, with after, anything past that seq), decrypted and acknowledged. Returns reason, context, messages and history; an empty messages list on timeout.',
     {
       room: chatTarget,
       after: z.number().int().nonnegative().optional(),
       wait: time.optional().describe('How long this call blocks (default 10m)'),
     },
-    async (input, herald) =>
-      json({
-        messages: await herald.chat.wait(input.room, {
-          after: input.after,
-          timeout: duration(input.wait || '10m'),
-        }),
-      }),
+    async (input, herald) => {
+      const timeout = duration(input.wait || '10m');
+      if (input.after !== undefined)
+        return json({
+          messages: await herald.chat.wait(input.room, { after: input.after, timeout }),
+        });
+      return json((await herald.chat.next(input.room, { timeout })) ?? { messages: [] });
+    },
     true,
   );
 

@@ -65,7 +65,15 @@ export { E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
 export { ChatClient } from './chat.js';
-export type { ChatMessage, ChatPage, ChatRoom, ChatSendOptions } from './chat.js';
+export type {
+  ChatFormRules,
+  ChatMessage,
+  ChatPage,
+  ChatRoom,
+  ChatSendOptions,
+  ChatWake,
+  WakeReason,
+} from './chat.js';
 export { backoff, LiveSocket } from './socket.js';
 export type { LiveEvent } from './socket.js';
 export type { UploadData } from './upload.js';
@@ -596,6 +604,12 @@ export class Herald {
         new WebSocket(this.base.replace(/^http/, 'ws') + '/api/v1/chats/stream', {
           headers: this.#headers(),
           followRedirects: false,
+        }),
+      (route, init) =>
+        fetch(this.base + '/api/v1' + route, {
+          ...init,
+          headers: this.#headers(),
+          redirect: 'manual',
         }),
     ));
   }

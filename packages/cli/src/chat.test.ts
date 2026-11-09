@@ -24,12 +24,22 @@ it('strips terminal controls from chat text', async () => {
 });
 it('wait exits 3 when nothing arrives', async () => {
   const out = io();
-  const code = await chat(fake({ wait: async () => [] }), ['wait', 'room'], base, out);
+  const code = await chat(fake({ next: async () => undefined }), ['wait', 'room'], base, out);
   expect(code).toBe(3);
 });
 it('runs a handler with the message on stdin and rejects a non-zero exit', async () => {
   const env = { PATH: process.env.PATH };
   const check = 'test "$(head -c 9)" = \'{"room":"\' && test "$HERALD_CHAT_SEQ" = 2';
-  await expect(runHandler(check, message, env, 5)).resolves.toBeUndefined();
-  await expect(runHandler('exit 7', message, env, 5)).rejects.toThrow('exited with 7');
+  const wake = {
+    room: message.room,
+    first: 2,
+    seq: 2,
+    reason: 'mention' as const,
+    context: 'message' as const,
+    contextFrom: 2,
+    messages: [message],
+    history: [],
+  };
+  await expect(runHandler(check, wake, env, 5)).resolves.toBeUndefined();
+  await expect(runHandler('exit 7', wake, env, 5)).rejects.toThrow('exited with 7');
 });

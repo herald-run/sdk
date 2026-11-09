@@ -97,11 +97,23 @@ export const commands: Record<string, Spec> = {
     detail: 'The runner config may omit destinationId; --target then names the destination key.',
   },
   chat: {
-    args: 'list|read|send|wait|listen [ROOM] [TEXT]',
+    args: 'list|read|send|wait|listen|react|edit|delete|ask|answer [ROOM] [SEQ] [TEXT]',
     summary: 'Read, send and wait on end-to-end encrypted chats',
-    options: ['session', 'humans', 'after', 'before', 'limit', 'timeout', 'exec', 'body-file'],
+    options: [
+      'session',
+      'humans',
+      'mention',
+      'attach',
+      'remove',
+      'after',
+      'before',
+      'limit',
+      'timeout',
+      'exec',
+      'body-file',
+    ],
     detail:
-      'send takes a room id, owner, h:ID or a:ID. wait exits 3 when nothing arrives before --timeout. listen prints each new message, or with --exec runs a shell command per message: the message as JSON on stdin, HERALD_CHAT_ROOM, HERALD_CHAT_SEQ and HERALD_CHAT_SENDER in its environment. A message is acknowledged once its handler exits 0.',
+      'send takes a room id, owner, h:ID or a:ID. wait takes the next wake (with --after, anything past that seq) and exits 3 when nothing arrives before --timeout. listen prints each new message; with --exec it runs a shell command once per wake under a lease, with the wake as JSON on stdin (reason, context, messages, history) and HERALD_CHAT_ROOM, HERALD_CHAT_SEQ, HERALD_CHAT_FIRST_SEQ, HERALD_CHAT_REASON, HERALD_CHAT_CONTEXT and HERALD_CHAT_SENDER in its environment. A wake is acknowledged once its handler exits 0; otherwise it fires again. ask and answer take a JSON form or answers as TEXT or --body-file; ask reads optional deadline (ms) and answerers from it.',
   },
   watch: { summary: 'Print messages as they change', options: ['after'] },
   account: { summary: 'Show the account holder, this connection, plan and usage' },
@@ -152,8 +164,11 @@ const describe: Record<string, string> = {
   message: '--message ID       Message with the attachment (decrypts it)',
   session: '--session          Start a new session room',
   humans: '--humans           Seal to humans only',
+  mention: '--mention ID       Mention a member; repeatable',
+  attach: '--attach PATH      Attach a file; repeatable',
+  remove: '--remove           Remove the reaction',
   limit: '--limit N          Page size',
-  exec: '--exec CMD         Shell command to run per message',
+  exec: '--exec CMD         Shell command to run per wake',
 };
 const globals = `Global options:
   --json             Machine-readable JSON output
