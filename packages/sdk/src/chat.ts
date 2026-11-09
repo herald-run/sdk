@@ -27,6 +27,8 @@ export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   reference?: Record<string, unknown>;
   /** The declared mentions differ from the signed ones, which `mentions` holds. */
   mentionsMismatch?: true;
+  /** The runtime subagent the sender tagged, when this connection owns it. */
+  subagent?: string;
 };
 export type WakeReason = 'form_answer' | 'mention' | 'reply' | 'message';
 /** One handled batch: new `messages` from others, and earlier `history` per the context mode. */
@@ -68,11 +70,12 @@ type Posted = {
   rules?: ChatFormRules;
 };
 type Frame =
-  | (ChatRecord & { type: 'message'; room: string; prev: number; hint?: true })
+  | (ChatRecord & { type: 'message'; room: string; prev: number; hint?: true; subagent?: string })
   | {
       type: 'wake' | 'read';
       room: string;
       seq: number;
+      subagent?: string;
     };
 type Socketed = { type?: string; room?: string };
 const defined = <T extends object>(o: T) =>
@@ -571,7 +574,13 @@ export class ChatClient {
     const allowed = options.rooms && new Set(options.rooms);
     const verified = new Set<string>();
     const queues = new Map<string, Promise<void>>();
+    const tagged = new Map<string, string>();
     const deliver = async (message: ChatMessage) => {
+      const tag = tagged.get(`${message.room}:${message.seq}`);
+      if (tag) {
+        tagged.delete(`${message.room}:${message.seq}`);
+        message = { ...message, subagent: tag };
+      }
       if (!message.mine && message.kind === 'message' && !message.locked) {
         await handler(message);
         if (options.ack) await this.ack(message.room, message.seq);
@@ -605,6 +614,8 @@ export class ChatClient {
     const enqueue = (frame: Frame) => {
       if (typeof frame?.room !== 'string' || !ROOM_ID.test(frame.room)) return;
       if (allowed && !allowed.has(frame.room)) return;
+      if (typeof frame.subagent === 'string' && tagged.size < 1000)
+        tagged.set(`${frame.room}:${frame.seq}`, frame.subagent);
       const previous = queues.get(frame.room) ?? Promise.resolve();
       queues.set(
         frame.room,

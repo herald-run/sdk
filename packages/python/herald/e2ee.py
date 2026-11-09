@@ -273,6 +273,9 @@ _CTX = {
     "teamkey": {},
     "wskey": {},
     "chat": {"room": str, "id": "uuid", "audience": str, "sub": "text", "head": str},
+    "presence": {"principal": str},
+    "subagent": {"principal": str, "key": str},
+    "layout": {"principal": str},
 }
 # Fields a `ws_` (team workspace) account's contexts add; forbidden elsewhere.
 _WORKSPACE = {

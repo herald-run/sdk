@@ -27,6 +27,24 @@ export {
   type RoomKind,
   type RoomTrust,
 } from './chat';
+export {
+  layoutContext,
+  openLayout,
+  openPresence,
+  openSubagent,
+  presenceContext,
+  presenceStates,
+  sealLayout,
+  sealPresence,
+  sealSubagent,
+  subagentContext,
+  type AgentLayout,
+  type AgentPresence,
+  type LayoutGroup,
+  type LayoutPlace,
+  type PresenceState,
+  type SubagentProfile,
+} from './agents';
 export { H } from './hash';
 export { fingerprint, keySet, safetyCode, type KeySet } from './keys';
 export {

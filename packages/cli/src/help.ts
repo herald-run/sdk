@@ -115,6 +115,16 @@ export const commands: Record<string, Spec> = {
     detail:
       'send takes a room id, owner, h:ID or a:ID. wait takes the next wake (with --after, anything past that seq) and exits 3 when nothing arrives before --timeout. listen prints each new message; with --exec it runs a shell command once per wake under a lease, with the wake as JSON on stdin (reason, context, messages, history) and HERALD_CHAT_ROOM, HERALD_CHAT_SEQ, HERALD_CHAT_FIRST_SEQ, HERALD_CHAT_REASON, HERALD_CHAT_CONTEXT and HERALD_CHAT_SENDER in its environment. A wake is acknowledged once its handler exits 0; otherwise it fires again. ask and answer take a JSON form or answers as TEXT or --body-file; ask reads optional deadline (ms) and answerers from it.',
   },
+  presence: {
+    args: 'set STATE [TEXT]',
+    summary: 'Show the owner idle, busy, blocked or offline',
+    options: ['color', 'ttl'],
+  },
+  subagents: {
+    args: 'list|set|remove [KEY] [NAME]',
+    summary: 'Name subagents of this connection',
+    options: ['state', 'color', 'ttl'],
+  },
   watch: { summary: 'Print messages as they change', options: ['after'] },
   account: { summary: 'Show the account holder, this connection, plan and usage' },
   completion: { args: 'bash|zsh|fish', summary: 'Print a shell completion script' },
@@ -168,6 +178,9 @@ const describe: Record<string, string> = {
   attach: '--attach PATH      Attach a file; repeatable',
   remove: '--remove           Remove the reaction',
   limit: '--limit N          Page size',
+  state: '--state STATE     idle, busy, blocked or offline',
+  color: '--color #RRGGBB',
+  ttl: '--ttl SECONDS     Seconds until it expires (300)',
   exec: '--exec CMD         Shell command to run per wake',
 };
 const globals = `Global options:
