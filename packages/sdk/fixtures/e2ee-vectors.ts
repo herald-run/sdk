@@ -382,6 +382,19 @@ export async function generateVectors() {
       name: 'Build agent',
     });
     take();
+    // A group: the creator signs version 1, then adds a second agent (Ed25519 is deterministic).
+    const creator = members[0]!;
+    const groupRoom = await e2ee.groupRoomId(creator, nonce);
+    const by = { account: ACCOUNT, principal: creator, signer: keys.identity };
+    const first = { room: groupRoom, version: 1, prev: '', owners: [creator], members };
+    const second = {
+      ...first,
+      version: 2,
+      prev: await e2ee.headHash(first),
+      members: [...members, 'a:agent-two'],
+    };
+    const chain = [await e2ee.signChatHead(by, first), await e2ee.signChatHead(by, second)];
+    const group = { creator, room: groupRoom, chain, tip: await e2ee.headHash(second) };
     const chat = {
       members,
       nonce,
@@ -389,6 +402,7 @@ export async function generateVectors() {
       pairKey: e2ee.pairKey(members),
       envelopes: chatEnvelopes,
       certificate: labelled,
+      group,
     };
     return {
       _comment:

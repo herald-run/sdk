@@ -2691,6 +2691,37 @@
         "name": "Build agent"
       },
       "sig": "qXVZk6JQjenbbbfrFovoEAdV-ezBKG65UA6GguRAAoXzycddrisDjS0Pk82bndKZlDjC8lpS1YBOh0t9hOgSCg"
+    },
+    "group": {
+      "creator": "h:user-owner",
+      "room": "CvUXNUSt_DGyjvLgJaJd4NZGFr9QPmjwlo1PMlAPwy4",
+      "chain": [
+        {
+          "head": {
+            "room": "CvUXNUSt_DGyjvLgJaJd4NZGFr9QPmjwlo1PMlAPwy4",
+            "version": 1,
+            "prev": "",
+            "owners": ["h:user-owner"],
+            "members": ["h:user-owner", "a:agent-one"]
+          },
+          "by": "h:user-owner",
+          "from": "B6kwnCOiRfHcwTyVM48W2Q",
+          "sig": "KgqfDJ7_dk6n-FVyYbfqa-s0WRR1mSM421cblKC0fH9ek4SmwteXrOLDX6TORHdai6MDe4Y4KyfDXXolagEYDA"
+        },
+        {
+          "head": {
+            "room": "CvUXNUSt_DGyjvLgJaJd4NZGFr9QPmjwlo1PMlAPwy4",
+            "version": 2,
+            "prev": "wOGBLdXxL7Y2TvzyCkGqnrE4OgOuGEERBscnW7ACY2A",
+            "owners": ["h:user-owner"],
+            "members": ["h:user-owner", "a:agent-one", "a:agent-two"]
+          },
+          "by": "h:user-owner",
+          "from": "B6kwnCOiRfHcwTyVM48W2Q",
+          "sig": "zjsAESM02TycQdNeYMu_sJaK5-jlfDuhIzuLQ3ThdRxQ3y9lO24c4Aik3qSPXoaCEznxJ7BgNTcRx-cFVsoEBA"
+        }
+      ],
+      "tip": "MP-wyYSTVI3jq0hqKoDUe_7FVrEoxHKYeQVilAxER14"
     }
   }
 }
