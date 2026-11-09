@@ -1,10 +1,12 @@
 import { b64u } from './bytes';
 import { canon } from './canon';
-import type { SealedEnvelope } from '../schema/e2ee';
+import type { Recipient, SealedEnvelope } from '../schema/e2ee';
 import { E2eeError } from './bytes';
 import {
+  grant,
   isWorkspace,
   open,
+  openKey,
   seal,
   type Ctx,
   type Opener,
@@ -53,6 +55,8 @@ export interface ChatMember {
   /** The recipient kid this member must be sealed to. */
   kid: string;
   readSeq: number;
+  /** Messages up to this seq predate the member; shared history may cover them. */
+  joinedSeq?: number;
   notify?: NotifyRule | 'default';
   context?: ContextMode;
 }
@@ -133,6 +137,10 @@ export interface ChatKeys {
   recipient(principal: string): RecipientKey | undefined;
   /** The verified signing key a member's messages must carry. */
   verifier(principal: string): { kid: string; sign: string } | undefined;
+  /** An agent's verified effective teams; a team room never seals to an agent outside its team. */
+  teamsOf?(principal: string): string[] | undefined;
+  /** Verified keys of admins who read every room, only while the signed policy says so. */
+  observers?(): RecipientKey[];
 }
 const fail = (message: string): never => {
   throw new E2eeError(message);
@@ -145,6 +153,8 @@ export const groupHead = (room: ChatRoom) => room.chain?.at(-1)?.head;
 export interface RoomTrust {
   pins?: HeadPins;
   vouched?: (hash: string) => boolean;
+  /** Reading as a team manager outside the room, under the read policy. */
+  observe?: boolean;
 }
 async function verifyGroup(keys: ChatKeys, room: ChatRoom, trust: RoomTrust) {
   const chain = room.chain ?? fail('The group has no head.');
@@ -154,11 +164,13 @@ async function verifyGroup(keys: ChatKeys, room: ChatRoom, trust: RoomTrust) {
     room,
     chain,
     (hash) => pin?.hash === hash || !!trust.vouched?.(hash),
+    pin,
   );
   await checkPin(trust.pins, room.id, chain, tip);
   const head = chain.at(-1)!.head;
   if (room.head !== tip || room.headVersion !== head.version) fail('The room head is stale.');
-  if (!head.members.includes(keys.principal)) fail('This key is not a member of the room.');
+  if (!trust.observe && !head.members.includes(keys.principal))
+    fail('This key is not a member of the room.');
   for (const m of room.members)
     if (!head.members.includes(m.principal)) fail(`Unlisted member ${m.principal}.`);
 }
@@ -174,7 +186,8 @@ export async function verifyChatRoom(
   if (room.kind === 'group') return verifyGroup(keys, room, trust);
   const principals = room.members.map((m) => m.principal);
   if (principals.length !== 2 || new Set(principals).size !== 2) fail('Unexpected room members.');
-  if (!principals.includes(keys.principal)) fail('This key is not a member of the room.');
+  if (!trust.observe && !principals.includes(keys.principal))
+    fail('This key is not a member of the room.');
   if ((await roomId(principals, room.nonce)) !== room.id) fail('The room id does not match.');
   for (const m of room.members) {
     if (m.type !== (m.principal.startsWith('a:') ? 'agent' : 'human')) fail('Invalid room member.');
@@ -186,15 +199,50 @@ export async function roomHeads(room: ChatRoom): Promise<Set<string>> {
   if (room.kind !== 'group') return new Set([room.id]);
   return new Set(await Promise.all((room.chain ?? []).map((link) => headHash(link.head))));
 }
-/** A group seals to who is on the head, still in the room and still on the roster. */
+/** May this agent be in a room of `team`? Unknown teams count as outside it. */
+export const inTeam = (keys: ChatKeys, principal: string, team: string | undefined) =>
+  !team || humanP(principal) || !keys.teamsOf || !!keys.teamsOf(principal)?.includes(team);
+/**
+ * A group seals to who is on the head, still in the room, still on the roster and, for agents, in
+ * the room's team; plus key-holding managers while the verified read policy is on.
+ */
 const recipients = (keys: ChatKeys, room: ChatRoom, audience: ChatRecord['audience']) => {
-  const listed = groupHead(room)?.members;
-  return room.members
-    .filter((m) => !listed || listed.includes(m.principal))
+  const head = groupHead(room);
+  const out = room.members
+    .filter((m) => !head || head.members.includes(m.principal))
+    .filter((m) => inTeam(keys, m.principal, head?.team))
     .filter((m) => audience === 'all' || humanP(m.principal) || m.principal === keys.principal)
     .map((m) => keys.recipient(m.principal))
     .filter((key): key is RecipientKey => !!key);
+  const kids = new Set(out.map((k) => k.kid));
+  for (const key of keys.observers?.() ?? [])
+    if (!kids.has(key.kid)) (out.push(key), kids.add(key.kid));
+  return out;
 };
+/**
+ * Shared history: re-wraps messages a member joined after to their key, newest first, up to
+ * `limit`. Humans-only messages are never shared with an agent.
+ */
+export async function shareHistory(
+  keys: ChatKeys,
+  member: ChatMember,
+  records: ChatRecord[],
+  limit = 500,
+): Promise<Record<string, Recipient>> {
+  const to = keys.recipient(member.principal) ?? fail(`Unverified member ${member.principal}.`);
+  if (to.kid !== member.kid) fail(`Unverified member ${member.principal}.`);
+  const out: Record<string, Recipient> = {};
+  const picked = records
+    .filter((r) => r.envelope && r.seq <= (member.joinedSeq ?? 0))
+    .filter((r) => r.audience === 'all' || member.type === 'human')
+    .sort((a, b) => b.seq - a.seq)
+    .slice(0, limit);
+  for (const r of picked) {
+    const cek = await openKey(r.envelope!, keys.openers).catch(() => undefined);
+    if (cek) out[r.seq] = await grant(r.envelope!, cek, to);
+  }
+  return out;
+}
 export type ChatSealInput = Partial<Omit<ChatPayload, 'kind' | 'text' | 'seen'>> & {
   id: string;
   text: string;

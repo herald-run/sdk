@@ -10,6 +10,8 @@ export {
   pairKey,
   roomId,
   sealChat,
+  shareHistory,
+  inTeam,
   verifyChatRoom,
   type ChatContextInput,
   type ChatKeys,
@@ -166,3 +168,9 @@ export {
   type HeadPins,
   type SignedChatHead,
 } from './chat-head';
+export {
+  signChatPolicy,
+  verifyChatPolicy,
+  type ChatPolicy,
+  type SignedChatPolicy,
+} from './chat-policy';

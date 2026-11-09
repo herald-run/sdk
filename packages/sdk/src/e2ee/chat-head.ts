@@ -12,6 +12,8 @@ export interface ChatHead {
   prev: string;
   owners: string[];
   members: string[];
+  /** Team workspaces: the team the room belongs to; set by the first head, never changed. */
+  team?: string;
 }
 export interface SignedChatHead {
   head: ChatHead;
@@ -74,24 +76,33 @@ export function maySign(
   if (prev.owners.includes(signer)) return true;
   if (prev.owners.some(onRoster)) return false;
   // A signer who has since left cannot be placed in today's order; a later link vouches for it.
-  return !onRoster(signer) || prev.members.find((m) => m.startsWith('h:') && onRoster(m)) === signer;
+  return (
+    !onRoster(signer) || prev.members.find((m) => m.startsWith('h:') && onRoster(m)) === signer
+  );
 }
 /**
  * Verifies a chain from the first head and returns its tip hash. A link whose signer has left the
  * roster or rotated keys cannot be checked directly, so a later verified link must commit to it,
  * or `trusted` (a pin or a verified recent message) must vouch for the tip.
+ *
+ * A recovery link (signed by a non-owner once no owner was on the roster) must make its signer an
+ * owner and no former owner one. If a former owner is back on the roster, today's roster cannot
+ * show the link was allowed when signed, so only this client's own `pin` at or past it can.
  */
 export async function verifyHeadChain(
   keys: HeadKeys,
   room: { id: string; nonce: string },
   chain: SignedChatHead[],
   trusted?: (hash: string) => boolean,
+  pin?: { version: number; hash: string },
 ): Promise<string> {
   if (!chain.length) fail('The group has no head.');
   const onRoster = (p: string) => keys.verifier(p) !== undefined;
   let prev: ChatHead | undefined;
   let prevHash = '';
   let unchecked = false;
+  let stale = 0;
+  const hashes: string[] = [];
   for (const [i, link] of chain.entries()) {
     const { head, by } = link;
     if (head.room !== room.id || head.version !== i + 1 || head.prev !== prevHash)
@@ -101,7 +112,12 @@ export async function verifyHeadChain(
     if (!prev) {
       if ((await groupRoomId(by, room.nonce)) !== room.id || !head.owners.includes(by))
         fail('The group creator does not match its id.');
-    } else if (!maySign(prev, by, onRoster)) fail('The head signer is not an owner.');
+    } else if (head.team !== prev.team) fail('A group keeps its team.');
+    else if (!prev.owners.includes(by)) {
+      if (!head.owners.includes(by) || head.owners.some((o) => prev!.owners.includes(o)))
+        fail('A recovery head must make its signer the owner.');
+      if (!maySign(prev, by, onRoster)) stale = i + 1;
+    }
     const who = keys.verifier(by);
     if (who && who.kid === link.from) {
       if (!(await verify(who.sign, link.sig, await signingInput(keys.account, head))))
@@ -110,7 +126,10 @@ export async function verifyHeadChain(
     } else unchecked = true;
     prev = head;
     prevHash = await headHash(head);
+    hashes.push(prevHash);
   }
+  if (stale && !(pin && pin.version >= stale && hashes[pin.version - 1] === pin.hash))
+    fail('The head signer is not an owner.');
   if (unchecked && !trusted?.(prevHash)) fail('The group head signer is not verified.');
   return prevHash;
 }
