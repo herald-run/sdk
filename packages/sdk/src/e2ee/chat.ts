@@ -33,6 +33,8 @@ export interface ChatContextInput {
   head: string;
   /** The sender principal; team workspaces only. */
   member?: string;
+  /** The newest chat policy version the sender has seen; team workspaces only. */
+  policy?: number;
 }
 /** Unique key of a two-party room, order independent. */
 export const pairKey = (principals: string[]) => [...principals].sort().join('|');
@@ -48,6 +50,7 @@ export const chatContext = (input: ChatContextInput): Ctx => ({
   sub: input.sub,
   head: input.head,
   ...(input.member === undefined ? {} : { member: input.member }),
+  ...(input.policy === undefined ? {} : { policy: input.policy }),
 });
 export interface ChatMember {
   principal: string;
@@ -141,6 +144,10 @@ export interface ChatKeys {
   teamsOf?(principal: string): string[] | undefined;
   /** Verified keys of admins who read every room, only while the signed policy says so. */
   observers?(): RecipientKey[];
+  /** The newest chat policy version seen; team members sign it into every message. */
+  policy?: number;
+  /** Called with the policy version a human member signed, so a fresh reader cannot be rolled back. */
+  sawPolicy?(version: number): void;
 }
 const fail = (message: string): never => {
   throw new E2eeError(message);
@@ -277,6 +284,7 @@ export async function sealChat(
     sub: sub ?? '',
     head: room.head,
     member: isWorkspace(keys.account) ? keys.principal : undefined,
+    policy: isWorkspace(keys.account) ? (keys.policy ?? 0) : undefined,
   });
   return seal({ payload, ctx, signer: keys.signer, to: to ?? recipients(keys, room, audience) });
 }
@@ -310,6 +318,8 @@ export async function openChat(
   if (payload.kind !== record.kind || typeof payload.text !== 'string')
     fail('The message content is invalid.');
   if (!fieldsMatch(record.event, payload.event)) fail('The event does not match its record.');
+  if (isWorkspace(keys.account) && humanP(record.sender))
+    keys.sawPolicy?.(envelope.ctx.policy as number);
   const mentionsMismatch = !sameSet(record.mentions ?? [], payload.mentions ?? []);
   return { ...payload, ...(mentionsMismatch ? { mentionsMismatch: true as const } : {}) };
 }

@@ -251,3 +251,50 @@ it('re-certifies only certificates verified under the previous roster, teams int
     e2ee.recertifyWorkspace(cert, { previous: current, current, identity: head }),
   ).rejects.toThrow('Not the previous roster');
 });
+
+it('chat fetches the signed policy, seals to key holders and never goes back a version', async () => {
+  const ws = await e2ee.verifyWorkspace({ chain: W.chain, roster: W.roster }, W.fingerprint);
+  const head = await e2ee.workspaceIdentity(W.seeds.identity1);
+  const policy = (version: number) => e2ee.signChatPolicy(ws, head, { version, adminRead: true });
+  const [ana, ben] = ['user-ana', 'user-ben'].map((u) => ws.members.get(u)!);
+  const [human, me, nonce] = ['h:user-ben', 'a:integration', 'n'.repeat(22)];
+  const room: e2ee.ChatRoom = {
+    ...{ id: await e2ee.roomId([human, me], nonce), kind: 'dm', nonce, head: 'head-1' },
+    ...{ headVersion: 1, lastSeq: 1, lastAt: 1, readSeq: 0, unread: 0 },
+    members: [
+      { principal: human, type: 'human', kid: ben.inboxKid, readSeq: 0 },
+      { principal: me, type: 'agent', kid: integration.kid, readSeq: 0 },
+    ],
+  };
+  const keys = await e2ee.keyringKeys(W.keyrings.ben);
+  const benKeys: e2ee.ChatKeys = {
+    ...{ account: W.workspace, principal: human, openers: [], policy: 3 },
+    signer: { kid: ben.kid, signPriv: keys.identity.signPriv },
+    recipient: (p) =>
+      p === human
+        ? { kid: ben.inboxKid, box: ben.inbox }
+        : { kid: integration.kid, box: integration.boxPub },
+    verifier: () => undefined,
+  };
+  const id = crypto.randomUUID();
+  const envelope = await e2ee.sealChat(benKeys, room, { id, text: 'v3 is out' });
+  const from = { seq: 1, id, sender: human, sub: '', at: 1, kind: 'message', audience: 'all' };
+  const seen = serve({
+    'GET /api/v1/keys': directory,
+    'GET /api/v1/chats/policy': { policy: await policy(2) },
+    [`GET /api/v1/chats/${room.id}/messages`]: { messages: [{ ...from, envelope }], more: false },
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 2, id: 'x' },
+  });
+  const chat = new Herald({ apiKey: token, url, workspace: W.workspace }).chat;
+  await chat.send(room.id, 'hi');
+  const sealed = JSON.parse(seen.find((s) => s.route.startsWith('POST'))!.body!).envelope;
+  expect(seen.some((s) => s.route === 'GET /api/v1/chats/policy')).toBe(true);
+  expect(sealed.to.map((r: { kid: string }) => r.kid).sort()).toEqual(
+    [ben.inboxKid, integration.kid, ana.inboxKid].sort(),
+  );
+  expect(sealed.ctx).toMatchObject({ member: me, policy: 2 });
+  // Ben signed policy 3 into his message, so the server's version 2 is now a rollback.
+  expect((await chat.read(room.id)).messages[0]).toMatchObject({ text: 'v3 is out' });
+  await expect(chat.send(room.id, 'again')).rejects.toThrow('rolled back');
+});

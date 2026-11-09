@@ -257,6 +257,10 @@ export class KeyedSession {
       signer: s.me,
       openers: [s.me],
       observers: () => observers,
+      policy: this.#policyVersion,
+      sawPolicy: (v: number) => {
+        this.#policyVersion = Math.max(this.#policyVersion, v);
+      },
       ...(ws && { teamsOf: (p: string) => s.certs.get(agent(p) ?? '')?.teams }),
       recipient: (p) => {
         const kid = agent(p);

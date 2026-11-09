@@ -108,7 +108,7 @@ export class ChatClient {
     const keyed = this.#keyed();
     if (!(await keyed.state(refresh)).ws) return keyed.chatKeys();
     const age = this.#policy ? Date.now() - this.#policy.at : Infinity;
-    if (refresh === 'force' || age > (refresh ? 10_000 : Infinity))
+    if (!this.#policy || refresh === 'force' || (refresh && age > 10_000))
       this.#policy = {
         at: Date.now(),
         value: this.#request<{ policy: e2ee.SignedChatPolicy | null }>('/chats/policy').then(

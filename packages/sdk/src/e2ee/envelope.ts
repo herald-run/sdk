@@ -51,7 +51,7 @@ const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
   secret: { team: 'string', member: 'string' },
   teamkey: { team: 'string', kv: 'number', member: 'string' },
   wskey: { n: 'number', member: 'string' },
-  chat: { member: 'string' },
+  chat: { member: 'string', policy: 'number' },
 };
 /** Team workspace ids start with `ws_`; personal account ids never do. */
 export const isWorkspace = (account: unknown) =>
