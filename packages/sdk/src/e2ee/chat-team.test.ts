@@ -70,6 +70,9 @@ it('ties ownership to the current head when a recovered owner returns', async ()
   const v4 = await next(restored, { owners: ['h:ann'] });
   const full = [...chain, await link(sets, 'h:ben', restored), await link(sets, 'h:ann', v4)];
   await expect(e2ee.verifyHeadChain(back, room, full, undefined, pin)).resolves.toBeTruthy();
+  // Without the pin, only Ann's own later link vouches for the recovery, not Ben's.
+  await expect(e2ee.verifyHeadChain(back, room, full.slice(0, 3))).rejects.toThrow();
+  await expect(e2ee.verifyHeadChain(back, room, full)).resolves.toBeTruthy();
 });
 
 it('accepts only a policy the current chain head signed, never an older one', async () => {

@@ -87,7 +87,8 @@ export function maySign(
  *
  * A recovery link (signed by a non-owner once no owner was on the roster) must make its signer an
  * owner and no former owner one. If a former owner is back on the roster, today's roster cannot
- * show the link was allowed when signed, so only this client's own `pin` at or past it can.
+ * show the link was allowed when signed, so only this client's own `pin` at or past it, or a later
+ * link signed by a former owner, can.
  */
 export async function verifyHeadChain(
   keys: HeadKeys,
@@ -102,6 +103,7 @@ export async function verifyHeadChain(
   let prevHash = '';
   let unchecked = false;
   let stale = 0;
+  let formerOwners: string[] = [];
   const hashes: string[] = [];
   for (const [i, link] of chain.entries()) {
     const { head, by } = link;
@@ -116,13 +118,15 @@ export async function verifyHeadChain(
     else if (!prev.owners.includes(by)) {
       if (!head.owners.includes(by) || head.owners.some((o) => prev!.owners.includes(o)))
         fail('A recovery head must make its signer the owner.');
-      if (!maySign(prev, by, onRoster)) stale = i + 1;
+      if (!maySign(prev, by, onRoster)) [stale, formerOwners] = [i + 1, prev.owners];
     }
     const who = keys.verifier(by);
     if (who && who.kid === link.from) {
       if (!(await verify(who.sign, link.sig, await signingInput(keys.account, head))))
         fail('Bad head signature.');
       unchecked = false;
+      // An owner from before the recovery signing a later link vouches for it.
+      if (stale && formerOwners.includes(by)) stale = 0;
     } else unchecked = true;
     prev = head;
     prevHash = await headHash(head);
