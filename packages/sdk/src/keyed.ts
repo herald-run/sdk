@@ -120,6 +120,8 @@ export class KeyedSession {
   #options: KeyedOptions;
   /** Record IDs → their team: set at send time or from a verified envelope's `ctx.team` only. */
   #teams = new Map<string, string>();
+  /** The newest chat policy version seen, so a server cannot roll it back. */
+  #policyVersion = 0;
   constructor(
     seed: string,
     fingerprint: string,
@@ -227,9 +229,23 @@ export class KeyedSession {
       mine,
     };
   }
-  /** This connection's verified view of chat principals, for sealing and opening rooms. */
-  async chatKeys(refresh: boolean | 'force' = false): Promise<e2ee.ChatKeys> {
+  /**
+   * This connection's verified view of chat principals, for sealing and opening rooms. `policy`
+   * is the team's signed chat policy; while it allows admin read, rooms also seal to key holders.
+   */
+  async chatKeys(
+    refresh: boolean | 'force' = false,
+    policy?: e2ee.SignedChatPolicy | null,
+  ): Promise<e2ee.ChatKeys> {
     const s = await this.state(refresh);
+    const ws = s.ws;
+    const verified = ws && (await e2ee.verifyChatPolicy(ws, policy, this.#policyVersion));
+    if (verified) this.#policyVersion = verified.version;
+    const observers = verified?.adminRead
+      ? [...ws!.members.values()]
+          .filter((m) => m.caps.includes('keys'))
+          .map((m) => ({ kid: m.inboxKid, box: m.inbox }))
+      : [];
     const id = [...s.kids].find(([, kid]) => kid === s.me.kid)?.[0];
     if (!id) fail("This token's key is not certified.");
     const user = (p: string) => (s.ws ? s.ws.members.get(p.slice(2)) : undefined);
@@ -240,6 +256,8 @@ export class KeyedSession {
       principal: 'a:' + id,
       signer: s.me,
       openers: [s.me],
+      observers: () => observers,
+      ...(ws && { teamsOf: (p: string) => s.certs.get(agent(p) ?? '')?.teams }),
       recipient: (p) => {
         const kid = agent(p);
         if (kid) return s.boxes.has(kid) ? { kid, box: s.boxes.get(kid)! } : undefined;

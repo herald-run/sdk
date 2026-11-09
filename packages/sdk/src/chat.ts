@@ -102,8 +102,22 @@ export class ChatClient {
     this.#connect = connect;
     this.#raw = raw;
   }
-  #keys = (refresh: boolean | 'force' = false): Promise<ChatKeys> =>
-    this.#keyed().chatKeys(refresh);
+  #policy?: { at: number; value: Promise<e2ee.SignedChatPolicy | null> };
+  /** Keys plus, for a team, the signed chat policy, refetched as often as the directory. */
+  #keys = async (refresh: boolean | 'force' = false): Promise<ChatKeys> => {
+    const keyed = this.#keyed();
+    if (!(await keyed.state(refresh)).ws) return keyed.chatKeys();
+    const age = this.#policy ? Date.now() - this.#policy.at : Infinity;
+    if (refresh === 'force' || age > (refresh ? 10_000 : Infinity))
+      this.#policy = {
+        at: Date.now(),
+        value: this.#request<{ policy: e2ee.SignedChatPolicy | null }>('/chats/policy').then(
+          (r) => r.policy,
+          () => null,
+        ),
+      };
+    return keyed.chatKeys(false, await this.#policy!.value);
+  };
   /** Rooms the connection can verify, newest first; others are left out. */
   async list(options: { before?: number; limit?: number } = {}): Promise<ChatRoom[]> {
     const query = new URLSearchParams();
