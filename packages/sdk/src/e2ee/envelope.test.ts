@@ -162,6 +162,15 @@ it('grants another key access without re-signing', async () => {
   await expect(
     open(forged, { recipients: [destination], signers, expect: expectOf(forged) }),
   ).rejects.toThrow('Bad signature');
+  // A junk wrap for the same key does not hide a good one after it.
+  const junk = await grant(env, crypto.getRandomValues(new Uint8Array(32)), to(destination));
+  const both = { ...env, to: [junk, { ...junk, key: 'A'.repeat(64) }, extra] };
+  expect(
+    await open(both, { recipients: [destination], signers, expect: expectOf(env) }),
+  ).toMatchObject(payload);
+  await expect(
+    open({ ...env, to: [junk] }, { recipients: [destination], signers, expect: expectOf(env) }),
+  ).rejects.toThrow();
 });
 it('digests envelopes and payloads', async () => {
   const env = await sealed();

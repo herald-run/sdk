@@ -68,6 +68,8 @@ export interface WorkspacePin {
   link: string;
   epoch: number;
   roster: string;
+  /** The newest chat policy version verified, so a server cannot roll it back. */
+  policy?: number;
 }
 export interface VerifiedChain {
   workspace: string;
@@ -192,10 +194,11 @@ export function parseWorkspacePin(value: unknown): WorkspacePin {
     int(pin.epoch) &&
     pin.epoch >= 1 &&
     digestText(pin.link) &&
-    digestText(pin.roster);
+    digestText(pin.roster) &&
+    (pin.policy === undefined || int(pin.policy));
   if (!ok) fail('Malformed workspace pin.');
-  const { workspace, n, link, epoch, roster } = pin;
-  return { workspace, n, link, epoch, roster };
+  const { workspace, n, link, epoch, roster, policy } = pin;
+  return { workspace, n, link, epoch, roster, ...(policy !== undefined && { policy }) };
 }
 
 /** Fails unless `next` is the same as or newer than `pin` (no rollback, fork or stale roster). */

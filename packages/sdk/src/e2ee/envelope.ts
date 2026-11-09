@@ -195,7 +195,16 @@ export async function open<T extends Payload = Payload>(
   const signPub = options.signers(env.from) ?? fail('Untrusted signer.');
   await verifySig(env, head, signPub);
   checkCtx(env.ctx, options.expect);
-  return (await decryptPayload(env, head, await unwrapKey(env, head, options.recipients))) as T;
+  // Shared history can carry one wrap per sharer for the same key: try each until one decrypts.
+  const mine = env.to.filter((e) => options.recipients.some((r) => r.kid === e.kid));
+  for (const [i, entry] of mine.entries())
+    try {
+      const cek = await unwrapKey({ ...env, to: [entry] }, head, options.recipients);
+      return (await decryptPayload(env, head, cek)) as T;
+    } catch (e) {
+      if (i === mine.length - 1) throw e;
+    }
+  return fail('No recipient entry for these keys.');
 }
 /** Recovers the content key without verifying; open the envelope first. */
 export async function openKey(env: SealedEnvelope, recipients: Opener[]): Promise<Bytes> {

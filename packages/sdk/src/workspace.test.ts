@@ -252,7 +252,7 @@ it('re-certifies only certificates verified under the previous roster, teams int
   ).rejects.toThrow('Not the previous roster');
 });
 
-it('chat fetches the signed policy, seals to key holders and never goes back a version', async () => {
+it('chat fetches the signed policy, pins its version and verifies a member-signed one', async () => {
   const ws = await e2ee.verifyWorkspace({ chain: W.chain, roster: W.roster }, W.fingerprint);
   const head = await e2ee.workspaceIdentity(W.seeds.identity1);
   const policy = (version: number) => e2ee.signChatPolicy(ws, head, { version, adminRead: true });
@@ -267,34 +267,79 @@ it('chat fetches the signed policy, seals to key holders and never goes back a v
     ],
   };
   const keys = await e2ee.keyringKeys(W.keyrings.ben);
-  const benKeys: e2ee.ChatKeys = {
-    ...{ account: W.workspace, principal: human, openers: [], policy: 3 },
-    signer: { kid: ben.kid, signPriv: keys.identity.signPriv },
-    recipient: (p) =>
-      p === human
-        ? { kid: ben.inboxKid, box: ben.inbox }
-        : { kid: integration.kid, box: integration.boxPub },
-    verifier: () => undefined,
+  const benSigns = async (version: number) => {
+    const benKeys: e2ee.ChatKeys = {
+      ...{ account: W.workspace, principal: human, openers: [], policy: version },
+      signer: { kid: ben.kid, signPriv: keys.identity.signPriv },
+      recipient: (p) =>
+        p === human
+          ? { kid: ben.inboxKid, box: ben.inbox }
+          : { kid: integration.kid, box: integration.boxPub },
+      verifier: () => undefined,
+    };
+    const id = crypto.randomUUID();
+    const envelope = await e2ee.sealChat(benKeys, room, { id, text: 'v' + version });
+    return {
+      seq: 1,
+      id,
+      sender: human,
+      sub: '',
+      at: 1,
+      kind: 'message',
+      audience: 'all',
+      envelope,
+    };
   };
-  const id = crypto.randomUUID();
-  const envelope = await e2ee.sealChat(benKeys, room, { id, text: 'v3 is out' });
-  const from = { seq: 1, id, sender: human, sub: '', at: 1, kind: 'message', audience: 'all' };
+  let [served, signed] = [await policy(2), await benSigns(3)];
   const seen = serve({
     'GET /api/v1/keys': directory,
-    'GET /api/v1/chats/policy': { policy: await policy(2) },
-    [`GET /api/v1/chats/${room.id}/messages`]: { messages: [{ ...from, envelope }], more: false },
+    'GET /api/v1/chats/policy': () => ({ policy: served }),
+    [`GET /api/v1/chats/${room.id}/messages`]: () => ({ messages: [signed], more: false }),
     [`GET /api/v1/chats/${room.id}`]: room,
     [`POST /api/v1/chats/${room.id}/messages`]: { seq: 2, id: 'x' },
   });
-  const chat = new Herald({ apiKey: token, url, workspace: W.workspace }).chat;
-  await chat.send(room.id, 'hi');
-  const sealed = JSON.parse(seen.find((s) => s.route.startsWith('POST'))!.body!).envelope;
-  expect(seen.some((s) => s.route === 'GET /api/v1/chats/policy')).toBe(true);
-  expect(sealed.to.map((r: { kid: string }) => r.kid).sort()).toEqual(
-    [ben.inboxKid, integration.kid, ana.inboxKid].sort(),
-  );
-  expect(sealed.ctx).toMatchObject({ member: me, policy: 2 });
-  // Ben signed policy 3 into his message, so the server's version 2 is now a rollback.
-  expect((await chat.read(room.id)).messages[0]).toMatchObject({ text: 'v3 is out' });
-  await expect(chat.send(room.id, 'again')).rejects.toThrow('rolled back');
+  const pins: e2ee.WorkspacePin[] = [];
+  const chat = new Herald({
+    apiKey: token,
+    url,
+    workspace: W.workspace,
+    onPin: (p) => pins.push(p),
+  }).chat;
+  const fetches = () => seen.filter((s) => s.route === 'GET /api/v1/chats/policy').length;
+  const sent = async () => {
+    await chat.send(room.id, 'hi');
+    const posts = seen.filter((s) => s.route.startsWith('POST'));
+    const { envelope } = JSON.parse(posts.at(-1)!.body!);
+    return { kids: envelope.to.map((r: { kid: string }) => r.kid).sort(), ctx: envelope.ctx };
+  };
+  const all = [ben.inboxKid, integration.kid, ana.inboxKid].sort();
+  expect(await sent()).toMatchObject({ kids: all, ctx: { member: me, policy: 2 } });
+  expect(pins.at(-1)).toEqual({ ...W.pin, policy: 2 });
+  // Ben signed 3, which the server cannot show: one refetch, then admin read is off, not an error.
+  expect((await chat.read(room.id)).messages[0]).toMatchObject({ text: 'v3' });
+  expect(await sent()).toMatchObject({ kids: [ben.inboxKid, integration.kid].sort() });
+  expect(fetches()).toBe(2);
+  // A hostile member's huge version is ignored the same way.
+  signed = await benSigns(Number.MAX_SAFE_INTEGER);
+  await chat.read(room.id);
+  expect(await sent()).toMatchObject({ ctx: { policy: 2 } });
+  expect(fetches()).toBe(3);
+  // A claim the server can show raises the pinned floor.
+  [served, signed] = [await policy(4), await benSigns(4)];
+  const fresh = new Herald({
+    ...{ apiKey: token, url, workspace: W.workspace },
+    ...{ pin: pins.at(-1), onPin: (p: e2ee.WorkspacePin) => pins.push(p) },
+  }).chat;
+  await fresh.read(room.id);
+  await fresh.send(room.id, 'hi');
+  expect(pins.at(-1)).toEqual({ ...W.pin, policy: 4 });
+  // After a restart the pin keeps the floor, so the server cannot replay an older policy.
+  served = await policy(3);
+  const pinned = new Herald({
+    apiKey: token,
+    url,
+    workspace: W.workspace,
+    pin: { ...W.pin, policy: 4 },
+  });
+  await expect(pinned.chat.send(room.id, 'again')).rejects.toThrow('rolled back');
 });

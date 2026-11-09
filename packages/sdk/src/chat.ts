@@ -105,12 +105,15 @@ export class ChatClient {
     this.#raw = raw;
   }
   #policy?: { at: number; value: Promise<e2ee.SignedChatPolicy | null> };
+  #claim = 0;
   /** Keys plus, for a team, the signed chat policy, refetched as often as the directory. */
   #keys = async (refresh: boolean | 'force' = false): Promise<ChatKeys> => {
     const keyed = this.#keyed();
     if (!(await keyed.state(refresh)).ws) return keyed.chatKeys();
     const age = this.#policy ? Date.now() - this.#policy.at : Infinity;
-    if (!this.#policy || refresh === 'force' || (refresh && age > 10_000))
+    // A member signed a newer version: refetch once, and ignore it if it still does not verify.
+    const claim = keyed.policyClaim > this.#claim ? (this.#claim = keyed.policyClaim) : 0;
+    if (!this.#policy || refresh === 'force' || claim || (refresh && age > 10_000))
       this.#policy = {
         at: Date.now(),
         value: this.#request<{ policy: e2ee.SignedChatPolicy | null }>('/chats/policy').then(

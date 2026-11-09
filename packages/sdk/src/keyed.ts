@@ -120,8 +120,10 @@ export class KeyedSession {
   #options: KeyedOptions;
   /** Record IDs → their team: set at send time or from a verified envelope's `ctx.team` only. */
   #teams = new Map<string, string>();
-  /** The newest chat policy version seen, so a server cannot roll it back. */
-  #policyVersion = 0;
+  /** The newest chat policy version verified, kept in the pin so a server cannot roll it back. */
+  #policyVersion: number;
+  /** The newest version a human member signed into a message; trusted only once verified. */
+  #policyClaim = 0;
   constructor(
     seed: string,
     fingerprint: string,
@@ -132,6 +134,11 @@ export class KeyedSession {
     this.fingerprint = fingerprint;
     this.#directory = directory;
     this.#options = { ...options };
+    this.#policyVersion = options.pin?.policy ?? 0;
+  }
+  /** A version a member signed that no verified policy reaches yet, or 0: refetch the policy. */
+  get policyClaim(): number {
+    return this.#policyClaim > this.#policyVersion ? this.#policyClaim : 0;
   }
   /** The workspace pin this session holds, if its token belongs to a team workspace. */
   get pin(): WorkspacePin | undefined {
@@ -210,10 +217,8 @@ export class KeyedSession {
     const mine = certs.get(me.kid);
     if (mine?.sign !== me.signPub) fail("This token's key is not certified for the workspace.");
     const pin = this.#options.pin;
-    if (!pin || pin.epoch !== ws.pin.epoch || pin.n !== ws.pin.n) {
-      this.#options.pin = ws.pin;
-      this.#options.onPin?.(ws.pin);
-    }
+    if (!pin || pin.epoch !== ws.pin.epoch || pin.n !== ws.pin.n)
+      this.#setPin({ ...ws.pin, ...(pin?.policy !== undefined && { policy: pin.policy }) });
     return {
       directory,
       account: ws.workspace,
@@ -229,6 +234,10 @@ export class KeyedSession {
       mine,
     };
   }
+  #setPin(pin: WorkspacePin) {
+    this.#options.pin = pin;
+    this.#options.onPin?.(pin);
+  }
   /**
    * This connection's verified view of chat principals, for sealing and opening rooms. `policy`
    * is the team's signed chat policy; while its read setting is on, rooms also seal to key holders.
@@ -240,8 +249,12 @@ export class KeyedSession {
     const s = await this.state(refresh);
     const ws = s.ws;
     const verified = ws && (await e2ee.verifyChatPolicy(ws, policy, this.#policyVersion));
-    if (verified) this.#policyVersion = verified.version;
-    const observers = verified?.adminRead
+    if (verified && verified.version > this.#policyVersion) {
+      this.#policyVersion = verified.version;
+      if (this.#options.pin) this.#setPin({ ...this.#options.pin, policy: verified.version });
+    }
+    // A member signed a newer version than the server can show: admin read is off till it can.
+    const observers = verified?.adminRead && verified.version >= this.#policyClaim
       ? [...ws!.members.values()]
           .filter((m) => m.caps.includes('keys'))
           .map((m) => ({ kid: m.inboxKid, box: m.inbox }))
@@ -259,7 +272,7 @@ export class KeyedSession {
       observers: () => observers,
       policy: this.#policyVersion,
       sawPolicy: (v: number) => {
-        this.#policyVersion = Math.max(this.#policyVersion, v);
+        this.#policyClaim = Math.max(this.#policyClaim, v);
       },
       ...(ws && { teamsOf: (p: string) => s.certs.get(agent(p) ?? '')?.teams }),
       recipient: (p) => {
