@@ -262,6 +262,12 @@ export class KeyedSession {
       },
     };
   }
+  /** Who sees this connection's presence: the account's person, or the member who certified it. */
+  async owner(): Promise<string> {
+    const s = await this.state();
+    if (!s.ws) return 'h:' + s.account;
+    return s.mine?.by ? 'h:' + s.mine.by : fail('This connection has no certifying member.');
+  }
   /** The team workspace this token belongs to, or undefined for a personal account. */
   async workspace(): Promise<WorkspaceInfo | undefined> {
     const { ws, mine } = await this.state();

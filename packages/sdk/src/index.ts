@@ -28,6 +28,7 @@ import {
   sealFile,
   type WorkspacePin,
 } from './e2ee/index.js';
+import { AgentsClient } from './agents.js';
 import { ChatClient } from './chat.js';
 import { KeyedSession, type FileAttachment, type OpenedLog, type WorkspaceInfo } from './keyed.js';
 import { HeraldError, parseRetryAfter, readError, readJson, retryDelay, sleep } from './http.js';
@@ -64,6 +65,8 @@ export { HeraldError, parseRetryAfter } from './http.js';
 export { E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
+export { AgentsClient } from './agents.js';
+export type { AgentPresenceOptions, OwnSubagent } from './agents.js';
 export { ChatClient } from './chat.js';
 export type { ChatMessage, ChatPage, ChatRoom, ChatSendOptions } from './chat.js';
 export { backoff, LiveSocket } from './socket.js';
@@ -184,6 +187,7 @@ export class Herald {
   #live?: LiveSocket;
   #keyed?: KeyedSession;
   #chat?: ChatClient;
+  #agents?: AgentsClient;
   constructor(options: HeraldOptions = {}) {
     this.base = (options.url || process.env.HERALD_URL || 'https://app.herald.run').replace(
       /\/$/,
@@ -597,6 +601,13 @@ export class Herald {
           headers: this.#headers(),
           followRedirects: false,
         }),
+    ));
+  }
+  /** This connection's presence and runtime subagents, shown end-to-end encrypted to its owner. */
+  get agents(): AgentsClient {
+    return (this.#agents ??= new AgentsClient(
+      (path, body, options) => this.request(path, body, options),
+      () => this.#keys,
     ));
   }
   /** The shared live socket; every `wait` and `watch` on this client subscribes to it. */

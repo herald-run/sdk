@@ -36,6 +36,9 @@ const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid' | 'text'>>
   teamkey: {},
   wskey: {},
   chat: { room: 'string', id: 'uuid', audience: 'string', sub: 'text', head: 'string' },
+  presence: { principal: 'string' },
+  subagent: { principal: 'string', key: 'string' },
+  layout: { principal: 'string' },
 };
 /** Fields a `ws_` (team workspace) account's contexts add; forbidden elsewhere. */
 const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {

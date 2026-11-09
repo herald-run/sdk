@@ -10,6 +10,8 @@ export type ChatMessage = Omit<ChatRecord, 'envelope'> & {
   text: string;
   mine: boolean;
   locked?: boolean;
+  /** The runtime subagent the sender tagged, when this connection owns it. */
+  subagent?: string;
 };
 export type ChatPage = { messages: ChatMessage[]; through_seq: number; hasMore: boolean };
 export type ChatSendOptions = {
@@ -25,11 +27,12 @@ type Request = <T>(
   options?: { idempotencyKey?: string; signal?: AbortSignal },
 ) => Promise<T>;
 type Frame =
-  | (ChatRecord & { type: 'message'; room: string; prev: number; hint?: true })
+  | (ChatRecord & { type: 'message'; room: string; prev: number; hint?: true; subagent?: string })
   | {
       type: 'wake' | 'read';
       room: string;
       seq: number;
+      subagent?: string;
     };
 const PAGE = 100;
 const path = (room: string) => '/chats/' + encodeURIComponent(room);
@@ -220,7 +223,13 @@ export class ChatClient {
     const allowed = options.rooms && new Set(options.rooms);
     const verified = new Set<string>();
     const queues = new Map<string, Promise<void>>();
+    const tagged = new Map<string, string>();
     const deliver = async (message: ChatMessage) => {
+      const tag = tagged.get(`${message.room}:${message.seq}`);
+      if (tag) {
+        tagged.delete(`${message.room}:${message.seq}`);
+        message = { ...message, subagent: tag };
+      }
       if (!message.mine && message.kind === 'message' && !message.locked) {
         await handler(message);
         if (options.ack) await this.ack(message.room, message.seq);
@@ -254,6 +263,8 @@ export class ChatClient {
     const enqueue = (frame: Frame) => {
       if (typeof frame?.room !== 'string' || !ROOM_ID.test(frame.room)) return;
       if (allowed && !allowed.has(frame.room)) return;
+      if (typeof frame.subagent === 'string' && tagged.size < 1000)
+        tagged.set(`${frame.room}:${frame.seq}`, frame.subagent);
       const previous = queues.get(frame.room) ?? Promise.resolve();
       queues.set(
         frame.room,
