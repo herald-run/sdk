@@ -9,6 +9,7 @@ export {
   grant,
   isWorkspace,
   idempotencyDigest,
+  threadDigest,
   MAX_PAYLOAD_BYTES,
   open,
   openKey,

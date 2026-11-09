@@ -176,6 +176,78 @@ it('verifies answers against the request and its digest', async () => {
   vi.spyOn(herald.live, 'subscribe').mockReturnValue(() => {});
   await expect(herald.ask({ title: 'Deploy?' })).rejects.toBeInstanceOf(HeraldError);
 });
+const declined = async (note: string, request = sent.sealed!, id = sent.id) => {
+  const { signer, to } = await owner();
+  const ctx = {
+    t: 'decline',
+    account: keyring.account,
+    message: id,
+    request: await e2ee.envelopeDigest(request),
+  };
+  const sealed = await e2ee.seal({ payload: { note }, ctx, signer, to });
+  return {
+    ...sent,
+    status: 'cancelled',
+    declined: true,
+    decline: { createdAt: sent.createdAt, sealed },
+  };
+};
+it('opens the note of a declined request only when it answers that request', async () => {
+  const herald = new Herald({ apiKey: token, url });
+  serve({
+    'GET /api/v1/keys': directory,
+    [`GET /api/v1/messages/${sent.id}`]: await declined('Not today'),
+  });
+  expect(await herald.get(sent.id)).toMatchObject({
+    status: 'cancelled',
+    declined: true,
+    decline: { note: 'Not today' },
+  });
+  vi.restoreAllMocks();
+  const other = (step('send-secret-form').response.body as Message).sealed!;
+  serve({
+    'GET /api/v1/keys': directory,
+    [`GET /api/v1/messages/${sent.id}`]: await declined('Not today', other),
+  });
+  expect(await herald.get(sent.id)).toMatchObject({ unverified: true });
+  vi.restoreAllMocks();
+  // A decline without a note carries nothing to open, and a note cannot be passed off as plain text.
+  serve({
+    'GET /api/v1/keys': directory,
+    [`GET /api/v1/messages/${sent.id}`]: {
+      ...sent,
+      status: 'cancelled',
+      declined: true,
+      decline: { createdAt: sent.createdAt, note: 'forged' },
+    },
+  });
+  const plain = await herald.get(sent.id);
+  expect(plain).toMatchObject({ status: 'cancelled', declined: true });
+  expect(plain.decline).not.toHaveProperty('note');
+});
+it('names threads by keyed digest, per integration seed', async () => {
+  const seed = e2ee.parseToken(token).seed!;
+  const a = await e2ee.threadDigest(seed, 'deploy');
+  expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(await e2ee.threadDigest(seed, 'deploy')).toBe(a);
+  expect(await e2ee.threadDigest(seed, 'backup')).not.toBe(a);
+  expect(
+    await e2ee.threadDigest(e2ee.parseToken(token).seed!.replace(/.$/, 'A'), 'deploy'),
+  ).not.toBe(a);
+  await expect(e2ee.threadDigest(seed, '')).rejects.toThrow();
+  const seen = serve({
+    'GET /api/v1/keys': directory,
+    'POST /api/v1/messages': sent,
+    'GET /api/v1/threads': { threads: [] },
+  });
+  const herald = new Herald({ apiKey: token, url });
+  await herald.send({ title: 'Hello', threadKey: 'deploy' }, 'k1');
+  const body = seen.find((s) => s.route === 'POST /api/v1/messages')!.body!;
+  expect(JSON.parse(body).threadKey).toBe(a);
+  expect(body).not.toContain('"deploy"');
+  await herald.threads({ threadKey: 'deploy', all: true });
+  expect(seen.at(-1)!.route).toBe('GET /api/v1/threads');
+});
 it('opens webhook tasks and refuses downloads without a file key', async () => {
   serve({
     'GET /api/v1/keys': directory,

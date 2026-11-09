@@ -91,6 +91,8 @@ export const sealedMessageInputSchema = z
       .default([]),
     taskId: z.string().uuid().optional(),
     replyTo: z.string().uuid().optional(),
+    /** Keyed digest of the sender's `threadKey` (`threadDigest`); groups messages into a thread. */
+    threadKey: key32.optional(),
     /** Team workspaces: the team id, bound as `ctx.team`. */
     team: z.string().min(1).max(200).optional(),
     expiresAt: iso.optional(),
@@ -115,6 +117,11 @@ export const sealedResponseSchema = z
     secretFiles: z.array(z.string().uuid()).max(30).default([]),
   })
   .strict();
+/**
+ * `POST /messages/:id/decline`: an optional note, sealed like a response
+ * as `ctx.t = "decline"`.
+ */
+export const sealedDeclineSchema = z.object({ sealed: sealedEnvelopeSchema.optional() }).strict();
 /** `POST /outbox` to a keyed destination. `id` is the task's UUID, bound into the envelope. */
 export const sealedOutboxSchema = z
   .object({

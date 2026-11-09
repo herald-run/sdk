@@ -84,6 +84,9 @@ const options = {
   title: { type: 'string' },
   body: { type: 'string' },
   'reply-to': { type: 'string' },
+  'thread-key': { type: 'string' },
+  'refuse-label': { type: 'string' },
+  all: { type: 'boolean' },
   deadline: { type: 'string' },
   key: { type: 'string' },
   wait: { type: 'boolean' },
@@ -356,6 +359,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
         if (!waiting) {
           const message = await send();
           print(message.id, message);
+          // stderr keeps stdout one ID for scripts.
+          if (!values.json && message.threadId) io.err(`thread ${message.threadId}`);
           return 0;
         }
         if (!outs.length) return await waitFor((await send()).id);
@@ -426,6 +431,16 @@ export async function main(argv: string[], io: Io): Promise<number> {
           else list.push(message);
         }
         if (!values.json) io.out(list.map(format.messageLine).join('\n'));
+        return 0;
+      }
+      case 'threads': {
+        const list = await client.threads({ all: values.all, threadKey: values['thread-key'] });
+        print(
+          list.threads
+            .map((t) => [t.id, `${t.pending} waiting`, `${t.count} sent`, t.updatedAt].join('  '))
+            .join('\n'),
+          list,
+        );
         return 0;
       }
       case 'logs': {

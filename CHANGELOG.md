@@ -4,6 +4,9 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 ## Unreleased
 
+- Threads: `threadKey` on `send` and `ask` names a conversation. Messages sent with the same key by one connection share a thread; the server stores only a keyed digest of the name (`threadDigest`). `threads()` (CLI `herald threads`, MCP `threads`) lists a connection's threads, by default those with a waiting request. MCP `send` returns `threadId`, and the CLI prints it on stderr. Exported `ThreadList`, `ThreadSummary`.
+- Declining: a person can decline any pending request. The record ends as `cancelled` with `declined: true` and an optional end-to-end encrypted note (`decline.note`, verified like an answer, `ctx.t = "decline"`); `refuseLabel` (CLI `--refuse-label`) sets the decline button's label. MCP results include `declined` and `declineNote`.
+- Live socket: a `read` event (`ReadEvent`) lists records the same member read on another device.
 - Forms: an `annotations` field type for commenting on an attached PDF. It names the PDF in `attachmentId`, and its answer is a list of `{page, anchor, quote?, boxes?, text}`: a comment anchored to selected text (`quote`, one box per line), an image (one box) or a whole page (1-based page, boxes as page fractions); exported `annotationSchema`, `Annotation`, `AnnotationBox`. Python keyed clients accept it too.
 - CLI: `send`/`ask --annotate PDF` attaches a PDF and adds a `comments` field; human output prints one comment per line. In `-i` input an annotations field may give a local `file`.
 - SDKs: while the live socket is open, `wait` (and Python `watch`) falls back to polling every 5 minutes instead of 30 s (30 s while it is down); TypeScript `wait` checks only on sync events newer than the last one it saw, and a check that overlaps an event runs once more.

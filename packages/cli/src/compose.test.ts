@@ -61,6 +61,15 @@ it('refuses flag actions with a required field', async () => {
   );
   expect(ok.input.actions).toHaveLength(1);
 });
+it('passes the thread name and decline label to the message', async () => {
+  const draft = await composeMessage(
+    { title: 'Ship?', 'thread-key': 'deploy', 'refuse-label': 'Not now' },
+    undefined,
+    true,
+    async () => '',
+  );
+  expect(draft.input).toMatchObject({ threadKey: 'deploy', refuseLabel: 'Not now' });
+});
 it('composes questions input without a reply field or flag actions', async () => {
   const stdin = async () => '';
   const path = new URL('../../../examples/questions.json', import.meta.url);

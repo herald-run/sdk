@@ -15,6 +15,7 @@ import type {
   Scope,
   SealedEnvelope,
   TaskLog,
+  ThreadList,
   ThreadPage,
 } from './schema/index.js';
 import {
@@ -53,7 +54,9 @@ export type {
   SessionRequest,
   Task,
   TaskLog,
+  ThreadList,
   ThreadPage,
+  ThreadSummary,
 } from './schema/index.js';
 export { createKeys, seal, unseal } from './schema/crypto.js';
 export { HeraldError, parseRetryAfter } from './http.js';
@@ -355,6 +358,20 @@ export class Herald {
   async thread(id: string, after = 0): Promise<ThreadPage> {
     const page = await this.request<ThreadPage>(`/messages/${path(id)}/thread?after=${after}`);
     return { ...page, messages: await Promise.all(page.messages.map(this.#open)) };
+  }
+  /**
+   * This integration's threads, newest first. Without options only threads with a waiting
+   * request are listed; `all` lists every retained thread. `threadKey` finds one named thread.
+   */
+  async threads(
+    options: { all?: boolean; threadKey?: string; before?: string } = {},
+  ): Promise<ThreadList> {
+    const query = new URLSearchParams();
+    if (options.all) query.set('state', 'all');
+    if (options.before) query.set('before', options.before);
+    if (options.threadKey) query.set('key', await this.#keys.threadKey(options.threadKey));
+    const text = query.toString();
+    return this.request<ThreadList>('/threads' + (text ? '?' + text : ''));
   }
   async *threadMessages(id: string): AsyncGenerator<Message> {
     let after = 0;

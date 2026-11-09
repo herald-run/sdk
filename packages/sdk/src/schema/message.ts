@@ -32,6 +32,11 @@ const common = {
   checkpointId: z.string().max(120).optional(),
   taskId: z.string().uuid().optional(),
   replyTo: z.string().uuid().optional(),
+  /**
+   * A name you choose for a conversation. Messages sent with the same key by one integration
+   * share a thread; the server sees only a keyed digest of the name.
+   */
+  threadKey: z.string().min(1).max(200).optional(),
   requiresReview: z.boolean().optional(),
   group: z.string().max(120).optional(),
   expiresAt: z.string().datetime().optional(),
@@ -49,6 +54,8 @@ const contentInputSchema = z.object({
   actions: z.array(actionSchema).min(1).max(8).optional(),
   attachments: z.array(attachmentSchema).max(10).default([]),
   publicKey: publicKeySchema.optional(),
+  /** The label of the button that declines the request (default "Skip"). */
+  refuseLabel: z.string().min(1).max(40).optional(),
 });
 const metadataOnly =
   'Secret deliveries contain metadata only; use the encrypted delivery endpoint.';
@@ -205,6 +212,7 @@ interface StoredContent {
   attachments: Attachment[];
   blocks?: ReviewBlock[];
   actions?: RequestAction[];
+  refuseLabel?: string;
   publicKey?: z.infer<typeof publicKeySchema>;
   requiresReview?: boolean;
   runId?: string;
@@ -235,6 +243,17 @@ interface StoredRecord extends StoredContent {
     sealed?: SealedEnvelope;
     /** Team workspaces: the member who answered, as the server recorded it. */
     by?: string;
+  };
+  /** The request was declined: the status is `cancelled` and no answer exists. */
+  declined?: boolean;
+  decline?: {
+    createdAt: string;
+    /** Team workspaces: the member who declined, as the server recorded it. */
+    by?: string;
+    /** An optional end-to-end encrypted note (`ctx.t = "decline"`). */
+    sealed?: SealedEnvelope;
+    /** The opened note; set by clients after verifying `sealed`. */
+    note?: string;
   };
   deleteAt?: string;
   /** Team workspaces: the team inbox's id. */

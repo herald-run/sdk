@@ -30,6 +30,8 @@ export type Flags = {
   annotate?: string[];
   review?: boolean;
   'reply-to'?: string;
+  'thread-key'?: string;
+  'refuse-label'?: string;
   team?: string;
   deadline?: string;
 };
@@ -241,6 +243,8 @@ export async function composeMessage(
   if (blocks.length) input.blocks = blocks;
   if (flags.review) input.requiresReview = true;
   if (flags['reply-to']) input.replyTo = flags['reply-to'];
+  if (flags['thread-key']) input.threadKey = flags['thread-key'];
+  if (flags['refuse-label']) input.refuseLabel = flags['refuse-label'];
   if (flags.deadline) {
     if (input.expiresAt || input.expiresIn)
       throw new UsageError('Use --deadline or expiresAt, not both.');

@@ -617,7 +617,7 @@ export function parseInviteFragment(fragment: string): { secret: Bytes; fingerpr
   return { secret: bytesOf(match[1], 32), fingerprint: match[2] };
 }
 
-const MEMBER_SIGNED = ['response', 'task', 'secret'];
+const MEMBER_SIGNED = ['response', 'decline', 'task', 'secret'];
 /**
  * The signing key a workspace context allows for kid `from`: a member of `ctx.team` for answers,
  * tasks and secrets; an integration certified for `ctx.team` (from `certificates`, by kid) for
