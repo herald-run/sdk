@@ -231,7 +231,7 @@ export class KeyedSession {
   }
   /**
    * This connection's verified view of chat principals, for sealing and opening rooms. `policy`
-   * is the team's signed chat policy; while it allows admin read, rooms also seal to key holders.
+   * is the team's signed chat policy; while its read setting is on, rooms also seal to key holders.
    */
   async chatKeys(
     refresh: boolean | 'force' = false,
