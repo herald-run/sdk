@@ -27,6 +27,7 @@ export type Expect = { t: string; account: string } & Record<string, string | nu
 const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid' | 'text'>> = {
   message: { id: 'uuid' },
   response: { message: 'string', request: 'string' },
+  decline: { message: 'string', request: 'string' },
   task: { id: 'uuid', destination: 'string', type: 'string' },
   log: { task: 'string', seq: 'number' },
   result: { task: 'string' },
@@ -42,6 +43,7 @@ const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
   log: { team: 'string' },
   result: { team: 'string' },
   response: { team: 'string', member: 'string' },
+  decline: { team: 'string', member: 'string' },
   task: { team: 'string', member: 'string' },
   secret: { team: 'string', member: 'string' },
   teamkey: { team: 'string', kv: 'number', member: 'string' },
@@ -207,6 +209,15 @@ export async function grant(
 /** `b64u(SHA-256(iv || ct))`; binds a response to its request. */
 export const envelopeDigest = async (env: SealedEnvelope) =>
   b64u.encode(await sha256(b64u.decode(env.iv), b64u.decode(env.ct)));
+/**
+ * Keyed digest of a thread name. The server maps equal digests from one integration to one
+ * thread and never learns the name.
+ */
+export async function threadDigest(seed: Uint8Array | string, threadKey: string) {
+  if (typeof threadKey !== 'string' || !threadKey) fail('Missing thread key.');
+  const key = await hkdf(bytesOf(seed, 32), 'herald/e2ee/v1 thread');
+  return b64u.encode(await hmac(key, utf8(canon({ threadKey }))));
+}
 /**
  * A retry-stable digest of a payload and its idempotency key, keyed by the integration seed.
  * Binding the key keeps equal content under different keys unlinkable.

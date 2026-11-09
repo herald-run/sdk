@@ -34,6 +34,12 @@ const time = z
 const id = z.string().min(1).max(100);
 const files = z.array(z.string()).max(10).describe('Local file paths to attach (each ≤100 MB)');
 const replyTo = id.optional().describe('Message ID to reply to, keeping a thread');
+const threadKey = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe('A name you choose; messages sent with the same name share one thread');
 
 /** Answers by question text when the request came from `questions`. */
 const answers = (m: Message) =>
@@ -53,6 +59,9 @@ function summary(m: Message) {
     expiresAt: m.expiresAt,
     threadId: m.threadId,
     replyTo: m.replyTo,
+    ...(m.declined
+      ? { declined: true, ...(m.decline?.note ? { declineNote: m.decline.note } : {}) }
+      : {}),
     ...(m.response ? { actionId: m.response.actionId, values: m.response.values } : {}),
     answers: answers(m),
     ...(m.attachments?.length
@@ -112,19 +121,20 @@ export function createServer(client: () => Promise<Herald>) {
 
   tool(
     'send',
-    'Send a message to the human in Herald (their inbox on web, macOS and Android). The body is Markdown. Attach local files (reports, logs, images, PDFs) by path. Returns the message ID; does not wait for a reply.',
+    'Send a message to the human in Herald (their inbox on web, macOS and Android). The body is Markdown. Attach local files (reports, logs, images, PDFs) by path. Returns the message ID and its thread ID; does not wait for a reply.',
     {
       title: z.string().min(1).max(180),
       body: z.string().max(50_000).optional().describe('Markdown'),
       files: files.optional(),
       replyTo,
+      threadKey,
       idempotencyKey: z.string().max(200).optional().describe('Reuse to make retries safe'),
     },
     async ({ files: paths, idempotencyKey, ...input }, herald) => {
       const attachments = await attach(herald, paths);
       const kind = attachments.length && !input.body ? 'files' : 'message';
       const message = await herald.send({ ...input, kind, attachments }, { idempotencyKey });
-      return json({ id: message.id, status: message.status });
+      return json({ id: message.id, status: message.status, threadId: message.threadId });
     },
   );
 
@@ -159,6 +169,13 @@ export function createServer(client: () => Promise<Herald>) {
         ),
       files: files.optional(),
       replyTo,
+      threadKey,
+      refuseLabel: z
+        .string()
+        .min(1)
+        .max(40)
+        .optional()
+        .describe('Label of the button that declines the request (default Skip)'),
       deadline: time.optional().describe('When the request expires for the human (default 1h)'),
       wait: time.optional().describe('How long this call blocks (default 10m)'),
     },
@@ -173,6 +190,8 @@ export function createServer(client: () => Promise<Herald>) {
         body: input.body,
         kind: 'form',
         replyTo: input.replyTo,
+        threadKey: input.threadKey,
+        refuseLabel: input.refuseLabel,
         expiresIn: deadline,
         attachments: await attach(herald, input.files),
       };
@@ -207,6 +226,17 @@ export function createServer(client: () => Promise<Herald>) {
     'Wait for a pending Herald request to be answered, expire or be cancelled. Returns its status and answer (with answers by question text for questions); status "pending" means wait elapsed first.',
     { id, wait: time.optional().describe('How long to block (default 10m)') },
     async (input, herald) => json(await settle(herald, input.id, duration(input.wait || '10m'))),
+    true,
+  );
+
+  tool(
+    'threads',
+    "List this integration's threads, newest first: id, message count, requests still waiting. Defaults to threads with a waiting request; all includes every retained thread. threadKey finds the thread of that name.",
+    {
+      all: z.boolean().optional(),
+      threadKey: threadKey,
+    },
+    async (input, herald) => json(await herald.threads(input)),
     true,
   );
 

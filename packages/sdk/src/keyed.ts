@@ -78,6 +78,7 @@ const CONTENT = [
   'runId',
   'checkpointId',
   'group',
+  'refuseLabel',
 ] as const;
 const ENVELOPE_LIMIT = 20_000;
 const fileEntry = z.object({
@@ -335,6 +336,10 @@ export class KeyedSession {
   #learn(files: FileAttachment[] = []) {
     for (const file of files) if (file.key) this.files.set(file.id, file);
   }
+  /** The keyed digest the server stores for a `threadKey`. */
+  threadKey(name: string) {
+    return e2ee.threadDigest(this.seed, name);
+  }
   /**
    * Seals a message request under a new record ID. Secret offers seal their title and body; the
    * value itself goes to the receiver the account signs.
@@ -358,6 +363,9 @@ export class KeyedSession {
       digest: await e2ee.idempotencyDigest(this.seed, payload, idempotencyKey),
       taskId: parsed.data.taskId,
       replyTo: parsed.data.replyTo,
+      ...(parsed.data.threadKey
+        ? { threadKey: await e2ee.threadDigest(this.seed, parsed.data.threadKey) }
+        : {}),
       expiresAt: parsed.data.expiresAt,
       expiresIn: parsed.data.expiresIn,
     });
@@ -401,6 +409,7 @@ export class KeyedSession {
     // `answeredBy` comes only from a verified answer.
     m = { ...m, ...(m.response ? { response: omit(m.response, 'by') } : {}) };
     delete m.answeredBy;
+    if (m.decline) m = { ...m, decline: omit(m.decline, 'by', 'note') };
     try {
       if (task) {
         if (!m.input?.sealed) fail('This task is not end-to-end encrypted.');
@@ -415,7 +424,14 @@ export class KeyedSession {
       if (ws) this.#teams.set(m.id, m.team!);
       if (!task && m.response?.sealed)
         out = await this.#response(out, m.sealed!, m.response.sealed);
-      else if (!task && out.kind !== 'secret' && (m.response || m.status === 'answered'))
+      if (!task && m.declined && m.decline?.sealed)
+        out = await this.#decline(out, m.sealed!, m.decline.sealed);
+      if (
+        !task &&
+        !m.response?.sealed &&
+        out.kind !== 'secret' &&
+        (m.response || m.status === 'answered')
+      )
         fail('A sealed request needs a sealed answer.');
       for (const key of ['result', 'execution'] as const) {
         if (!m[key]) continue;
@@ -480,6 +496,19 @@ export class KeyedSession {
       ...(run ? { session: omit({ ...run, attachments: undefined }) } : {}),
       attachments: files.data || [],
     } as M;
+  }
+  /** Opens the note of a declined request; only the account (or the team member) may sign it. */
+  async #decline<M extends Message>(out: M, request: SealedEnvelope, env: SealedEnvelope) {
+    const expect = {
+      t: 'decline',
+      message: out.id,
+      request: await e2ee.envelopeDigest(request),
+      team: out.team,
+    };
+    const { note } = await this.#open(env, expect, KeyedSession.#identity);
+    if (typeof note !== 'string' || note.length > 1000) fail('Malformed decline note.');
+    const by = (await this.state()).ws ? (env.ctx.member as string) : undefined;
+    return { ...out, decline: omit({ ...out.decline!, note, by }) };
   }
   async #response<M extends Message>(out: M, request: SealedEnvelope, env: SealedEnvelope) {
     const expect = {

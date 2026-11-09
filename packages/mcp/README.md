@@ -31,6 +31,7 @@ Agent skills that use these tools are at [herald.run/skills](https://herald.run/
 | `get_message`    | One message or task with its answer.                                                                          |
 | `list_messages`  | Recent messages, with search and filters.                                                                     |
 | `thread`         | A thread, oldest first.                                                                                       |
+| `threads`        | This connection's threads with a waiting request, or all with `all`; `threadKey` finds one by name.           |
 | `upload_file`    | Upload a file; `download_file` saves an attachment to a new file.                                             |
 | `request_secret` | Encrypted form; writes the value to a new 0600 file and returns only the status.                              |
 | `send_secret`    | Offers a secret from a file through encrypted delivery; returns only the status.                              |

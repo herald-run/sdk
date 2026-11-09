@@ -41,6 +41,7 @@ const server = http(async (req, res) => {
         : { ...request, status: answer.status };
   else if (req.url?.startsWith('/api/v1/messages?'))
     result = [await sealed.sealedMessage({ title: 'Q' }, { id: request.id, status: 'pending' })];
+  else if (req.url?.startsWith('/api/v1/threads')) result = { threads: [] };
   else if (req.url === '/api/v1/keys') result = sealed.directory;
   else if (req.url === `/api/v1/messages/${locked.id}`) result = locked;
   else if (req.url === `/api/v1/messages/${opened.id}`) result = opened;
@@ -100,11 +101,24 @@ it('lists every tool with a description', async () => {
       'send',
       'send_secret',
       'thread',
+      'threads',
       'upload_file',
       'wait',
     ].sort(),
   );
   for (const tool of tools) expect(tool.description!.length).toBeGreaterThan(40);
+});
+
+it('keys threads by a name the server never sees and lists them', async () => {
+  const result = await call('send', { title: 'Hi', threadKey: 'deploy' });
+  expect(result.error).toBe(false);
+  const body = last((s) => s.url === '/api/v1/messages')!.body;
+  expect(JSON.parse(body).threadKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(body).not.toContain('deploy');
+  expect((await call('threads', { all: true, threadKey: 'deploy' })).data).toEqual({ threads: [] });
+  expect(last((s) => s.url.startsWith('/api/v1/threads'))!.url).toMatch(
+    /^\/api\/v1\/threads\?state=all&key=/,
+  );
 });
 
 it('sends markdown with uploaded files', async () => {

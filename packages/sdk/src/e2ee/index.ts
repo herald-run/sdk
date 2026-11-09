@@ -25,6 +25,7 @@ export {
   isWorkspace,
   idempotencyDigest,
   MAX_CHAT_RECIPIENTS,
+  threadDigest,
   MAX_PAYLOAD_BYTES,
   MAX_RECIPIENTS,
   open,
