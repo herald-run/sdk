@@ -66,7 +66,13 @@ export { E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
 export { AgentsClient } from './agents.js';
-export type { AgentPresenceOptions, OwnSubagent } from './agents.js';
+export type {
+  AgentPresence,
+  AgentPresenceOptions,
+  OwnSubagent,
+  PresenceState,
+  SubagentProfile,
+} from './agents.js';
 export { ChatClient } from './chat.js';
 export type { ChatMessage, ChatPage, ChatRoom, ChatSendOptions } from './chat.js';
 export { backoff, LiveSocket } from './socket.js';

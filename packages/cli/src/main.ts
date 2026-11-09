@@ -11,6 +11,7 @@ import { removeLogin, saveLogin, tokenPath } from './config';
 import { composeDestination, composeMessage, outputs, UsageError } from './compose';
 import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
+import { presence, subagents } from './agents';
 import { chat } from './chat';
 import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
@@ -111,6 +112,9 @@ const options = {
   session: { type: 'boolean' },
   humans: { type: 'boolean' },
   limit: { type: 'string' },
+  state: { type: 'string' },
+  color: { type: 'string' },
+  ttl: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
 /** A team workspace pin file: absent means no pin yet; anything else must be a valid pin. */
@@ -528,6 +532,21 @@ export async function main(argv: string[], io: Io): Promise<number> {
           integer(values.concurrency, '--concurrency'),
         );
         return 0;
+      }
+      case 'presence':
+      case 'subagents': {
+        const agent = {
+          json: values.json,
+          state: values.state,
+          color: values.color,
+          ttl: integer(values.ttl, '--ttl'),
+        };
+        return await (command === 'presence' ? presence : subagents)(
+          client,
+          positionals.slice(1),
+          agent,
+          io,
+        );
       }
       case 'chat':
         return await chat(

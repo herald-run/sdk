@@ -103,6 +103,16 @@ export const commands: Record<string, Spec> = {
     detail:
       'send takes a room id, owner, h:ID or a:ID. wait exits 3 when nothing arrives before --timeout. listen prints each new message, or with --exec runs a shell command per message: the message as JSON on stdin, HERALD_CHAT_ROOM, HERALD_CHAT_SEQ and HERALD_CHAT_SENDER in its environment. A message is acknowledged once its handler exits 0.',
   },
+  presence: {
+    args: 'set STATE [TEXT]',
+    summary: 'Show the owner idle, busy, blocked or offline',
+    options: ['color', 'ttl'],
+  },
+  subagents: {
+    args: 'list|set|remove [KEY] [NAME]',
+    summary: 'Name subagents of this connection',
+    options: ['state', 'color', 'ttl'],
+  },
   watch: { summary: 'Print messages as they change', options: ['after'] },
   account: { summary: 'Show the account holder, this connection, plan and usage' },
   completion: { args: 'bash|zsh|fish', summary: 'Print a shell completion script' },
@@ -153,6 +163,9 @@ const describe: Record<string, string> = {
   session: '--session          Start a new session room',
   humans: '--humans           Seal to humans only',
   limit: '--limit N          Page size',
+  state: '--state STATE     idle, busy, blocked or offline',
+  color: '--color #RRGGBB',
+  ttl: '--ttl SECONDS     Seconds until it expires (300)',
   exec: '--exec CMD         Shell command to run per message',
 };
 const globals = `Global options:

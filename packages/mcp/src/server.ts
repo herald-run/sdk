@@ -363,6 +363,46 @@ export function createServer(client: () => Promise<Herald>) {
     true,
   );
 
+  const look = {
+    state: z.enum(['idle', 'busy', 'blocked', 'offline']),
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional()
+      .describe('Custom colour as #rrggbb'),
+    ttl: z.number().int().min(10).max(86400).optional().describe('Seconds before it expires (300)'),
+  };
+  tool(
+    'presence_set',
+    'Show the account owner whether this connection is idle, busy, blocked or offline, end-to-end encrypted. Expires after ttl seconds unless refreshed.',
+    { ...look, text: z.string().max(120).optional() },
+    async ({ ttl, ...presence }, herald) =>
+      json(await herald.agents.setPresence(presence, { ttl })),
+  );
+  tool(
+    'subagent_set',
+    'Name a subagent of this connection for the account owner, end-to-end encrypted. It costs no connection and expires after ttl seconds unless renewed.',
+    { key: z.string().regex(/^[\w.-]{1,64}$/), name: z.string().min(1).max(60), ...look },
+    async ({ key, ttl, ...profile }, herald) =>
+      json(await herald.agents.setSubagent(key, profile, { ttl })),
+  );
+  tool(
+    'subagent_remove',
+    "Remove a subagent of this connection from the account owner's view.",
+    { key: z.string().regex(/^[\w.-]{1,64}$/) },
+    async ({ key }, herald) => {
+      await herald.agents.removeSubagent(key);
+      return json({ key, removed: true });
+    },
+  );
+  tool(
+    'subagents_list',
+    "List the keys and expiry of this connection's subagents.",
+    {},
+    async (_input, herald) => json({ subagents: await herald.agents.subagents() }),
+    true,
+  );
+
   tool(
     'upload_file',
     'Upload a local file to Herald and return its attachment ({id, name, size, type}) for use in a later message.',
