@@ -150,6 +150,23 @@ class ChatTests(unittest.TestCase):
         with self.assertRaises(E2eeError):
             e2ee.seal(payload={}, ctx={**ctx, "room": ""}, signer=S.signer_keys["integration"], to=[target])
 
+    def test_agent_contexts_seal_and_open_like_the_typescript_ones(self):
+        target, signer = S.recipients["inbox"], S.signer_keys["integration"]
+        for ctx in [
+            {"t": "presence", "account": ACCOUNT, "principal": "a:bot"},
+            {"t": "subagent", "account": ACCOUNT, "principal": "a:bot", "key": "w1"},
+            {"t": "layout", "account": ACCOUNT, "principal": "h:me"},
+        ]:
+            env = e2ee.seal(payload={"state": "idle"}, ctx=ctx, signer=signer, to=[target])
+            got = e2ee.open(env, recipients=[S.openers["inbox"]], signers=S.signers(ALL), expect=ctx)
+            self.assertEqual(got, {"v": 1, "state": "idle"})
+            with self.assertRaises(E2eeError):
+                e2ee.seal(payload={}, ctx={**ctx, "extra": "x"}, signer=signer, to=[target])
+            with self.assertRaises(E2eeError):
+                e2ee.seal(payload={}, ctx={**ctx, "principal": ""}, signer=signer, to=[target])
+        with self.assertRaises(E2eeError):
+            e2ee.seal(payload={}, ctx={"t": "subagent", "account": ACCOUNT, "principal": "a:bot"}, signer=signer, to=[target])
+
     def test_labelled_certificate_verifies(self):
         cert = V["chat"]["certificate"]
         self.assertEqual(cert["certificate"]["name"], "Build agent")
