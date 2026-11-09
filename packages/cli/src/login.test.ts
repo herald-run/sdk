@@ -9,7 +9,7 @@ const fingerprint = await e2ee.fingerprint(account.statement.identity);
 const safetyCode = e2ee.safetyCode(fingerprint);
 /** The approval link the last login printed; its fragment holds the login's keys. */
 let link = '';
-const key = () => link.split('#k=')[1].split('.');
+const key = () => link.split('#k=')[1].split('&')[0].split('.');
 type Server = {
   integrations: Array<{ id: string; name: string; scopes: string[] }>;
   destinations?: Array<{ id: string; integrationId: string }>;
@@ -165,7 +165,7 @@ it('requests the default scopes without asking and rejects unknown scopes before
   await login('https://herald.test', { safetyCode }, {}, { ...log, ask, open });
   expect(ask).not.toHaveBeenCalled();
   expect(open).toHaveBeenCalledWith(
-    expect.stringMatching(/^https:\/\/herald\.test\/device#k=[\w-]+\.[\w-]+$/),
+    expect.stringMatching(/^https:\/\/herald\.test\/device#k=[\w-]+\.[\w-]+&n=[^#]+$/),
   );
   expect(log.log).toHaveBeenCalledWith(
     expect.stringContaining('Opened https://herald.test/device'),
@@ -198,7 +198,7 @@ it('prefers the complete verification link and never opens other schemes', async
   const open = vi.fn(() => true);
   await login('https://herald.test', { safetyCode }, {}, { ...io(), open });
   expect(open).toHaveBeenCalledWith(
-    expect.stringMatching(/^https:\/\/herald\.test\/device\?user_code=U#k=[\w-]+\.[\w-]+$/),
+    expect.stringMatching(/^https:\/\/herald\.test\/device\?user_code=U#k=[\w-]+\.[\w-]+&n=[^#]+$/),
   );
   vi.mocked(globalThis.fetch).mockImplementationOnce(async () =>
     Response.json({
