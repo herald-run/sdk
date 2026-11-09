@@ -372,3 +372,25 @@ it('refuses a group whose recent messages name a head missing from its chain', a
   });
   await expect(client().open(room.id)).resolves.toMatchObject({ headVersion: 2 });
 });
+it('refuses an invalid form before sealing or sending', async () => {
+  const room = await makeRoom();
+  const seen = serve({ ...keysRoute, [`GET /api/v1/chats/${room.id}`]: room });
+  const bad = { title: 'Pick', fields: [{ id: 'a', type: 'choice', label: 'A' }] };
+  await expect(client().ask(room.id, bad)).rejects.toThrow(/type/);
+  await expect(client().ask(room.id, { fields: [] })).rejects.toThrow(/title/);
+  expect(seen).toEqual([]);
+});
+it('sends a valid form', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  const form = {
+    title: 'Pick',
+    fields: [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }],
+  };
+  await client().ask(room.id, form);
+  expect(seen.filter((s) => s.route.startsWith('POST'))).toHaveLength(1);
+});

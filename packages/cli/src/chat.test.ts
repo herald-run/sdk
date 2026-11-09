@@ -43,3 +43,24 @@ it('runs a handler with the message on stdin and rejects a non-zero exit', async
   await expect(runHandler(check, wake, env, 5)).resolves.toBeUndefined();
   await expect(runHandler('exit 7', wake, env, 5)).rejects.toThrow('exited with 7');
 });
+it('refuses an invalid chat form before sending', async () => {
+  const out = io();
+  const ask = vi.fn();
+  const form = JSON.stringify({
+    title: 'Pick',
+    fields: [{ id: 'a', type: 'choice', label: 'A' }],
+  });
+  await expect(chat(fake({ ask }), ['ask', 'room', form], base, out)).rejects.toThrow(
+    /Invalid form: fields 0 type/,
+  );
+  expect(ask).not.toHaveBeenCalled();
+});
+it('sends a valid chat form', async () => {
+  const ask = vi.fn(async () => ({ seq: 1, id: 'x', room: 'room' }));
+  const form = JSON.stringify({
+    title: 'Pick',
+    fields: [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }],
+  });
+  await chat(fake({ ask }), ['ask', 'room', form], base, io());
+  expect(ask).toHaveBeenCalledTimes(1);
+});

@@ -8,6 +8,8 @@ import type {
   RoomTrust,
 } from './e2ee/index.js';
 import * as e2ee from './e2ee/index.js';
+import { z } from 'zod';
+import { messageInputSchema } from './schema/index.js';
 import { HeraldError, readError, sleep } from './http.js';
 import type { KeyedSession } from './keyed.js';
 import { backoff, KEEPALIVE, type EventSocket } from './socket.js';
@@ -259,11 +261,14 @@ export class ChatClient {
     return this.#post(target, text, options);
   }
   /** Asks a form in the chat; the first permitted answer closes it. */
-  ask(
+  async ask(
     target: string,
     form: Record<string, unknown>,
     options: ChatSendOptions & ChatFormRules = {},
   ) {
+    // The same schema the Inbox applies; an invalid form would only show as unverifiable.
+    const parsed = messageInputSchema.safeParse({ ...form, kind: 'form' });
+    if (!parsed.success) throw new HeraldError(z.prettifyError(parsed.error), 400);
     const { deadline, answerers, ...rest } = options;
     return this.#post(target, '', rest, { kind: 'form', form, rules: { deadline, answerers } });
   }

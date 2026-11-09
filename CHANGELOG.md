@@ -4,6 +4,7 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 ## Unreleased
 
+- Chat: `chat.ask` (CLI `chat ask`) rejects a form the Inbox would not accept, such as an unknown field type, before sending.
 - Threads: `threadKey` on `send` and `ask` names a conversation. Messages sent with the same key by one connection share a thread; the server stores only a keyed digest of the name (`threadDigest`). `threads()` (CLI `herald threads`, MCP `threads`) lists a connection's threads, by default those with a waiting request. MCP `send` returns `threadId`, and the CLI prints it on stderr. Exported `ThreadList`, `ThreadSummary`.
 - Declining: a person can decline any pending request. The record ends as `cancelled` with `declined: true` and an optional end-to-end encrypted note (`decline.note`, verified like an answer, `ctx.t = "decline"`); `refuseLabel` (CLI `--refuse-label`) sets the decline button's label. MCP results include `declined` and `declineNote`.
 - Live socket: a `read` event (`ReadEvent`) lists records the same member read on another device.

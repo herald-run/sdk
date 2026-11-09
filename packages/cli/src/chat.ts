@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type { ChatMessage, ChatRoom, ChatWake, Herald } from '@herald-run/sdk';
+import { messageInputSchema } from '@herald-run/sdk/schema';
 import { UsageError } from './compose';
 export type ChatValues = {
   json?: boolean;
@@ -149,6 +150,12 @@ export async function chat(
     }
     case 'ask': {
       const { deadline, answerers, ...form } = await parsed(rest[0], 'FORM');
+      const valid = messageInputSchema.safeParse({ ...form, kind: 'form' });
+      if (!valid.success)
+        throw new UsageError(
+          'Invalid form: ' +
+            valid.error.issues.map((i) => [...i.path, i.message].join(' ')).join('; '),
+        );
       return done(
         await client.chat.ask(need(room, 'ROOM'), form, {
           deadline: deadline as number | undefined,
