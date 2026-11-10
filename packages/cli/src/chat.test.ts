@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import type { ChatMessage, Herald } from '@herald-run/sdk';
+import type { ChatMessage, ChatRoom, Herald } from '@herald-run/sdk';
 import { chat, runHandler, type ChatValues } from './chat';
 const message: ChatMessage = {
   room: 'r'.repeat(43),
@@ -76,4 +76,13 @@ it('sends as a subagent with tags and a summary, and reads for one', async () =>
   );
   await chat(fake({ send, read }), ['read', 'room'], values, io());
   expect(read).toHaveBeenCalledWith('room', expect.objectContaining({ for: 'b' }));
+});
+it('creates a titled group and titles a room', async () => {
+  const group = vi.fn(async () => ({ id: 'g'.repeat(43) }) as ChatRoom);
+  const title = vi.fn(async () => ({ seq: 1, id: 'x', room: 'room' }));
+  await chat(fake({ group }), ['group', 'a:one', 'h:two'], { ...base, title: 'Launch' }, io());
+  expect(group).toHaveBeenCalledWith(['a:one', 'h:two'], { title: 'Launch' });
+  await chat(fake({ title }), ['title', 'room', 'New name'], base, io());
+  expect(title).toHaveBeenCalledWith('room', 'New name');
+  await expect(chat(fake({ group }), ['group'], base, io())).rejects.toThrow(/MEMBER/);
 });

@@ -571,6 +571,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             sub: values.sub,
             tag: values.tag,
             summary: values.summary,
+            title: values.title,
             for: values.for,
             remove: values.remove,
             after: integer(values.after, '--after'),

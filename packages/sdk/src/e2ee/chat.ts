@@ -132,6 +132,8 @@ export interface ChatPayload extends Record<string, unknown> {
   text: string;
   seen: number;
   mentions?: string[];
+  /** The subagent keys addressed, signed with the message; only set when non-empty. */
+  tags?: string[];
   event?: ChatEvent;
   form?: Record<string, unknown>;
   answers?: Record<string, unknown>;

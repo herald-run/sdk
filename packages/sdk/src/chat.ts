@@ -31,6 +31,8 @@ export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   summary?: string;
   /** The declared mentions differ from the signed ones, which `mentions` holds. */
   mentionsMismatch?: true;
+  /** The subagent keys the sender addressed, as signed. */
+  tags?: string[];
   /** The runtime subagent the sender tagged, when this connection owns it. */
   subagent?: string;
 };
@@ -78,6 +80,8 @@ export type ChatGroupOptions = {
   team?: string;
   /** Agent messages in a row before wakes pause; 0 turns the limit off. Default 6. */
   hopLimit?: number;
+  /** Titles the room after creating it. */
+  title?: string;
 };
 export type ChatFormRules = { deadline?: number; answerers?: 'humans' | 'any' };
 type ChatRequest = <T>(
@@ -89,7 +93,7 @@ type Raw = (path: string, init: RequestInit) => Promise<Response>;
 type Lease = Omit<ChatWake, 'messages' | 'history'>;
 /** What a kind of message adds to the sealed payload and to the cleartext body. */
 type Posted = {
-  kind?: 'message' | 'form' | 'event';
+  kind?: 'message' | 'title' | 'form' | 'event';
   event?: ChatEvent;
   form?: Record<string, unknown>;
   rules?: ChatFormRules;
@@ -249,6 +253,9 @@ export class ChatClient {
     if (!payload) return { ...out, locked: true };
     const { text, event, form, answers, attachments, reference, mentions, mentionsMismatch } =
       payload;
+    const tags = Array.isArray(payload.tags)
+      ? payload.tags.filter((t) => typeof t === 'string')
+      : undefined;
     const summary = typeof payload.summary === 'string' ? payload.summary.slice(0, 200) : undefined;
     const sealed = await e2ee.openChatSecrets(current, room, record).catch(() => undefined);
     return {
@@ -263,6 +270,7 @@ export class ChatClient {
         summary,
         mentions,
         mentionsMismatch,
+        tags: tags?.length ? tags : undefined,
         secrets: sealed?.answers as Record<string, unknown> | undefined,
       }),
     };
@@ -338,7 +346,14 @@ export class ChatClient {
     };
     const signed = await e2ee.signChatHead({ ...keys, principal: me }, head);
     const body = { kind: 'group', nonce, head: signed, ...defined({ hopLimit: options.hopLimit }) };
-    return this.#verified(await this.#request<ChatRoom>('/chats', body));
+    const room = await this.#verified(await this.#request<ChatRoom>('/chats', body));
+    if (!options.title) return room;
+    await this.title(room.id, options.title);
+    return this.open(room.id);
+  }
+  /** Sets the room's title; any member may. */
+  title(target: string, text: string) {
+    return this.#post(target, text, {}, { kind: 'title' });
   }
   /** Signs the next head; an agent owner may add or remove agents only. */
   async updateGroup(
@@ -381,6 +396,7 @@ export class ChatClient {
         id,
         text,
         ...defined({ kind, audience, sub, mentions, attachments, reference, event, form, summary }),
+        ...(tags?.length ? { tags } : {}),
       };
       const body = {
         id,

@@ -97,7 +97,7 @@ export const commands: Record<string, Spec> = {
     detail: 'The runner config may omit destinationId; --target then names the destination key.',
   },
   chat: {
-    args: 'list|read|send|wait|listen|react|edit|delete|ask|answer [ROOM] [SEQ] [TEXT]',
+    args: 'list|read|send|wait|listen|react|edit|delete|ask|answer|group|title [ROOM] [SEQ] [TEXT]',
     summary: 'Read, send and wait on end-to-end encrypted chats',
     options: [
       'session',
@@ -107,6 +107,7 @@ export const commands: Record<string, Spec> = {
       'sub',
       'tag',
       'summary',
+      'title',
       'for',
       'remove',
       'after',

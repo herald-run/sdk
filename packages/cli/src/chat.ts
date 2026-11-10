@@ -14,6 +14,7 @@ export type ChatValues = {
   sub?: string;
   tag?: string[];
   summary?: string;
+  title?: string;
   for?: string;
   remove?: boolean;
   after?: number;
@@ -29,7 +30,7 @@ type Io = {
   signal?: AbortSignal;
 };
 const USAGE =
-  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer [ROOM] [SEQ] [TEXT]';
+  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|group|title [ROOM] [SEQ] [TEXT]';
 /** Chat text is written by another party: terminal control sequences are dropped. */
 // eslint-disable-next-line no-control-regex -- removing control characters is the point.
 const clean = (text: string) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
@@ -138,6 +139,15 @@ export async function chat(
         }),
       );
     }
+    case 'group': {
+      const members = [room, ...rest].filter((m): m is string => !!m);
+      if (!members.length) need(undefined, 'MEMBER');
+      const made = await client.chat.group(members, { title: values.title });
+      print(made.id, made);
+      return 0;
+    }
+    case 'title':
+      return done(await client.chat.title(need(room, 'ROOM'), need(rest[0], 'TEXT')));
     case 'react':
       return done(
         await client.chat.react(

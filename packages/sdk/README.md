@@ -34,7 +34,7 @@ console.log(answer.actionId);
 
 ## Agent rooms
 
-`chat.group(members, { hopLimit })` lets an agent open a group with other agents and people it already chats with; `chat.updateGroup(room, { add, remove })` changes its agents. Send as a subagent with `{ sub, tags, summary }`. `agents.setSubagent(key, profile, { reach: 'agents' })` hides a subagent from people; it reads with `chat.read(room, { for: key })`.
+`chat.group(members, { hopLimit, title })` lets an agent open a group with other agents and people it already chats with, and `chat.title(room, text)` titles any room; `chat.updateGroup(room, { add, remove })` changes its agents. Send as a subagent with `{ sub, tags, summary }`. `agents.setSubagent(key, profile, { reach: 'agents' })` hides a subagent from people; it reads with `chat.read(room, { for: key })`.
 
 ## Schemas
 

@@ -368,7 +368,7 @@ export function createServer(client: () => Promise<Herald>) {
   const principals = z.array(z.string().regex(/^[ha]:/)).describe('h:<user> or a:<integration>');
   tool(
     'chat_group',
-    'Create an encrypted group from members, or with room add or remove members. An agent may add agents it can reach and people it already chats with, who own the group; as an owner it changes agents only.',
+    'Create an encrypted group from members (with an optional title), or with room add or remove members. An agent may add agents it can reach and people it already chats with, who own the group; as an owner it changes agents only.',
     {
       room: chatTarget.optional().describe('A group to change; omit to create one'),
       members: principals.optional(),
@@ -381,12 +381,13 @@ export function createServer(client: () => Promise<Herald>) {
         .max(1000)
         .optional()
         .describe('Agent messages in a row before wakes pause; 0 is no limit (6)'),
+      title: z.string().min(1).max(200).optional().describe('Titles a new group'),
     },
-    async ({ room, members, add, remove, hopLimit }, herald) =>
+    async ({ room, members, add, remove, hopLimit, title }, herald) =>
       json(
         room
           ? await herald.chat.updateGroup(room, { add, remove })
-          : await herald.chat.group(members ?? [], { hopLimit }),
+          : await herald.chat.group(members ?? [], { hopLimit, title }),
       ),
   );
   const seq = z.number().int().positive();

@@ -70,7 +70,7 @@ function serve(routes: Record<string, Reply>) {
     const key = Object.keys(routes).find((r) => route.startsWith(r));
     if (!key) return Response.json({ error: 'Not found.' }, { status: 404 });
     const value = routes[key];
-    const out = typeof value === 'function' ? (value as () => unknown)() : value;
+    const out = typeof value === 'function' ? await (value as () => unknown)() : value;
     return out instanceof Response ? out : Response.json(out);
   });
   return seen;
@@ -420,10 +420,74 @@ it('seals a summary, sends tags and refuses a long summary', async () => {
     [`GET /api/v1/chats/${room.id}`]: room,
   });
   const { messages } = await client().read(room.id, { for: 'b' });
-  expect(messages[0]).toMatchObject({ text: 'long prompt', summary: 'Plan' });
+  expect(messages[0]).toMatchObject({ text: 'long prompt', summary: 'Plan', tags: ['b'] });
   const urls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
   expect(urls.some((u) => u.includes('/messages?for=b'))).toBe(true);
   await expect(client().send(room.id, 'x', { summary: 's'.repeat(201) })).rejects.toThrow(/200/);
+});
+it('seals tags with the message and leaves them out when empty', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  await client().send(room.id, 'plain', { tags: [] });
+  await client().send(room.id, 'to b', { tags: ['b', 'c'] });
+  const posts = seen.filter((s) => s.route.startsWith('POST'));
+  const opened = async (i: number) => {
+    const body = posts[i].body!;
+    const record = {
+      ...{ seq: 1, id: body.id as string, sender: agent, sub: '', at: 1 },
+      ...{ kind: 'message' as const, audience: 'all' as const },
+      envelope: body.envelope as e2ee.SealedEnvelope,
+    };
+    return e2ee.openChat(await ownerKeys(), room.id, record);
+  };
+  expect(await opened(0)).not.toHaveProperty('tags');
+  expect(await opened(1)).toMatchObject({ tags: ['b', 'c'] });
+});
+it('titles a room, and a new group when asked', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  await client().title(room.id, 'Launch Checklist');
+  const post = seen.find((s) => s.route.startsWith('POST'))!;
+  expect(post.body).toMatchObject({ kind: 'title' });
+  const empty = { messages: [], through_seq: 0, hasMore: false };
+  const calls = serve({
+    ...keysRoute,
+    'GET /api/v1/chats/': () => {
+      const route = calls.at(-1)!.route;
+      return route.endsWith('/messages') ? empty : created;
+    },
+    'POST /api/v1/chats': async () => {
+      const last = calls.at(-1)!;
+      if (last.route.endsWith('/messages')) return { seq: 1, id: 'x' };
+      const signed = last.body!.head as e2ee.SignedChatHead;
+      created = {
+        id: signed.head.room,
+        kind: 'group',
+        nonce: last.body!.nonce,
+        head: await e2ee.headHash(signed.head),
+        headVersion: 1,
+        chain: [signed],
+        lastSeq: 0,
+        lastAt: 0,
+        readSeq: 0,
+        unread: 0,
+        members: (await makeRoom()).members,
+      };
+      return created;
+    },
+  });
+  let created: Record<string, unknown> = {};
+  await client().group([human], { title: 'Launch Checklist' });
+  const titled = calls.find((s) => s.route.endsWith('/messages') && s.route.startsWith('POST'));
+  expect(titled?.body).toMatchObject({ kind: 'title' });
 });
 it('lets an agent create a group owned by it and its people', async () => {
   const seen = serve({
