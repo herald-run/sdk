@@ -1,6 +1,55 @@
 /** End-to-end encryption for Herald: key sets, signed envelopes, sealed files and keyring backups. */
 export { b64u, E2eeError, type Bytes } from './bytes';
 export { canon } from './canon';
+export {
+  chatContext,
+  groupHead,
+  openChat,
+  openChatSecrets,
+  roomHeads,
+  vouches,
+  pairKey,
+  roomId,
+  sealChat,
+  shareHistory,
+  inTeam,
+  verifyChatRoom,
+  type ChatContextInput,
+  type ChatKeys,
+  type ChatMember,
+  type ChatPayload,
+  type ChatRecord,
+  type ChatRoom,
+  type RoomSubagent,
+  type SubagentReach,
+  type ChatAttachment,
+  type ChatEvent,
+  type ChatSealInput,
+  type ContextMode,
+  type FormState,
+  type NotifyRule,
+  type OpenedChat,
+  type RoomKind,
+  type RoomTrust,
+} from './chat';
+export {
+  layoutContext,
+  openLayout,
+  openPresence,
+  openSubagent,
+  presenceContext,
+  presenceStates,
+  sealLayout,
+  sealPresence,
+  sealSubagent,
+  subagentContext,
+  type AgentLayout,
+  type AgentPresence,
+  type LayoutGroup,
+  type LayoutPlace,
+  type PresenceState,
+  type SubagentProfile,
+} from './agents';
 export { H } from './hash';
 export { fingerprint, keySet, safetyCode, type KeySet } from './keys';
 export {
@@ -9,7 +58,10 @@ export {
   grant,
   isWorkspace,
   idempotencyDigest,
+  MAX_CHAT_RECIPIENTS,
+  threadDigest,
   MAX_PAYLOAD_BYTES,
+  MAX_RECIPIENTS,
   open,
   openKey,
   seal,
@@ -107,3 +159,22 @@ export type {
   SealedEnvelope,
   WrappedKeyring,
 } from '../schema/e2ee';
+export {
+  checkPin,
+  groupRoomId,
+  headHash,
+  checkAgentHead,
+  maySign,
+  signChatHead,
+  verifyHeadChain,
+  type ChatHead,
+  type HeadKeys,
+  type HeadPins,
+  type SignedChatHead,
+} from './chat-head';
+export {
+  signChatPolicy,
+  verifyChatPolicy,
+  type ChatPolicy,
+  type SignedChatPolicy,
+} from './chat-policy';

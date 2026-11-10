@@ -1,5 +1,6 @@
 import { createWriteStream } from 'node:fs';
-import { stat, unlink } from 'node:fs/promises';
+import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -34,6 +35,12 @@ const time = z
 const id = z.string().min(1).max(100);
 const files = z.array(z.string()).max(10).describe('Local file paths to attach (each ≤100 MB)');
 const replyTo = id.optional().describe('Message ID to reply to, keeping a thread');
+const threadKey = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe('A name you choose; messages sent with the same name share one thread');
 
 /** Answers by question text when the request came from `questions`. */
 const answers = (m: Message) =>
@@ -53,6 +60,9 @@ function summary(m: Message) {
     expiresAt: m.expiresAt,
     threadId: m.threadId,
     replyTo: m.replyTo,
+    ...(m.declined
+      ? { declined: true, ...(m.decline?.note ? { declineNote: m.decline.note } : {}) }
+      : {}),
     ...(m.response ? { actionId: m.response.actionId, values: m.response.values } : {}),
     answers: answers(m),
     ...(m.attachments?.length
@@ -112,19 +122,20 @@ export function createServer(client: () => Promise<Herald>) {
 
   tool(
     'send',
-    'Send a message to the human in Herald (their inbox on web, macOS and Android). The body is Markdown. Attach local files (reports, logs, images, PDFs) by path. Returns the message ID; does not wait for a reply.',
+    'Send a message to the human in Herald (their inbox on web, macOS and Android). The body is Markdown. Attach local files (reports, logs, images, PDFs) by path. Returns the message ID and its thread ID; does not wait for a reply.',
     {
       title: z.string().min(1).max(180),
       body: z.string().max(50_000).optional().describe('Markdown'),
       files: files.optional(),
       replyTo,
+      threadKey,
       idempotencyKey: z.string().max(200).optional().describe('Reuse to make retries safe'),
     },
     async ({ files: paths, idempotencyKey, ...input }, herald) => {
       const attachments = await attach(herald, paths);
       const kind = attachments.length && !input.body ? 'files' : 'message';
       const message = await herald.send({ ...input, kind, attachments }, { idempotencyKey });
-      return json({ id: message.id, status: message.status });
+      return json({ id: message.id, status: message.status, threadId: message.threadId });
     },
   );
 
@@ -159,6 +170,13 @@ export function createServer(client: () => Promise<Herald>) {
         ),
       files: files.optional(),
       replyTo,
+      threadKey,
+      refuseLabel: z
+        .string()
+        .min(1)
+        .max(40)
+        .optional()
+        .describe('Label of the button that declines the request (default Skip)'),
       deadline: time.optional().describe('When the request expires for the human (default 1h)'),
       wait: time.optional().describe('How long this call blocks (default 10m)'),
     },
@@ -173,6 +191,8 @@ export function createServer(client: () => Promise<Herald>) {
         body: input.body,
         kind: 'form',
         replyTo: input.replyTo,
+        threadKey: input.threadKey,
+        refuseLabel: input.refuseLabel,
         expiresIn: deadline,
         attachments: await attach(herald, input.files),
       };
@@ -207,6 +227,18 @@ export function createServer(client: () => Promise<Herald>) {
     'Wait for a pending Herald request to be answered, expire or be cancelled. Returns its status and answer (with answers by question text for questions); status "pending" means wait elapsed first.',
     { id, wait: time.optional().describe('How long to block (default 10m)') },
     async (input, herald) => json(await settle(herald, input.id, duration(input.wait || '10m'))),
+    true,
+  );
+
+  tool(
+    'threads',
+    "List this integration's threads, newest first: id, message count, requests still waiting. Defaults to threads with a waiting request; all includes every retained thread. threadKey finds the thread of that name; a full page returns next, which before continues from.",
+    {
+      all: z.boolean().optional(),
+      threadKey: threadKey,
+      before: z.string().min(1).optional().describe('The next cursor of the previous page'),
+    },
+    async (input, herald) => json(await herald.threads(input)),
     true,
   );
 
@@ -269,6 +301,240 @@ export function createServer(client: () => Promise<Herald>) {
       for await (const message of herald.threadMessages(input.id)) list.push(summary(message));
       return json(list);
     },
+    true,
+  );
+
+  const posting = {
+    sub: z.string().min(1).optional().describe('Send as this subagent key of the connection'),
+    summary: z.string().max(200).optional().describe('One line shown while it is collapsed'),
+  };
+  const chatTarget = z
+    .string()
+    .min(1)
+    .describe('Room id, or "owner", "h:<user>" or "a:<integration>" for a direct chat');
+  tool(
+    'chat_list',
+    'List the end-to-end encrypted chat rooms this connection belongs to, newest first.',
+    { limit: z.number().int().min(1).max(100).optional() },
+    async (input, herald) => json(await herald.chat.list(input)),
+    true,
+  );
+  tool(
+    'chat_read',
+    'Read one page of a chat, decrypted, oldest first. Use after to read forward from a seq.',
+    {
+      room: chatTarget,
+      after: z.number().int().nonnegative().optional(),
+      before: z.number().int().positive().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+      for: z.string().min(1).optional().describe('Read as this subagent key of the connection'),
+    },
+    async ({ room, ...options }, herald) => json(await herald.chat.read(room, options)),
+    true,
+  );
+  tool(
+    'chat_send',
+    'Send an end-to-end encrypted chat message; creates the direct chat if needed.',
+    {
+      to: chatTarget,
+      text: z.string().min(1),
+      session: z.boolean().optional().describe('Start a new session room with this principal'),
+      humansOnly: z.boolean().optional().describe('Seal to humans only'),
+      replyTo: z.number().int().positive().optional(),
+      mentions: z.array(z.string().min(1)).optional().describe('Principals to tag'),
+      paths: z.array(z.string().min(1)).optional().describe('Local files to attach'),
+      ...posting,
+      tags: z.array(z.string().min(1)).optional().describe('Subagent keys to address'),
+    },
+    async (input, herald) => {
+      const target = input.session ? (await herald.chat.session(input.to)).id : input.to;
+      const attachments = [];
+      for (const file of input.paths ?? [])
+        attachments.push(
+          await herald.chat.attach(target, basename(file), new Uint8Array(await readFile(file))),
+        );
+      return json(
+        await herald.chat.send(target, input.text, {
+          audience: input.humansOnly ? 'humans' : undefined,
+          replyTo: input.replyTo,
+          mentions: input.mentions,
+          attachments: attachments.length ? attachments : undefined,
+          sub: input.sub,
+          tags: input.tags,
+          summary: input.summary,
+        }),
+      );
+    },
+  );
+  const principals = z.array(z.string().regex(/^[ha]:/)).describe('h:<user> or a:<integration>');
+  tool(
+    'chat_group',
+    'Create an encrypted group from members (with an optional title), or with room add or remove members and set the title. An agent may add agents it can reach and people it already chats with, who own the group; as an owner it changes agents only.',
+    {
+      room: chatTarget.optional().describe('A group to change; omit to create one'),
+      members: principals.optional(),
+      add: principals.optional(),
+      remove: principals.optional(),
+      hopLimit: z
+        .number()
+        .int()
+        .min(1)
+        .max(1000)
+        .optional()
+        .describe(
+          'Agent turns in a row, between different agents, before wakes pause until a person writes (default 6)',
+        ),
+      title: z.string().min(1).max(200).optional().describe('Titles the group'),
+    },
+    async ({ room, members, add, remove, hopLimit, title }, herald) => {
+      if (!room) return json(await herald.chat.group(members ?? [], { hopLimit, title }));
+      if (members || hopLimit !== undefined)
+        return failure('members and hopLimit only apply when creating a group; use add or remove.');
+      if (add || remove) await herald.chat.updateGroup(room, { add, remove });
+      if (title) await herald.chat.title(room, title);
+      return json(await herald.chat.open(room));
+    },
+  );
+  const seq = z.number().int().positive();
+  tool(
+    'chat_react',
+    'Add or remove an emoji reaction on a chat message. Wakes nobody.',
+    { room: chatTarget, seq, emoji: z.string().min(1).max(32), remove: z.boolean().optional() },
+    async (input, herald) =>
+      json(await herald.chat.react(input.room, input.seq, input.emoji, input.remove)),
+  );
+  tool(
+    'chat_edit',
+    'Replace the text of a message this connection sent. Wakes nobody.',
+    { room: chatTarget, seq, text: z.string().min(1) },
+    async (input, herald) => json(await herald.chat.edit(input.room, input.seq, input.text)),
+  );
+  tool(
+    'chat_delete',
+    'Delete a chat message this connection sent, leaving a tombstone.',
+    { room: chatTarget, seq },
+    async (input, herald) => {
+      await herald.chat.delete(input.room, input.seq);
+      return json({ deleted: true });
+    },
+  );
+  tool(
+    'chat_ask',
+    'Post a form in a chat. Humans answer by default; the first answer closes it and wakes only the asker.',
+    {
+      room: chatTarget,
+      form: z.record(z.string(), z.unknown()).describe('Form definition, as in the Inbox'),
+      deadline: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Epoch milliseconds, within 30 days'),
+      anyone: z.boolean().optional().describe('Let agents answer as well'),
+      ...posting,
+    },
+    async ({ room, form, deadline, anyone, ...rest }, herald) =>
+      json(
+        await herald.chat.ask(room, form, {
+          deadline,
+          answerers: anyone ? 'any' : undefined,
+          ...rest,
+        }),
+      ),
+  );
+  tool(
+    'chat_answer',
+    'Answer a form in a chat. Secret values are sealed to the asker alone.',
+    {
+      room: chatTarget,
+      seq,
+      answers: z.record(z.string(), z.unknown()),
+      secrets: z.record(z.string(), z.unknown()).optional(),
+    },
+    async ({ room, seq: form, answers, secrets }, herald) =>
+      json(await herald.chat.answer(room, form, answers, { secrets })),
+  );
+  tool(
+    'chat_download',
+    'Decrypt a chat attachment to a new local file (the path must not exist yet).',
+    {
+      room: chatTarget,
+      seq,
+      attachment: z.string().describe('Attachment id from the message'),
+      path: z.string().min(1),
+    },
+    async (input, herald) => {
+      const { messages } = await herald.chat.read(input.room, { after: input.seq - 1, limit: 1 });
+      const file = messages[0]?.attachments?.find((a) => a.id === input.attachment);
+      if (!file) throw new Error('No such attachment on that message.');
+      const data = await herald.chat.download(input.room, file);
+      await writeFile(input.path, data, { flag: 'wx', mode: 0o600 });
+      return json({ path: input.path, name: file.name, size: file.size });
+    },
+  );
+  tool(
+    'chat_wait',
+    'Wait for the next wake in a chat (or, with after, anything past that seq), decrypted and acknowledged. Returns reason, context, messages and history; an empty messages list on timeout.',
+    {
+      room: chatTarget,
+      after: z.number().int().nonnegative().optional(),
+      wait: time.optional().describe('How long this call blocks (default 10m)'),
+    },
+    async (input, herald) => {
+      const timeout = duration(input.wait || '10m');
+      if (input.after !== undefined)
+        return json({
+          messages: await herald.chat.wait(input.room, { after: input.after, timeout }),
+        });
+      return json((await herald.chat.next(input.room, { timeout })) ?? { messages: [] });
+    },
+  );
+
+  const look = {
+    state: z.enum(['idle', 'busy', 'blocked', 'offline']),
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional()
+      .describe('Custom colour as #rrggbb'),
+    ttl: z.number().int().min(10).max(86400).optional().describe('Seconds before it expires (300)'),
+  };
+  tool(
+    'presence_set',
+    'Show the account owner whether this connection is idle, busy, blocked or offline, end-to-end encrypted. Expires after ttl seconds unless refreshed.',
+    { ...look, text: z.string().max(120).optional() },
+    async ({ ttl, ...presence }, herald) =>
+      json(await herald.agents.setPresence(presence, { ttl })),
+  );
+  tool(
+    'subagent_set',
+    'Name a subagent of this connection for the account owner, end-to-end encrypted. It costs no connection and expires after ttl seconds unless renewed.',
+    {
+      key: z.string().regex(/^[\w.-]{1,64}$/),
+      name: z.string().min(1).max(60),
+      ...look,
+      reach: z
+        .enum(['all', 'agents'])
+        .optional()
+        .describe('agents: people cannot tag or message it; it reads agent messages only'),
+    },
+    async ({ key, ttl, reach, ...profile }, herald) =>
+      json(await herald.agents.setSubagent(key, profile, { ttl, reach })),
+  );
+  tool(
+    'subagent_remove',
+    "Remove a subagent of this connection from the account owner's view.",
+    { key: z.string().regex(/^[\w.-]{1,64}$/) },
+    async ({ key }, herald) => {
+      await herald.agents.removeSubagent(key);
+      return json({ key, removed: true });
+    },
+  );
+  tool(
+    'subagents_list',
+    "List the keys and expiry of this connection's subagents.",
+    {},
+    async (_input, herald) => json({ subagents: await herald.agents.subagents() }),
     true,
   );
 

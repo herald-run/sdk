@@ -12,7 +12,7 @@ Create a token in Herald under Settings → Connections, or run `npx @herald-run
 
 Content is always end-to-end encrypted; tokens without a key are refused. Use a connection token (`hdr_<auth>.<seed>.<fingerprint>`, from `herald login` or Settings → Connections): the client encrypts and decrypts content itself and sends only `hdr_<auth>`; records it cannot decrypt or verify, including anything unsealed, come back with `locked` or `unverified` set and no content. Download files by passing the attachment (it carries the file key) to `download()`.
 
-Team workspace tokens verify the workspace chain and roster. Store the newest verified pin with the token: pass `pin` and `onPin`, or set `HERALD_PIN` (the pin as JSON). Without one, a fresh client trusts the newest chain and roster the server shows under the token's workspace safety code, so it cannot detect a rollback to before a removal it never saw.
+Team workspace tokens verify the workspace chain and roster. Store the newest verified pin (with the chat policy version) with the token: pass `pin` and `onPin`, or set `HERALD_PIN` (the pin as JSON). Without one, a fresh client trusts the newest chain and roster the server shows under the token's workspace safety code, so it cannot detect a rollback to before a removal it never saw.
 
 ## One-minute example
 
@@ -31,6 +31,10 @@ const answer = await herald.askAction({
 });
 console.log(answer.actionId);
 ```
+
+## Agent rooms
+
+`chat.group(members, { hopLimit, title })` lets an agent open a group with other agents and people it already chats with (`hopLimit`: turns in a row between different agents before wakes pause until a person writes, 1 to 1000, default 6), and `chat.title(room, text)` titles any room; `chat.updateGroup(room, { add, remove })` changes its agents. Send as a subagent with `{ sub, tags, summary }`. `agents.setSubagent(key, profile, { reach: 'agents' })` hides a subagent from people; it reads with `chat.read(room, { for: key })`.
 
 ## Schemas
 

@@ -24,9 +24,10 @@ export interface Opener {
 }
 export type Expect = { t: string; account: string } & Record<string, string | number>;
 /** Extra context fields per type; `t` and `account` are always present. */
-const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid'>> = {
+const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid' | 'text'>> = {
   message: { id: 'uuid' },
   response: { message: 'string', request: 'string' },
+  decline: { message: 'string', request: 'string' },
   task: { id: 'uuid', destination: 'string', type: 'string' },
   log: { task: 'string', seq: 'number' },
   result: { task: 'string' },
@@ -34,6 +35,10 @@ const CTX: Record<string, Record<string, 'string' | 'number' | 'uuid'>> = {
   keyring: { device: 'string' },
   teamkey: {},
   wskey: {},
+  chat: { room: 'string', id: 'uuid', audience: 'string', sub: 'text', head: 'string' },
+  presence: { principal: 'string' },
+  subagent: { principal: 'string', key: 'string' },
+  layout: { principal: 'string' },
 };
 /** Fields a `ws_` (team workspace) account's contexts add; forbidden elsewhere. */
 const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
@@ -41,10 +46,12 @@ const WORKSPACE: Record<string, Record<string, 'string' | 'number'>> = {
   log: { team: 'string' },
   result: { team: 'string' },
   response: { team: 'string', member: 'string' },
+  decline: { team: 'string', member: 'string' },
   task: { team: 'string', member: 'string' },
   secret: { team: 'string', member: 'string' },
   teamkey: { team: 'string', kv: 'number', member: 'string' },
   wskey: { n: 'number', member: 'string' },
+  chat: { member: 'string', policy: 'number' },
 };
 /** Team workspace ids start with `ws_`; personal account ids never do. */
 export const isWorkspace = (account: unknown) =>
@@ -53,6 +60,9 @@ const KEY_INFO = utf8('herald/e2ee/v1 key');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Largest payload JSON, in UTF-8 bytes, whose ciphertext fits the envelope schema. */
 export const MAX_PAYLOAD_BYTES = 134_984;
+/** Recipient caps: chat rooms address every member device; everything else stays at 16. */
+export const MAX_RECIPIENTS = 16;
+export const MAX_CHAT_RECIPIENTS = 64;
 export function checkCtx(ctx: Ctx, expect?: Expect) {
   if (!ctx || typeof ctx !== 'object' || !Object.hasOwn(CTX, ctx.t)) fail('Unknown context type.');
   const ws = isWorkspace(ctx.account);
@@ -68,7 +78,7 @@ export function checkCtx(ctx: Ctx, expect?: Expect) {
         ? Number.isSafeInteger(value) && (value as number) >= 0
         : type === 'uuid'
           ? typeof value === 'string' && UUID.test(value)
-          : typeof value === 'string' && value !== '';
+          : typeof value === 'string' && (type === 'text' || value !== '');
     if (!ok) fail(`Invalid ctx.${key}.`);
   }
   if (!expect) return;
@@ -150,8 +160,9 @@ export async function seal(input: {
   to: RecipientKey[];
 }): Promise<SealedEnvelope> {
   const { signer, to } = input;
-  if (!to.length || to.length > 16) fail('Seal to 1 to 16 recipients.');
   const { ctx } = input;
+  const cap = ctx?.t === 'chat' ? MAX_CHAT_RECIPIENTS : MAX_RECIPIENTS;
+  if (!to.length || to.length > cap) fail(`Seal to 1 to ${cap} recipients.`);
   checkCtx(ctx);
   const payload = withVersion(input.payload);
   const plain = utf8(JSON.stringify(payload));
@@ -184,7 +195,16 @@ export async function open<T extends Payload = Payload>(
   const signPub = options.signers(env.from) ?? fail('Untrusted signer.');
   await verifySig(env, head, signPub);
   checkCtx(env.ctx, options.expect);
-  return (await decryptPayload(env, head, await unwrapKey(env, head, options.recipients))) as T;
+  // Shared history can carry one wrap per sharer for the same key: try each until one decrypts.
+  const mine = env.to.filter((e) => options.recipients.some((r) => r.kid === e.kid));
+  for (const [i, entry] of mine.entries())
+    try {
+      const cek = await unwrapKey({ ...env, to: [entry] }, head, options.recipients);
+      return (await decryptPayload(env, head, cek)) as T;
+    } catch (e) {
+      if (i === mine.length - 1) throw e;
+    }
+  return fail('No recipient entry for these keys.');
 }
 /** Recovers the content key without verifying; open the envelope first. */
 export async function openKey(env: SealedEnvelope, recipients: Opener[]): Promise<Bytes> {
@@ -201,6 +221,15 @@ export async function grant(
 /** `b64u(SHA-256(iv || ct))`; binds a response to its request. */
 export const envelopeDigest = async (env: SealedEnvelope) =>
   b64u.encode(await sha256(b64u.decode(env.iv), b64u.decode(env.ct)));
+/**
+ * Keyed digest of a thread name. The server maps equal digests from one integration to one
+ * thread and never learns the name.
+ */
+export async function threadDigest(seed: Uint8Array | string, threadKey: string) {
+  if (typeof threadKey !== 'string' || !threadKey) fail('Missing thread key.');
+  const key = await hkdf(bytesOf(seed, 32), 'herald/e2ee/v1 thread');
+  return b64u.encode(await hmac(key, utf8(canon({ threadKey }))));
+}
 /**
  * A retry-stable digest of a payload and its idempotency key, keyed by the integration seed.
  * Binding the key keeps equal content under different keys unlinkable.

@@ -41,6 +41,7 @@ const server = http(async (req, res) => {
         : { ...request, status: answer.status };
   else if (req.url?.startsWith('/api/v1/messages?'))
     result = [await sealed.sealedMessage({ title: 'Q' }, { id: request.id, status: 'pending' })];
+  else if (req.url?.startsWith('/api/v1/threads')) result = { threads: [] };
   else if (req.url === '/api/v1/keys') result = sealed.directory;
   else if (req.url === `/api/v1/messages/${locked.id}`) result = locked;
   else if (req.url === `/api/v1/messages/${opened.id}`) result = opened;
@@ -88,19 +89,56 @@ it('lists every tool with a description', async () => {
     [
       'ask',
       'cancel',
+      'chat_answer',
+      'chat_ask',
+      'chat_delete',
+      'chat_download',
+      'chat_edit',
+      'chat_group',
+      'chat_list',
+      'chat_react',
+      'chat_read',
+      'chat_send',
+      'chat_wait',
       'download_file',
       'get_message',
       'list_messages',
+      'presence_set',
       'request_file',
       'request_secret',
       'send',
       'send_secret',
+      'subagent_remove',
+      'subagent_set',
+      'subagents_list',
       'thread',
+      'threads',
       'upload_file',
       'wait',
     ].sort(),
   );
   for (const tool of tools) expect(tool.description!.length).toBeGreaterThan(40);
+});
+
+it('keys threads by a name the server never sees and lists them', async () => {
+  const result = await call('send', { title: 'Hi', threadKey: 'deploy' });
+  expect(result.error).toBe(false);
+  const body = last((s) => s.url === '/api/v1/messages')!.body;
+  expect(JSON.parse(body).threadKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(body).not.toContain('deploy');
+  expect((await call('threads', { all: true, threadKey: 'deploy' })).data).toEqual({ threads: [] });
+  expect(last((s) => s.url.startsWith('/api/v1/threads'))!.url).toMatch(
+    /^\/api\/v1\/threads\?state=all&key=/,
+  );
+  await call('threads', { before: 'cursor' });
+  expect(last((s) => s.url.startsWith('/api/v1/threads'))!.url).toBe(
+    '/api/v1/threads?before=cursor',
+  );
+});
+it('refuses members or a hop limit on an existing group; chat_wait is not read-only', async () => {
+  expect((await call('chat_group', { room: 'r'.repeat(43), hopLimit: 3 })).error).toBe(true);
+  const { tools } = await client.listTools();
+  expect(tools.find((t) => t.name === 'chat_wait')!.annotations?.readOnlyHint).toBe(false);
 });
 
 it('sends markdown with uploaded files', async () => {
@@ -239,4 +277,11 @@ it('uses a keyed CLI login and reports locked records plainly', async () => {
   expect(await get(locked.id)).toMatchObject({ title: 'Encrypted message', locked: true });
   expect(seen.every((s) => s.auth === `Bearer ${auth}`)).toBe(true);
   await other.close();
+});
+it('passes subagent reach and reads as a subagent', async () => {
+  await call('subagent_set', { key: 'quiet', name: 'Q', state: 'idle', reach: 'agents' });
+  const put = last((s) => s.method === 'PUT')!;
+  expect(JSON.parse(put.body)).toMatchObject({ reach: 'agents' });
+  await call('chat_read', { room: 'r'.repeat(43), for: 'quiet' });
+  expect(seen.some((s) => s.url.includes('/messages?for=quiet'))).toBe(true);
 });

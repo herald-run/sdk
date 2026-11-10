@@ -22,6 +22,20 @@ export const responseSchema = z.object({
   actionId: actionIdSchema.optional(),
   secrets: z.record(z.string().max(64), envelopeSchema).default({}),
 });
+/** One of an integration's threads (`GET /threads`). `key` is the keyed digest of its `threadKey`. */
+export interface ThreadSummary {
+  id: string;
+  key?: string;
+  /** Messages in the thread this integration sent. */
+  count: number;
+  /** Of those, how many still wait for an answer. */
+  pending: number;
+  updatedAt: string;
+}
+export interface ThreadList {
+  threads: ThreadSummary[];
+  next?: string;
+}
 export interface ThreadPage {
   messages: Message[];
   next?: number;
@@ -44,6 +58,11 @@ export interface SyncEvent {
   type: 'sync';
   revision: number;
   reconcile?: true;
+}
+/** Live socket event: these records were read on another device of the same member. */
+export interface ReadEvent {
+  type: 'read';
+  ids: string[];
 }
 export const destinationSchema = z
   .object({

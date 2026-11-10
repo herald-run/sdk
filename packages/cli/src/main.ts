@@ -11,6 +11,8 @@ import { removeLogin, saveLogin, tokenPath } from './config';
 import { composeDestination, composeMessage, outputs, UsageError } from './compose';
 import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
+import { presence, subagents } from './agents';
+import { chat } from './chat';
 import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
 import { collect, fileFailure, isSecret, sendSecret, secretFailure } from './secrets';
@@ -84,6 +86,9 @@ const options = {
   title: { type: 'string' },
   body: { type: 'string' },
   'reply-to': { type: 'string' },
+  'thread-key': { type: 'string' },
+  'refuse-label': { type: 'string' },
+  all: { type: 'boolean' },
   deadline: { type: 'string' },
   key: { type: 'string' },
   wait: { type: 'boolean' },
@@ -103,6 +108,22 @@ const options = {
   'safety-code': { type: 'string' },
   workspace: { type: 'string' },
   team: { type: 'string' },
+  exec: { type: 'string' },
+  session: { type: 'boolean' },
+  humans: { type: 'boolean' },
+  mention: { type: 'string', multiple: true },
+  attach: { type: 'string', multiple: true },
+  remove: { type: 'boolean' },
+  limit: { type: 'string' },
+  'hop-limit': { type: 'string' },
+  state: { type: 'string' },
+  color: { type: 'string' },
+  ttl: { type: 'string' },
+  sub: { type: 'string' },
+  tag: { type: 'string', multiple: true },
+  summary: { type: 'string' },
+  for: { type: 'string' },
+  reach: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
 /** A team workspace pin file: absent means no pin yet; anything else must be a valid pin. */
@@ -237,6 +258,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
       if (values.json) io.out(JSON.stringify(shown(message, stored)));
       else if (message.status === 'answered') io.out(format.answer(message, stored) || 'Answered.');
       else io.err(`Request ${message.status}. Message ID: ${message.id}`);
+      // stderr keeps stdout the answer for scripts.
+      if (!values.json && message.threadId) io.err(`thread ${message.threadId}`);
       return outcome[message.status] ?? 1;
     };
     const waitFor = async (id: string) => report(await client.wait(id, { waitTimeout: timeout }));
@@ -356,6 +379,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
         if (!waiting) {
           const message = await send();
           print(message.id, message);
+          // stderr keeps stdout one ID for scripts.
+          if (!values.json && message.threadId) io.err(`thread ${message.threadId}`);
           return 0;
         }
         if (!outs.length) return await waitFor((await send()).id);
@@ -426,6 +451,19 @@ export async function main(argv: string[], io: Io): Promise<number> {
           else list.push(message);
         }
         if (!values.json) io.out(list.map(format.messageLine).join('\n'));
+        return 0;
+      }
+      case 'threads': {
+        const list = await client.threads({
+          all: values.all,
+          threadKey: values['thread-key'],
+          before: values.before,
+        });
+        const lines = list.threads.map((t) =>
+          [t.id, `${t.pending} waiting`, `${t.count} sent`, t.updatedAt].join('  '),
+        );
+        if (list.next) lines.push(`More: --before ${list.next}`);
+        print(lines.join('\n'), list);
         return 0;
       }
       case 'logs': {
@@ -509,6 +547,48 @@ export async function main(argv: string[], io: Io): Promise<number> {
         );
         return 0;
       }
+      case 'presence':
+      case 'subagents': {
+        const agent = {
+          json: values.json,
+          state: values.state,
+          color: values.color,
+          ttl: integer(values.ttl, '--ttl'),
+          reach: values.reach,
+        };
+        return await (command === 'presence' ? presence : subagents)(
+          client,
+          positionals.slice(1),
+          agent,
+          io,
+        );
+      }
+      case 'chat':
+        return await chat(
+          client,
+          positionals.slice(1),
+          {
+            json: values.json,
+            exec: values.exec,
+            session: values.session,
+            humans: values.humans,
+            mention: values.mention,
+            attach: values.attach,
+            sub: values.sub,
+            tag: values.tag,
+            summary: values.summary,
+            title: values.title,
+            for: values.for,
+            remove: values.remove,
+            after: integer(values.after, '--after'),
+            before: integer(values.before, '--before'),
+            limit: integer(values.limit, '--limit'),
+            hopLimit: integer(values['hop-limit'], '--hop-limit'),
+            timeout,
+            bodyFile: values['body-file'],
+          },
+          io,
+        );
       case 'watch': {
         const stop = new AbortController();
         const done = new Promise<void>((resolve) =>

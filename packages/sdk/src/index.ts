@@ -15,6 +15,7 @@ import type {
   Scope,
   SealedEnvelope,
   TaskLog,
+  ThreadList,
   ThreadPage,
 } from './schema/index.js';
 import {
@@ -27,6 +28,8 @@ import {
   sealFile,
   type WorkspacePin,
 } from './e2ee/index.js';
+import { AgentsClient } from './agents.js';
+import { ChatClient } from './chat.js';
 import { KeyedSession, type FileAttachment, type OpenedLog, type WorkspaceInfo } from './keyed.js';
 import { HeraldError, parseRetryAfter, readError, readJson, retryDelay, sleep } from './http.js';
 import { version } from './version.js';
@@ -53,13 +56,39 @@ export type {
   SessionRequest,
   Task,
   TaskLog,
+  ThreadList,
   ThreadPage,
+  ThreadSummary,
 } from './schema/index.js';
 export { createKeys, seal, unseal } from './schema/crypto.js';
 export { HeraldError, parseRetryAfter } from './http.js';
 export { E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
+export { AgentsClient } from './agents.js';
+export type {
+  AgentPresence,
+  AgentPresenceOptions,
+  OwnSubagent,
+  PresenceState,
+  SubagentOptions,
+  SubagentProfile,
+  SubagentReach,
+} from './agents.js';
+export { ChatClient } from './chat.js';
+export type {
+  ChatFormRules,
+  ChatGroupOptions,
+  ChatListing,
+  ChatMessage,
+  ChatPage,
+  ChatReadOptions,
+  ChatRoom,
+  ChatSendOptions,
+  ChatWake,
+  RoomSubagent,
+  WakeReason,
+} from './chat.js';
 export { backoff, LiveSocket } from './socket.js';
 export type { LiveEvent } from './socket.js';
 export type { UploadData } from './upload.js';
@@ -177,6 +206,8 @@ export class Herald {
   readonly workspaceId?: string;
   #live?: LiveSocket;
   #keyed?: KeyedSession;
+  #chat?: ChatClient;
+  #agents?: AgentsClient;
   constructor(options: HeraldOptions = {}) {
     this.base = (options.url || process.env.HERALD_URL || 'https://app.herald.run').replace(
       /\/$/,
@@ -355,6 +386,20 @@ export class Herald {
   async thread(id: string, after = 0): Promise<ThreadPage> {
     const page = await this.request<ThreadPage>(`/messages/${path(id)}/thread?after=${after}`);
     return { ...page, messages: await Promise.all(page.messages.map(this.#open)) };
+  }
+  /**
+   * This integration's threads, newest first. Without options only threads with a waiting
+   * request are listed; `all` lists every retained thread. `threadKey` finds one named thread.
+   */
+  async threads(
+    options: { all?: boolean; threadKey?: string; before?: string } = {},
+  ): Promise<ThreadList> {
+    const query = new URLSearchParams();
+    if (options.all) query.set('state', 'all');
+    if (options.before) query.set('before', options.before);
+    if (options.threadKey) query.set('key', await this.#keys.threadKey(options.threadKey));
+    const text = query.toString();
+    return this.request<ThreadList>('/threads' + (text ? '?' + text : ''));
   }
   async *threadMessages(id: string): AsyncGenerator<Message> {
     let after = 0;
@@ -565,6 +610,31 @@ export class Herald {
     if (result.locked || result.unverified)
       throw new HeraldError('The answer could not be verified.', 502, sent.id);
     return result;
+  }
+  /** End-to-end encrypted chat rooms: list, read, send, wait and listen. */
+  get chat(): ChatClient {
+    return (this.#chat ??= new ChatClient(
+      (path, body, options) => this.request(path, body, options),
+      () => this.#keys,
+      () =>
+        new WebSocket(this.base.replace(/^http/, 'ws') + '/api/v1/chats/stream', {
+          headers: this.#headers(),
+          followRedirects: false,
+        }),
+      (route, init) =>
+        fetch(this.base + '/api/v1' + route, {
+          ...init,
+          headers: this.#headers(),
+          redirect: 'manual',
+        }),
+    ));
+  }
+  /** This connection's presence and runtime subagents, shown end-to-end encrypted to its owner. */
+  get agents(): AgentsClient {
+    return (this.#agents ??= new AgentsClient(
+      (path, body, options) => this.request(path, body, options),
+      () => this.#keys,
+    ));
   }
   /** The shared live socket; every `wait` and `watch` on this client subscribes to it. */
   get live(): LiveSocket {

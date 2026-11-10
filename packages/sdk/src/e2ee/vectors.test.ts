@@ -12,6 +12,71 @@ it('the committed vectors are current', async () => {
     writeFileSync(path, JSON.stringify(generated, null, 2) + '\n');
   else expect(JSON.parse(JSON.stringify(generated))).toEqual(committed);
 });
+it('opens the chat vectors and binds the room to its members', async () => {
+  const v = committed;
+  const { members, nonce, room, envelopes, certificate } = v.chat;
+  expect(await e2ee.roomId([...members].reverse(), nonce)).toBe(room);
+  expect(await e2ee.roomId(members, nonce + 'x')).not.toBe(room);
+  expect(e2ee.pairKey([...members].reverse())).toBe(v.chat.pairKey);
+  const keys = await e2ee.keyringKeys(v.keyring.value);
+  const info = await e2ee.verifyAccount(
+    v.statement,
+    v.keyring.fingerprint,
+    v.keyring.value.account,
+  );
+  const checked = await e2ee.verifyCertificate(certificate, info.identity, v.keyring.value.account);
+  const integration = await e2ee.keySet(
+    v.keySets.find((s: { name: string }) => s.name === 'integration').seed,
+  );
+  expect(checked.sign).toBe(integration.signPub);
+  for (const c of envelopes) {
+    const got = await e2ee.open(c.envelope, {
+      recipients: [keys.inbox[0]],
+      signers: (kid: string) => (kid === integration.kid ? integration.signPub : undefined),
+      expect: c.envelope.ctx,
+    });
+    expect(got).toEqual({ v: 1, ...c.payload });
+  }
+});
+it('verifies the group head chain vectors', async () => {
+  const v = committed;
+  const { creator, room, chain, tip } = v.chat.group;
+  expect(await e2ee.groupRoomId(creator, v.chat.nonce)).toBe(room);
+  const info = await e2ee.verifyAccount(
+    v.statement,
+    v.keyring.fingerprint,
+    v.keyring.value.account,
+  );
+  const keys = {
+    account: v.keyring.value.account,
+    verifier: (p: string) =>
+      p === creator ? { kid: chain[0].from, sign: info.identity } : undefined,
+  };
+  const nonce = v.chat.nonce;
+  expect(await e2ee.verifyHeadChain(keys, { id: room, nonce }, chain)).toBe(tip);
+  const forged = [chain[0], { ...chain[1], head: { ...chain[1].head, owners: ['h:x'] } }];
+  await expect(e2ee.verifyHeadChain(keys, { id: room, nonce }, forged)).rejects.toThrow();
+});
+it('caps chat at 64 recipients and everything else at 16', async () => {
+  const set = await e2ee.keySet(committed.keySets[0].seed);
+  const ctx = (t: string) =>
+    t === 'chat'
+      ? e2ee.chatContext({
+          account: 'acct',
+          room: 'r',
+          id: '00000000-0000-4000-8000-000000000000',
+          audience: 'all',
+          sub: '',
+          head: 'r',
+        })
+      : { t, account: 'acct', id: '00000000-0000-4000-8000-000000000000' };
+  const to = (n: number) => Array.from({ length: n }, () => ({ kid: set.kid, box: set.boxPub }));
+  const send = (t: string, n: number) =>
+    e2ee.seal({ payload: {}, ctx: ctx(t), signer: set, to: to(n) });
+  await expect(send('message', 17)).rejects.toThrow('1 to 16');
+  await expect(send('chat', 65)).rejects.toThrow('1 to 64');
+  expect((await send('chat', 64)).to).toHaveLength(64);
+});
 it('opens every committed vector', async () => {
   const v = committed;
   const keys = await e2ee.keyringKeys(v.keyring.value);

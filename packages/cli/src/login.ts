@@ -75,7 +75,8 @@ export async function login(
   // The fragment never reaches the server; the approval page certifies these keys.
   const keys = await e2ee.keySet();
   const workspace = options.workspace ? `&w=${encodeURIComponent(options.workspace)}` : '';
-  const page = `${device.verification_uri_complete || device.verification_uri}#k=${keys.signPub}.${keys.boxPub}${workspace}`;
+  // The name is signed into the certificate with the connection's id.
+  const page = `${device.verification_uri_complete || device.verification_uri}#k=${keys.signPub}.${keys.boxPub}&n=${encodeURIComponent(name)}${workspace}`;
   const opened = /^https?:\/\//.test(page) && !!io.open?.(page);
   io.log(
     opened

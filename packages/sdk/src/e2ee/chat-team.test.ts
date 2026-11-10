@@ -1,0 +1,276 @@
+import { expect, it } from 'vitest';
+import * as e2ee from './index';
+import type { KeySet } from './keys';
+import type { VerifiedChain } from './workspace';
+
+const account = 'ws_team';
+const people = async (names: string[]) =>
+  Object.fromEntries(await Promise.all(names.map(async (n) => [n, await e2ee.keySet()] as const)));
+function keysFor(me: string, sets: Record<string, KeySet>, on = Object.keys(sets)): e2ee.ChatKeys {
+  const set = sets[me]!;
+  return {
+    account,
+    principal: me,
+    signer: { kid: set.kid, signPriv: set.signPriv },
+    openers: [set],
+    recipient: (p) => (on.includes(p) ? { kid: sets[p]!.kid, box: sets[p]!.boxPub } : undefined),
+    verifier: (p) => (on.includes(p) ? { kid: sets[p]!.kid, sign: sets[p]!.signPub } : undefined),
+  };
+}
+async function link(sets: Record<string, KeySet>, by: string, head: e2ee.ChatHead) {
+  const set = sets[by]!;
+  return e2ee.signChatHead(
+    { account, principal: by, signer: { kid: set.kid, signPriv: set.signPriv } },
+    head,
+  );
+}
+
+it('ties ownership to the current head when a recovered owner returns', async () => {
+  const sets = await people(['h:ann', 'h:ben', 'h:cat']);
+  const nonce = 'n'.repeat(22);
+  const id = await e2ee.groupRoomId('h:ann', nonce);
+  const room = { id, nonce };
+  const members = ['h:ann', 'h:ben', 'h:cat'];
+  const v1 = { room: id, version: 1, prev: '', owners: ['h:ann'], members, team: 't1' };
+  const next = async (prev: e2ee.ChatHead, change: Partial<e2ee.ChatHead>) => ({
+    ...prev,
+    version: prev.version + 1,
+    prev: await e2ee.headHash(prev),
+    ...change,
+  });
+  const v2 = await next(v1, { owners: ['h:ben'] });
+  const chain = [await link(sets, 'h:ann', v1), await link(sets, 'h:ben', v2)];
+  const away = keysFor('h:ben', sets, ['h:ben', 'h:cat']);
+  const tip = await e2ee.verifyHeadChain(away, room, chain);
+  // A recovery head must make its signer the owner, never a former owner, and keeps the team.
+  for (const bad of [
+    await next(v1, { owners: ['h:cat'] }),
+    await next(v1, { owners: ['h:ben', 'h:ann'] }),
+    await next(v1, { owners: ['h:ben'], team: 't2' }),
+  ])
+    await expect(
+      e2ee.verifyHeadChain(away, room, [chain[0]!, await link(sets, 'h:ben', bad)]),
+    ).rejects.toThrow();
+  // Ann is back: today's roster cannot vouch for the recovery, only this client's pin can.
+  const back = keysFor('h:ben', sets);
+  await expect(e2ee.verifyHeadChain(back, room, chain)).rejects.toThrow();
+  expect(await e2ee.verifyHeadChain(back, room, chain, undefined, { version: 2, hash: tip })).toBe(
+    tip,
+  );
+  await expect(
+    e2ee.verifyHeadChain(back, room, chain, undefined, { version: 1, hash: chain[0]!.sig }),
+  ).rejects.toThrow();
+  // Ann signs nothing until a current owner makes her one.
+  const v3 = await next(v2, { owners: ['h:ann'] });
+  const pin = { version: 2, hash: tip };
+  await expect(
+    e2ee.verifyHeadChain(back, room, [...chain, await link(sets, 'h:ann', v3)], undefined, pin),
+  ).rejects.toThrow();
+  const restored = await next(v2, { owners: ['h:ben', 'h:ann'] });
+  const v4 = await next(restored, { owners: ['h:ann'] });
+  const full = [...chain, await link(sets, 'h:ben', restored), await link(sets, 'h:ann', v4)];
+  await expect(e2ee.verifyHeadChain(back, room, full, undefined, pin)).resolves.toBeTruthy();
+  // Without the pin, only Ann's own later link vouches for the recovery, not Ben's.
+  await expect(e2ee.verifyHeadChain(back, room, full.slice(0, 3))).rejects.toThrow();
+  await expect(e2ee.verifyHeadChain(back, room, full)).resolves.toBeTruthy();
+});
+
+it('lets an agent create a group and change only its agents', async () => {
+  const sets = await people(['a:orc', 'a:sub', 'a:two', 'h:ann', 'h:ben']);
+  const nonce = 'n'.repeat(22);
+  const id = await e2ee.groupRoomId('a:orc', nonce);
+  const room = { id, nonce };
+  const keys = keysFor('h:ann', sets);
+  const v1 = {
+    room: id,
+    version: 1,
+    prev: '',
+    owners: ['a:orc', 'h:ann'],
+    members: ['a:orc', 'h:ann'],
+  };
+  const next = async (prev: e2ee.ChatHead, change: Partial<e2ee.ChatHead>) => ({
+    ...prev,
+    version: prev.version + 1,
+    prev: await e2ee.headHash(prev),
+    ...change,
+  });
+  const first = await link(sets, 'a:orc', v1);
+  await expect(e2ee.verifyHeadChain(keys, room, [first])).resolves.toBeTruthy();
+  // The creator's people are owners; the id commits to the creator.
+  const loose = { ...v1, owners: ['a:orc'] };
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [await link(sets, 'a:orc', loose)]),
+  ).rejects.toThrow();
+  await expect(e2ee.verifyHeadChain(keys, room, [await link(sets, 'a:sub', v1)])).rejects.toThrow();
+  const v2 = await next(v1, { members: [...v1.members, 'a:sub'] });
+  const chain = [first, await link(sets, 'a:orc', v2)];
+  await expect(e2ee.verifyHeadChain(keys, room, chain)).resolves.toBeTruthy();
+  for (const bad of [
+    await next(v2, { members: [...v2.members, 'h:ben'] }),
+    await next(v2, { members: ['a:orc', 'a:sub'], owners: ['a:orc'] }),
+    await next(v2, { owners: [...v2.owners, 'a:sub'] }),
+  ])
+    await expect(
+      e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:orc', bad)]),
+    ).rejects.toThrow();
+  // A member agent that is no owner signs nothing.
+  const v3 = await next(v2, { members: [...v2.members, 'a:two'] });
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:sub', v3)]),
+  ).rejects.toThrow();
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:orc', v3)]),
+  ).resolves.toBeTruthy();
+  // A person still adds people.
+  const v4 = await next(v2, { members: [...v2.members, 'h:ben'] });
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'h:ann', v4)]),
+  ).resolves.toBeTruthy();
+});
+
+it('never lets an agent link vouch for an unchecked one or name another agent owner first', async () => {
+  const sets = await people(['a:orc', 'a:sub', 'h:ann', 'h:ben', 'h:cat']);
+  const nonce = 'n'.repeat(22);
+  const id = await e2ee.groupRoomId('h:ann', nonce);
+  const room = { id, nonce };
+  const keys = keysFor('h:cat', sets);
+  const owners = ['h:ann', 'h:ben', 'a:orc'];
+  const v1 = { room: id, version: 1, prev: '', owners, members: owners };
+  const next = async (prev: e2ee.ChatHead, change: Partial<e2ee.ChatHead>) => ({
+    ...prev,
+    version: prev.version + 1,
+    prev: await e2ee.headHash(prev),
+    ...change,
+  });
+  // Ben's "rotated" key cannot be checked: a forged link adds Cat and makes the agent's owner one.
+  const v2 = await next(v1, { members: [...owners, 'h:cat'], owners: [...owners, 'h:cat'] });
+  const forged = { ...(await link(sets, 'h:cat', v2)), by: 'h:ben', from: 'old-kid' };
+  const v3 = await next(v2, { members: [...v2.members, 'a:sub'] });
+  const chain = [await link(sets, 'h:ann', v1), forged];
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:orc', v3)]),
+  ).rejects.toThrow('not verified');
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'h:ann', v3)]),
+  ).resolves.toBeTruthy();
+  // An agent's first head makes no other agent an owner.
+  const agentId = await e2ee.groupRoomId('a:orc', nonce);
+  const both = ['a:orc', 'a:sub', 'h:ann'];
+  const first = { room: agentId, version: 1, prev: '', owners: both, members: both };
+  await expect(
+    e2ee.verifyHeadChain(keys, { id: agentId, nonce }, [await link(sets, 'a:orc', first)]),
+  ).rejects.toThrow('no other agent');
+});
+
+it('accepts only a policy the current chain head signed, never an older one', async () => {
+  const head = await e2ee.workspaceIdentity();
+  const other = await e2ee.workspaceIdentity();
+  const chain = {
+    workspace: account,
+    root: head.signPub,
+    head: { n: 2, link: 'L'.repeat(43), identity: head.signPub },
+    identities: new Map(),
+  } as unknown as VerifiedChain;
+  const on = await e2ee.signChatPolicy(chain, head, { version: 3, adminRead: true });
+  expect((await e2ee.verifyChatPolicy(chain, on))?.adminRead).toBe(true);
+  // A server-made, re-signed, altered or previous-head policy reads as off.
+  const unsigned = { policy: { ...on.policy }, sig: '' };
+  const forged = {
+    ...on,
+    sig: (await e2ee.signChatPolicy(chain, head, { version: 3, adminRead: false })).sig,
+  };
+  const stale = { ...chain, head: { ...chain.head, n: 3 } };
+  expect(await e2ee.verifyChatPolicy(chain, unsigned)).toBeUndefined();
+  expect(await e2ee.verifyChatPolicy(chain, forged)).toBeUndefined();
+  expect(
+    await e2ee.verifyChatPolicy(chain, { ...on, policy: { ...on.policy, version: 4 } }),
+  ).toBeUndefined();
+  expect(await e2ee.verifyChatPolicy(stale, on)).toBeUndefined();
+  expect(await e2ee.verifyChatPolicy(chain, null)).toBeUndefined();
+  await expect(
+    e2ee.signChatPolicy(chain, other, { version: 4, adminRead: true }),
+  ).rejects.toThrow();
+  await expect(e2ee.verifyChatPolicy(chain, on, 4)).rejects.toThrow();
+});
+
+it('seals to admins under the policy, never to agents outside the team, and shares history', async () => {
+  const sets = await people(['h:ann', 'h:ben', 'h:boss', 'a:red', 'a:blue']);
+  const nonce = 'm'.repeat(22);
+  const id = await e2ee.groupRoomId('h:ann', nonce);
+  const members = ['h:ann', 'h:ben', 'a:red', 'a:blue'];
+  const head = { room: id, version: 1, prev: '', owners: ['h:ann'], members, team: 'red' };
+  const chain = [await link(sets, 'h:ann', head)];
+  const tip = await e2ee.headHash(head);
+  const room: e2ee.ChatRoom = {
+    id,
+    kind: 'group',
+    nonce,
+    head: tip,
+    headVersion: 1,
+    lastSeq: 0,
+    lastAt: 0,
+    readSeq: 0,
+    unread: 0,
+    chain,
+    members: members.map((p) => ({
+      principal: p,
+      type: p[0] === 'h' ? 'human' : 'agent',
+      kid: sets[p]!.kid,
+      readSeq: 0,
+      joinedSeq: p === 'h:ben' ? 5 : 0,
+    })),
+  };
+  const ann: e2ee.ChatKeys = {
+    ...keysFor('h:ann', sets),
+    teamsOf: (p) => (p === 'a:red' ? ['red'] : p === 'a:blue' ? ['blue'] : undefined),
+    observers: () => [{ kid: sets['h:boss']!.kid, box: sets['h:boss']!.boxPub }],
+  };
+  const envelope = await e2ee.sealChat(ann, room, { id: crypto.randomUUID(), text: 'hi' });
+  const kid = (p: string) => sets[p]!.kid;
+  expect(envelope.to.map((r) => r.kid).sort()).toEqual(
+    ['h:ann', 'h:ben', 'a:red', 'h:boss'].map(kid).sort(),
+  );
+  // Opening checks the sender is on the head the message names; only people on it vouch.
+  const said = { id: crypto.randomUUID(), sender: 'h:ann', sub: '', at: 0, seq: 1 } as const;
+  const sent = await e2ee.sealChat(ann, room, { id: said.id, text: 'on head' });
+  const msg = { ...said, kind: 'message', audience: 'all', envelope: sent } as const;
+  const heads = await e2ee.roomHeads(room);
+  const benKeys = keysFor('h:ben', sets);
+  await expect(e2ee.openChat(benKeys, id, msg, { heads })).resolves.toMatchObject({
+    text: 'on head',
+  });
+  const without = new Map([[tip, members.filter((p) => p !== 'h:ann')]]);
+  await expect(e2ee.openChat(benKeys, id, msg, { heads: without })).rejects.toThrow('not on that');
+  expect([e2ee.vouches(heads, tip, 'h:ann'), e2ee.vouches(heads, tip, 'a:red')]).toEqual([
+    true,
+    false,
+  ]);
+  expect(e2ee.vouches(heads, 'cut', 'a:red')).toBe(true);
+  // A manager outside the room opens it only as an observer.
+  const boss = keysFor('h:boss', sets);
+  await expect(e2ee.verifyChatRoom(boss, room)).rejects.toThrow();
+  await e2ee.verifyChatRoom(boss, room, { observe: true });
+  // Shared history: within the grantee's join, humans-only rows never reach an agent.
+  const record = (seq: number, audience: 'all' | 'humans', env: typeof envelope) =>
+    ({
+      seq,
+      id: 'x',
+      sender: 'h:ann',
+      sub: '',
+      at: 0,
+      kind: 'message',
+      audience,
+      envelope: env,
+    }) as const;
+  const records = [
+    record(1, 'all', envelope),
+    record(2, 'humans', envelope),
+    record(9, 'all', envelope),
+  ];
+  const ben = room.members.find((m) => m.principal === 'h:ben')!;
+  const granted = await e2ee.shareHistory(ann, ben, [...records]);
+  expect(Object.keys(granted)).toEqual(['1', '2']);
+  expect(granted[1]!.kid).toBe(kid('h:ben'));
+  const red = { ...room.members.find((m) => m.principal === 'a:red')!, joinedSeq: 5 };
+  expect(Object.keys(await e2ee.shareHistory(ann, red, [...records]))).toEqual(['1']);
+});

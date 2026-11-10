@@ -39,6 +39,8 @@ type State = {
   /** Certified integration kids → signing keys, and integration IDs → kids. */
   signers: Map<string, string>;
   kids: Map<string, string>;
+  /** Certified kid → X25519 key, for sealing to a connection directly. */
+  boxes: Map<string, string>;
   /** Team workspaces: the verified chain and roster, certificates by kid, and this token's. */
   ws?: VerifiedWorkspace;
   certs: Map<string, CheckedCertificate>;
@@ -76,6 +78,7 @@ const CONTENT = [
   'runId',
   'checkpointId',
   'group',
+  'refuseLabel',
 ] as const;
 const ENVELOPE_LIMIT = 20_000;
 const fileEntry = z.object({
@@ -117,6 +120,10 @@ export class KeyedSession {
   #options: KeyedOptions;
   /** Record IDs → their team: set at send time or from a verified envelope's `ctx.team` only. */
   #teams = new Map<string, string>();
+  /** The newest chat policy version verified, kept in the pin so a server cannot roll it back. */
+  #policyVersion: number;
+  /** The newest version a human member signed into a message; trusted only once verified. */
+  #policyClaim = 0;
   constructor(
     seed: string,
     fingerprint: string,
@@ -127,6 +134,11 @@ export class KeyedSession {
     this.fingerprint = fingerprint;
     this.#directory = directory;
     this.#options = { ...options };
+    this.#policyVersion = options.pin?.policy ?? 0;
+  }
+  /** A version a member signed that no verified policy reaches yet, or 0: refetch the policy. */
+  get policyClaim(): number {
+    return this.#policyClaim > this.#policyVersion ? this.#policyClaim : 0;
   }
   /** The workspace pin this session holds, if its token belongs to a team workspace. */
   get pin(): WorkspacePin | undefined {
@@ -160,11 +172,13 @@ export class KeyedSession {
     const info = await e2ee.verifyAccount(directory.account!, this.fingerprint);
     const account = directory.account!.statement.account;
     const signers = new Map<string, string>(),
-      kids = new Map<string, string>();
+      kids = new Map<string, string>(),
+      boxes = new Map<string, string>();
     for (const cert of directory.certificates) {
       const checked = await e2ee.verifyCertificate(cert, info.identity, account).catch(() => {});
       if (!checked) continue;
       signers.set(checked.kid, checked.sign);
+      boxes.set(checked.kid, checked.box);
       kids.set(cert.integrationId, checked.kid);
     }
     if (signers.get(me.kid) !== me.signPub)
@@ -178,6 +192,7 @@ export class KeyedSession {
       inbox: { kid: info.inboxKid, box: info.inbox },
       signers,
       kids,
+      boxes,
       certs: new Map(),
     };
   }
@@ -188,11 +203,13 @@ export class KeyedSession {
     });
     const signers = new Map<string, string>(),
       kids = new Map<string, string>(),
+      boxes = new Map<string, string>(),
       certs = new Map<string, CheckedCertificate>();
     for (const cert of directory.certificates) {
       const checked = await e2ee.verifyWorkspaceCertificate(cert, ws).catch(() => {});
       if (!checked) continue;
       signers.set(checked.kid, checked.sign);
+      boxes.set(checked.kid, checked.box);
       kids.set(cert.integrationId, checked.kid);
       certs.set(checked.kid, checked);
     }
@@ -200,10 +217,8 @@ export class KeyedSession {
     const mine = certs.get(me.kid);
     if (mine?.sign !== me.signPub) fail("This token's key is not certified for the workspace.");
     const pin = this.#options.pin;
-    if (!pin || pin.epoch !== ws.pin.epoch || pin.n !== ws.pin.n) {
-      this.#options.pin = ws.pin;
-      this.#options.onPin?.(ws.pin);
-    }
+    if (!pin || pin.epoch !== ws.pin.epoch || pin.n !== ws.pin.n)
+      this.#setPin({ ...ws.pin, ...(pin?.policy !== undefined && { policy: pin.policy }) });
     return {
       directory,
       account: ws.workspace,
@@ -213,10 +228,81 @@ export class KeyedSession {
       inbox: { kid: ws.head.boxKid, box: ws.head.box },
       signers,
       kids,
+      boxes,
       ws,
       certs,
       mine,
     };
+  }
+  #setPin(pin: WorkspacePin) {
+    this.#options.pin = pin;
+    this.#options.onPin?.(pin);
+  }
+  /**
+   * This connection's verified view of chat principals, for sealing and opening rooms. `policy`
+   * is the team's signed chat policy; while its read setting is on, rooms also seal to key holders.
+   */
+  async chatKeys(
+    refresh: boolean | 'force' = false,
+    policy?: e2ee.SignedChatPolicy | null,
+  ): Promise<e2ee.ChatKeys> {
+    const s = await this.state(refresh);
+    const ws = s.ws;
+    const verified = ws && (await e2ee.verifyChatPolicy(ws, policy, this.#policyVersion));
+    if (verified && verified.version > this.#policyVersion) {
+      this.#policyVersion = verified.version;
+      if (this.#options.pin) this.#setPin({ ...this.#options.pin, policy: verified.version });
+    }
+    // A member signed a newer version than the server can show: `adminRead` is off till it can.
+    const observers =
+      verified?.adminRead && verified.version >= this.#policyClaim
+        ? [...ws!.members.values()]
+            .filter((m) => m.caps.includes('keys'))
+            .map((m) => ({ kid: m.inboxKid, box: m.inbox }))
+        : [];
+    const id = [...s.kids].find(([, kid]) => kid === s.me.kid)?.[0];
+    if (!id) fail("This token's key is not certified.");
+    const user = (p: string) => (s.ws ? s.ws.members.get(p.slice(2)) : undefined);
+    const owner = (p: string) => !s.ws && p === 'h:' + s.account;
+    const agent = (p: string) => (p.startsWith('a:') ? s.kids.get(p.slice(2)) : undefined);
+    return {
+      account: s.account,
+      principal: 'a:' + id,
+      signer: s.me,
+      openers: [s.me],
+      observers: () => observers,
+      policy: this.#policyVersion,
+      sawPolicy: (v: number) => {
+        this.#policyClaim = Math.max(this.#policyClaim, v);
+      },
+      ...(ws && { teamsOf: (p: string) => s.certs.get(agent(p) ?? '')?.teams }),
+      recipient: (p) => {
+        const kid = agent(p);
+        if (kid) return s.boxes.has(kid) ? { kid, box: s.boxes.get(kid)! } : undefined;
+        const member = user(p);
+        return member
+          ? { kid: member.inboxKid, box: member.inbox }
+          : owner(p)
+            ? s.inbox
+            : undefined;
+      },
+      verifier: (p) => {
+        const kid = agent(p);
+        if (kid) return { kid, sign: s.signers.get(kid)! };
+        const member = user(p);
+        return member
+          ? { kid: member.kid, sign: member.identity }
+          : owner(p)
+            ? { kid: s.identityKid, sign: s.identity }
+            : undefined;
+      },
+    };
+  }
+  /** Who sees this connection's presence: the account's person, or the member who certified it. */
+  async owner(): Promise<string> {
+    const s = await this.state();
+    if (!s.ws) return 'h:' + s.account;
+    return s.mine?.by ? 'h:' + s.mine.by : fail('This connection has no certifying member.');
   }
   /** The team workspace this token belongs to, or undefined for a personal account. */
   async workspace(): Promise<WorkspaceInfo | undefined> {
@@ -292,6 +378,10 @@ export class KeyedSession {
   #learn(files: FileAttachment[] = []) {
     for (const file of files) if (file.key) this.files.set(file.id, file);
   }
+  /** The keyed digest the server stores for a `threadKey`. */
+  threadKey(name: string) {
+    return e2ee.threadDigest(this.seed, name);
+  }
   /**
    * Seals a message request under a new record ID. Secret offers seal their title and body; the
    * value itself goes to the receiver the account signs.
@@ -315,6 +405,9 @@ export class KeyedSession {
       digest: await e2ee.idempotencyDigest(this.seed, payload, idempotencyKey),
       taskId: parsed.data.taskId,
       replyTo: parsed.data.replyTo,
+      ...(parsed.data.threadKey
+        ? { threadKey: await e2ee.threadDigest(this.seed, parsed.data.threadKey) }
+        : {}),
       expiresAt: parsed.data.expiresAt,
       expiresIn: parsed.data.expiresIn,
     });
@@ -358,6 +451,7 @@ export class KeyedSession {
     // `answeredBy` comes only from a verified answer.
     m = { ...m, ...(m.response ? { response: omit(m.response, 'by') } : {}) };
     delete m.answeredBy;
+    if (m.decline) m = { ...m, decline: omit(m.decline, 'by', 'note') };
     try {
       if (task) {
         if (!m.input?.sealed) fail('This task is not end-to-end encrypted.');
@@ -372,7 +466,14 @@ export class KeyedSession {
       if (ws) this.#teams.set(m.id, m.team!);
       if (!task && m.response?.sealed)
         out = await this.#response(out, m.sealed!, m.response.sealed);
-      else if (!task && out.kind !== 'secret' && (m.response || m.status === 'answered'))
+      if (!task && m.declined && m.decline?.sealed)
+        out = await this.#decline(out, m.sealed!, m.decline.sealed);
+      if (
+        !task &&
+        !m.response?.sealed &&
+        out.kind !== 'secret' &&
+        (m.response || m.status === 'answered')
+      )
         fail('A sealed request needs a sealed answer.');
       for (const key of ['result', 'execution'] as const) {
         if (!m[key]) continue;
@@ -437,6 +538,19 @@ export class KeyedSession {
       ...(run ? { session: omit({ ...run, attachments: undefined }) } : {}),
       attachments: files.data || [],
     } as M;
+  }
+  /** Opens the note of a declined request; only the account (or the team member) may sign it. */
+  async #decline<M extends Message>(out: M, request: SealedEnvelope, env: SealedEnvelope) {
+    const expect = {
+      t: 'decline',
+      message: out.id,
+      request: await e2ee.envelopeDigest(request),
+      team: out.team,
+    };
+    const { note } = await this.#open(env, expect, KeyedSession.#identity);
+    if (typeof note !== 'string' || note.length > 1000) fail('Malformed decline note.');
+    const by = (await this.state()).ws ? (env.ctx.member as string) : undefined;
+    return { ...out, decline: omit({ ...out.decline!, note, by }) };
   }
   async #response<M extends Message>(out: M, request: SealedEnvelope, env: SealedEnvelope) {
     const expect = {
