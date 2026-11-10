@@ -13,6 +13,7 @@ import {
   answersSchema,
   matchesAction,
   messageInputSchema,
+  roomIdSchema,
   sealedMessageInputSchema,
   sessionInputSchema,
   sessionValues,
@@ -79,6 +80,7 @@ const CONTENT = [
   'checkpointId',
   'group',
   'refuseLabel',
+  'room',
 ] as const;
 const ENVELOPE_LIMIT = 20_000;
 const fileEntry = z.object({
@@ -499,9 +501,15 @@ export class KeyedSession {
   async #content<M extends Message>(out: M, env: SealedEnvelope): Promise<M> {
     const sender = KeyedSession.#integration(out.senderId);
     const opened = await this.#open(env, { t: 'message', id: out.id, team: out.team }, sender);
-    const { attachments, ...rest } = opened;
+    const { attachments, room, ...rest } = opened;
     const files = fileList.safeParse(attachments);
-    const parsed = messageInputSchema.safeParse({ ...rest, attachments: files.data });
+    // A malformed room loses the link, not the message.
+    const linked = roomIdSchema.safeParse(room);
+    const parsed = messageInputSchema.safeParse({
+      ...rest,
+      ...(linked.success && { room: linked.data }),
+      attachments: files.data,
+    });
     if (!files.success || !parsed.success) return fail('Malformed message content.');
     if ((parsed.data.kind === 'secret') !== (out.kind === 'secret'))
       fail('The message kind does not match its record.');

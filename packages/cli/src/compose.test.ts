@@ -63,12 +63,16 @@ it('refuses flag actions with a required field', async () => {
 });
 it('passes the thread name and decline label to the message', async () => {
   const draft = await composeMessage(
-    { title: 'Ship?', 'thread-key': 'deploy', 'refuse-label': 'Not now' },
+    { title: 'Ship?', 'thread-key': 'deploy', 'refuse-label': 'Not now', room: 'abc_123' },
     undefined,
     true,
     async () => '',
   );
-  expect(draft.input).toMatchObject({ threadKey: 'deploy', refuseLabel: 'Not now' });
+  expect(draft.input).toMatchObject({
+    threadKey: 'deploy',
+    refuseLabel: 'Not now',
+    room: 'abc_123',
+  });
 });
 it('composes questions input without a reply field or flag actions', async () => {
   const stdin = async () => '';

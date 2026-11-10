@@ -5,16 +5,35 @@ import type { ChatKeys } from './chat';
 
 export const presenceStates = ['idle', 'busy', 'blocked', 'offline'] as const;
 export type PresenceState = (typeof presenceStates)[number];
-/** What an agent shows its owner: a state, and optionally its own colour and text. */
+/** A link an agent shows next to its presence, such as a pull request or a dashboard. */
+export interface AgentLink {
+  /** 1 to 60 characters. */
+  label: string;
+  /** An http or https URL, up to 2048 characters. */
+  url: string;
+}
+/** What an agent shows its owner: a state, and optionally its own colour, text, task and links. */
 export interface AgentPresence extends Record<string, unknown> {
   state: PresenceState;
   color?: string;
   text?: string;
+  /** What it is working on, up to 200 characters. */
+  task?: string;
+  /** Up to 8 links shown with the agent. */
+  links?: AgentLink[];
 }
 /** A runtime subagent: a name the connection asserts for itself, with optional presence. */
 export interface SubagentProfile extends AgentPresence {
   name: string;
+  /**
+   * Another subagent key of the same connection that started this one, so viewers can show a
+   * tree. A missing or circular parent shows the subagent at the top level.
+   */
+  parent?: string;
 }
+/** A subagent key: 1 to 64 letters, digits, `.`, `_` or `-`. */
+export const subagentKey = /^[\w.-]{1,64}$/;
+export const agentLinkLimits = { links: 8, label: 60, url: 2048, task: 200 } as const;
 export interface LayoutGroup {
   id: string;
   name: string;
@@ -51,13 +70,78 @@ const fail = (message: string): never => {
   throw new E2eeError(message);
 };
 const COLOR = /^#[0-9a-f]{6}$/i;
-const checkPresence = <T extends AgentPresence>(value: T): T => {
+/** Why a link cannot be shown, or undefined when it can. */
+export const agentLinkError = (link: unknown): string | undefined => {
+  const { label, url } = (link ?? {}) as Partial<AgentLink>;
+  if (typeof label !== 'string' || !label.trim() || label.length > agentLinkLimits.label)
+    return `a label of 1 to ${agentLinkLimits.label} characters is required`;
+  const message = `the URL must be http or https, up to ${agentLinkLimits.url} characters`;
+  if (typeof url !== 'string' || url.length > agentLinkLimits.url) return message;
+  try {
+    const parsed = new URL(url);
+    if (['http:', 'https:'].includes(parsed.protocol))
+      return parsed.username || parsed.password
+        ? 'the URL must not contain credentials'
+        : undefined;
+  } catch {
+    // An unparsable URL is invalid.
+  }
+  return message;
+};
+/** Sealing refuses what opening drops: a bad `task`, `links` or `parent` never costs the profile. */
+const checkLinks = (links: unknown[]) => {
+  const urls = new Set<string>();
+  links.forEach((link, i) => {
+    const error = agentLinkError(link);
+    if (error) fail(`Invalid presence link ${i + 1}: ${error}.`);
+    const { url } = link as AgentLink;
+    if (urls.has(url)) fail(`Invalid presence link ${i + 1}: duplicate URL.`);
+    urls.add(url);
+  });
+};
+const keepLinks = (links: unknown): AgentLink[] => {
+  const urls = new Set<string>();
+  const kept: AgentLink[] = [];
+  for (const link of Array.isArray(links) ? links : []) {
+    if (agentLinkError(link) || urls.has(link.url)) continue;
+    urls.add(link.url);
+    kept.push({ label: link.label, url: link.url });
+    if (kept.length === agentLinkLimits.links) break;
+  }
+  return kept;
+};
+const checkPresence = <T extends AgentPresence>(value: T, strict = true): T => {
   if (!value || !presenceStates.includes(value.state)) fail('Invalid presence state.');
   if (value.color !== undefined && (typeof value.color !== 'string' || !COLOR.test(value.color)))
     fail('Invalid presence colour.');
   if (value.text !== undefined && (typeof value.text !== 'string' || value.text.length > 120))
     fail('Invalid presence text.');
-  return value;
+  const { task, links } = value;
+  const badTask =
+    task !== undefined && (typeof task !== 'string' || task.length > agentLinkLimits.task);
+  if (strict) {
+    if (badTask) fail('Invalid presence task.');
+    if (links !== undefined && (!Array.isArray(links) || links.length > agentLinkLimits.links))
+      fail('Invalid presence links.');
+    checkLinks(links ?? []);
+    return value;
+  }
+  const kept = keepLinks(links);
+  const out = { ...value };
+  delete out.task;
+  delete out.links;
+  if (task !== undefined && !badTask) out.task = task;
+  if (kept.length) out.links = kept;
+  return out;
+};
+const validParent = (key: string, parent: unknown) =>
+  typeof parent === 'string' && subagentKey.test(parent) && parent !== key;
+const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
+  const { parent, ...rest } = checkPresence(value, strict);
+  if (parent === undefined) return rest as SubagentProfile;
+  if (validParent(key, parent)) return { ...rest, parent } as SubagentProfile;
+  if (strict) fail('Invalid subagent parent.');
+  return rest as SubagentProfile;
 };
 const checkLayout = (value: AgentLayout): AgentLayout => {
   if (!value || !Array.isArray(value.groups) || !value.places || typeof value.places !== 'object')
@@ -96,7 +180,7 @@ export async function openPresence(keys: ChatKeys, connection: string, envelope:
     account: keys.account,
     principal: connection,
   });
-  return checkPresence(value);
+  return checkPresence(value, false);
 }
 export const sealSubagent = (
   keys: ChatKeys,
@@ -107,7 +191,7 @@ export const sealSubagent = (
   if (typeof profile.name !== 'string' || !profile.name.trim() || profile.name.length > 60)
     fail('Invalid subagent name.');
   return seal({
-    payload: checkPresence(profile),
+    payload: checkSubagent(key, profile),
     ctx: subagentContext(keys.account, keys.principal, key),
     signer: keys.signer,
     to: owners(keys, owner),
@@ -126,7 +210,7 @@ export async function openSubagent(
     key,
   });
   if (typeof value.name !== 'string' || !value.name) fail('Invalid subagent name.');
-  return checkPresence(value);
+  return checkSubagent(key, value, false);
 }
 /** A member seals their own layout to themselves. */
 export const sealLayout = (keys: ChatKeys, layout: AgentLayout) =>

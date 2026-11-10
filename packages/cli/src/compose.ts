@@ -33,6 +33,7 @@ export type Flags = {
   'thread-key'?: string;
   'refuse-label'?: string;
   team?: string;
+  room?: string;
   deadline?: string;
 };
 type Json = Record<string, unknown>;
@@ -245,6 +246,7 @@ export async function composeMessage(
   if (flags['reply-to']) input.replyTo = flags['reply-to'];
   if (flags['thread-key']) input.threadKey = flags['thread-key'];
   if (flags['refuse-label']) input.refuseLabel = flags['refuse-label'];
+  if (flags.room) input.room = flags.room;
   if (flags.deadline) {
     if (input.expiresAt || input.expiresIn)
       throw new UsageError('Use --deadline or expiresAt, not both.');

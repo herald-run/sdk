@@ -2,7 +2,13 @@ import type { AgentPresence, SubagentProfile, SubagentReach } from './e2ee/index
 import * as e2ee from './e2ee/index.js';
 import type { KeyedSession } from './keyed.js';
 
-export type { AgentPresence, PresenceState, SubagentProfile, SubagentReach } from './e2ee/index.js';
+export type {
+  AgentLink,
+  AgentPresence,
+  PresenceState,
+  SubagentProfile,
+  SubagentReach,
+} from './e2ee/index.js';
 export type AgentPresenceOptions = {
   /** Seconds the presence stands without a refresh (10 to 86400, default 300). */
   ttl?: number;
@@ -15,7 +21,6 @@ type AgentsRequest = <T>(
   options?: { method?: string; signal?: AbortSignal },
 ) => Promise<T>;
 type Stored = { expiresAt: number; live?: boolean };
-const KEY = /^[\w.-]{1,64}$/;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
@@ -31,8 +36,8 @@ export class AgentsClient {
     this.#keyed = keyed;
   }
   /**
-   * Sets state `idle`, `busy`, `blocked` or `offline`, with an optional colour and text. An
-   * unchanged state only refreshes the expiry, which a live chat stream makes a no-op.
+   * Sets state `idle`, `busy`, `blocked` or `offline`, with an optional colour, text, `task` and
+   * `links`. An unchanged state only refreshes the expiry, which a live chat stream makes a no-op.
    */
   async setPresence(presence: AgentPresence, options: AgentPresenceOptions = {}): Promise<Stored> {
     const ttl = options.ttl ?? 300;
@@ -58,13 +63,17 @@ export class AgentsClient {
     this.#last = { presence, at: Date.now(), ttl };
     return stored;
   }
-  /** Adds or renews a named child of this connection; the owner sees the name as self-asserted. */
+  /**
+   * Adds or renews a named child of this connection; the owner sees the name as self-asserted.
+   * `profile.parent` names the subagent that started it, for a tree of helpers.
+   */
   async setSubagent(
     key: string,
     profile: SubagentProfile,
     options: SubagentOptions = {},
   ): Promise<Stored> {
-    if (!KEY.test(key)) throw new Error('A subagent key is 1 to 64 letters, digits, . _ or -.');
+    if (!e2ee.subagentKey.test(key))
+      throw new Error('A subagent key is 1 to 64 letters, digits, . _ or -.');
     const keys = await this.#keyed().chatKeys();
     const envelope = await e2ee.sealSubagent(keys, await this.#keyed().owner(), key, profile);
     return this.#request<Stored>(

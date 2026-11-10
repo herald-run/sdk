@@ -10,7 +10,7 @@ from .e2ee import E2eeError
 from .http import HeraldError
 
 NO_ENTRY = "No recipient entry for these keys."
-CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group")
+CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group", "room")
 ENVELOPE_LIMIT = 20000
 FIELD_TYPES = ("text", "textarea", "number", "select", "multiselect", "boolean", "date", "secret", "file", "annotations")
 FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "attachmentId", "secret", "help", "placeholder", "options", "header", "other")
@@ -180,6 +180,11 @@ def question_answers(questions, values):
     return out
 
 
+def _check_room(m):
+    if "room" in m and not (isinstance(m["room"], str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", m["room"])):
+        _invalid("A room is 1 to 64 base64url characters.")
+
+
 def check_input(message):
     """A content message as the server would store it; keyed clients validate before sealing."""
     m = {k: v for k, v in message.items() if v is not None}
@@ -200,6 +205,7 @@ def check_input(message):
     m["fields"] = check_fields(m.get("fields", []))
     if "expiresAt" in m and "expiresIn" in m:
         _invalid("Use expiresAt or expiresIn, not both.")
+    _check_room(m)
     actions = m.get("actions")
     if actions is not None:
         if not isinstance(actions, list) or not 0 < len(actions) <= 8 or len({a.get("id") for a in actions}) != len(actions):
@@ -221,6 +227,7 @@ def check_secret_offer(message):
         _invalid("Secret deliveries contain metadata only; use the encrypted delivery endpoint.")
     if "expiresAt" in m and "expiresIn" in m:
         _invalid("Use expiresAt or expiresIn, not both.")
+    _check_room(m)
     return m
 
 
@@ -560,6 +567,11 @@ class KeyedSession:
         payload = await self._open(env, {"t": "message", "id": out.get("id"), "team": out.get("team")}, self._integration(out.get("senderId")))
         files = check_files(payload.pop("attachments", None))
         fields = {k: v for k, v in payload.items() if k != "v"}
+        try:
+            # A malformed room loses the link, not the message.
+            _check_room(fields)
+        except HeraldError:
+            del fields["room"]
         try:
             content = check_secret_offer(fields) if fields.get("kind") == "secret" else check_input(fields)
         except HeraldError:

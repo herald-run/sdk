@@ -19,6 +19,39 @@ it('sets presence with text, colour and expiry', async () => {
   );
   expect(out.out).toHaveBeenCalledWith('busy  Reviewing');
 });
+it('sets a task and links, and nests a subagent under a parent', async () => {
+  const setPresence = vi.fn(async () => ({ expiresAt: 1 }));
+  const setSubagent = vi.fn(async () => ({ expiresAt: 1 }));
+  const client = fake({ setPresence, setSubagent });
+  const link = ['PR=https://example.com/pr?id=1'];
+  await presence(client, ['set', 'busy'], { task: 'Reviewing', link }, io());
+  expect(setPresence).toHaveBeenCalledWith(
+    {
+      state: 'busy',
+      task: 'Reviewing',
+      links: [{ label: 'PR', url: 'https://example.com/pr?id=1' }],
+    },
+    { ttl: undefined },
+  );
+  await subagents(client, ['set', 'tests', 'Tests'], { parent: 'review' }, io());
+  expect(setSubagent).toHaveBeenCalledWith(
+    'tests',
+    { state: 'idle', name: 'Tests', parent: 'review' },
+    expect.anything(),
+  );
+  await expect(
+    presence(client, ['set', 'busy'], { link: ['https://example.com'] }, io()),
+  ).rejects.toThrow('LABEL=URL');
+  // A label may hold `=`; the split is at the first `=` before a URL scheme.
+  await presence(client, ['set', 'busy'], { link: ['a=b=http://example.com/?x=https://y'] }, io());
+  expect(setPresence).toHaveBeenLastCalledWith(
+    { state: 'busy', links: [{ label: 'a=b', url: 'http://example.com/?x=https://y' }] },
+    { ttl: undefined },
+  );
+  await expect(presence(client, ['set', 'busy'], { link: ['a=ftp://x'] }, io())).rejects.toThrow(
+    'LABEL=URL',
+  );
+});
 it('rejects an unknown state or action', async () => {
   const client = fake({});
   await expect(presence(client, ['set', 'asleep'], {}, io())).rejects.toThrow('State is one of');

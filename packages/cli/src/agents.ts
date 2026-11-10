@@ -1,4 +1,4 @@
-import type { AgentPresence, Herald, PresenceState } from '@herald-run/sdk';
+import type { AgentLink, AgentPresence, Herald, PresenceState } from '@herald-run/sdk';
 import { UsageError } from './compose';
 
 export type AgentValues = {
@@ -7,6 +7,9 @@ export type AgentValues = {
   color?: string;
   ttl?: number;
   reach?: string;
+  task?: string;
+  link?: string[];
+  parent?: string;
 };
 type Io = { out: (line: string) => void };
 const STATES: PresenceState[] = ['idle', 'busy', 'blocked', 'offline'];
@@ -15,10 +18,18 @@ const state = (value: string | undefined): PresenceState => {
     throw new UsageError(`State is one of ${STATES.join(', ')}.`);
   return value as PresenceState;
 };
-const shape = (state: PresenceState, text: string | undefined, color: string | undefined) => {
+/** `--link LABEL=URL`: split at the first `=` followed by `http://` or `https://`. */
+const link = (value: string): AgentLink => {
+  const match = /^(.+?)=(https?:\/\/.*)$/is.exec(value);
+  if (!match) throw new UsageError('Links are LABEL=URL with an http or https URL.');
+  return { label: match[1], url: match[2] };
+};
+const shape = (state: PresenceState, text: string | undefined, values: AgentValues) => {
   const presence: AgentPresence = { state };
   if (text) presence.text = text;
-  if (color) presence.color = color;
+  if (values.color) presence.color = values.color;
+  if (values.task) presence.task = values.task;
+  if (values.link?.length) presence.links = values.link.map(link);
   return presence;
 };
 
@@ -30,7 +41,7 @@ export async function presence(
   io: Io,
 ): Promise<number> {
   if (action !== 'set' || !name) throw new UsageError('Usage: herald presence set STATE [TEXT]');
-  const stored = await client.agents.setPresence(shape(state(name), text, values.color), {
+  const stored = await client.agents.setPresence(shape(state(name), text, values), {
     ttl: values.ttl,
   });
   io.out(values.json ? JSON.stringify(stored) : `${name}${text ? '  ' + text : ''}`);
@@ -52,8 +63,9 @@ export async function subagents(
   } else if (action === 'set') {
     if (!key || !name) throw new UsageError('Usage: herald subagents set KEY NAME');
     const profile = {
-      ...shape(values.state ? state(values.state) : 'idle', undefined, values.color),
+      ...shape(values.state ? state(values.state) : 'idle', undefined, values),
       name,
+      ...(values.parent && { parent: values.parent }),
     };
     if (values.reach && values.reach !== 'all' && values.reach !== 'agents')
       throw new UsageError('Reach is all or agents.');

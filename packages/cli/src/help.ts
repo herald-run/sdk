@@ -12,6 +12,7 @@ const message = ['input', 'title', 'body', 'body-file', 'kind', 'field', 'action
   'deadline',
   'key',
   'team',
+  'room',
 ]);
 const compose = `Fields: ID[?]:TYPE[:LABEL[:CHOICES]], required unless ID ends with ?. TYPE: text, textarea,
 number, boolean, select, multiselect, date, secret, file or secret-file (one file for this
@@ -125,12 +126,12 @@ export const commands: Record<string, Spec> = {
   presence: {
     args: 'set STATE [TEXT]',
     summary: 'Show the owner idle, busy, blocked or offline',
-    options: ['color', 'ttl'],
+    options: ['color', 'task', 'link', 'ttl'],
   },
   subagents: {
     args: 'list|set|remove [KEY] [NAME]',
     summary: 'Name subagents of this connection',
-    options: ['state', 'color', 'ttl', 'reach'],
+    options: ['state', 'color', 'task', 'link', 'parent', 'ttl', 'reach'],
   },
   watch: { summary: 'Print messages as they change', options: ['after'] },
   account: { summary: 'Show the account holder, this connection, plan and usage' },
@@ -195,6 +196,10 @@ const describe: Record<string, string> = {
   summary: '--summary TEXT     One line shown while collapsed (200)',
   for: '--for KEY          Read as this subagent',
   reach: '--reach all|agents  agents: people cannot reach it',
+  task: '--task TEXT        What it is working on (200)',
+  link: '--link LABEL=URL   An http(s) link shown with it; repeatable (8)',
+  parent: '--parent KEY       The subagent that started this one',
+  room: '--room ID          The chat room this request belongs to',
 };
 const globals = `Global options:
   --json             Machine-readable JSON output

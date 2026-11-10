@@ -113,6 +113,96 @@ it('seals a subagent name under its key and lists or removes them', async () => 
   await agents.removeSubagent('review');
   expect(seen.at(-1)!.route).toBe('DELETE /api/v1/agents/me/subagents/review');
 });
+it('seals task, links and a parent, and refuses bad ones', async () => {
+  const seen = serve({ ...keysRoute, 'PUT /api/v1/agents/me/': { expiresAt: 5 } });
+  const agents = client();
+  const links = [{ label: 'Pull request', url: 'https://example.com/pr/1' }];
+  await agents.setPresence({ state: 'busy', task: 'Fixing the login bug', links });
+  await agents.setSubagent('tests', { name: 'Tests', state: 'busy', parent: 'review' });
+  const [presence, sub] = seen.filter((s) => s.route.startsWith('PUT')).map((s) => s.body!);
+  const owner = await ownerKeys();
+  const env = (body: Record<string, unknown>) => body.envelope as e2ee.SealedEnvelope;
+  expect(await e2ee.openPresence(owner, agent, env(presence))).toMatchObject({
+    task: 'Fixing the login bug',
+    links,
+  });
+  expect(await e2ee.openSubagent(owner, agent, 'tests', env(sub))).toMatchObject({
+    parent: 'review',
+  });
+  const bad = (presence: Partial<e2ee.AgentPresence>) =>
+    agents.setPresence({ state: 'idle', ...presence });
+  await expect(bad({ task: 'x'.repeat(201) })).rejects.toThrow('task');
+  await expect(
+    bad({ links: [links[0], { label: 'a', url: 'javascript:alert(1)' }] }),
+  ).rejects.toThrow('Invalid presence link 2: the URL must be http or https');
+  await expect(bad({ links: [{ label: ' ', url: 'https://example.com' }] })).rejects.toThrow(
+    'Invalid presence link 1: a label of 1 to 60 characters',
+  );
+  await expect(bad({ links: [links[0], links[0]] })).rejects.toThrow(
+    'Invalid presence link 2: duplicate URL',
+  );
+  await expect(
+    bad({ links: [{ label: 'a', url: 'https://user:pass@example.com/x' }] }),
+  ).rejects.toThrow('Invalid presence link 1: the URL must not contain credentials');
+  await expect(bad({ links: Array(9).fill(links[0]) })).rejects.toThrow('links');
+  const sub2 = (parent: string) =>
+    agents.setSubagent('tests', { name: 'T', state: 'idle', parent });
+  await expect(sub2('tests')).rejects.toThrow('parent');
+  await expect(sub2('bad key')).rejects.toThrow('parent');
+});
+/** The owner seals raw content as if it came from the connection `human`, to test opening. */
+async function raw(t: 'presence' | 'subagent', payload: unknown, key = 'tests') {
+  const owner = await ownerKeys();
+  const ctx =
+    t === 'presence'
+      ? e2ee.presenceContext(keyring.account, human)
+      : e2ee.subagentContext(keyring.account, human, key);
+  const env = await e2ee.seal({
+    payload: payload as e2ee.Payload,
+    ctx,
+    signer: owner.signer,
+    to: [owner.recipient(human)!],
+  });
+  return { owner, env };
+}
+it('opens presence tolerantly: an invalid optional field is dropped, not the presence', async () => {
+  const link = (n: number) => ({ label: `L${n}`, url: `https://example.com/${n}` });
+  const many = Array.from({ length: 12 }, (_, n) => link(n));
+  const open = async (extra: object) => {
+    const { owner, env } = await raw('presence', { state: 'busy', text: 'Hi', ...extra });
+    return e2ee.openPresence(owner, human, env);
+  };
+  const dropped = await open({ task: 'x'.repeat(201), links: 'nope' });
+  expect(dropped).toMatchObject({ state: 'busy', text: 'Hi' });
+  expect(dropped).not.toHaveProperty('task');
+  expect(dropped).not.toHaveProperty('links');
+  expect(await open({ task: 5 })).not.toHaveProperty('task');
+  const bad = [
+    { label: ' ', url: 'https://example.com/a' },
+    { label: 'js', url: 'javascript:alert(1)' },
+    { label: 'cred', url: 'https://user:pass@example.com/x' },
+    null,
+    { label: 'L1', url: 'https://example.com/1' },
+    { label: 'again', url: 'https://example.com/1' },
+  ];
+  // Invalid and repeated links are dropped, then the first 8 remain.
+  const kept = (await open({ task: 'ok', links: [...bad, ...many] })).links;
+  expect(kept?.map((l) => l.url.at(-1))).toEqual(['1', '0', '2', '3', '4', '5', '6', '7']);
+  expect((await open({ links: bad })).links).toEqual([link(1)]);
+  expect(await open({ task: 'ok' })).toMatchObject({ task: 'ok' });
+  await expect(open({ state: 'asleep' })).rejects.toThrow('state');
+});
+it('opens a subagent tolerantly: a bad or own-key parent shows it at the top level', async () => {
+  const open = async (parent: unknown, key = 'tests') => {
+    const { owner, env } = await raw('subagent', { state: 'idle', name: 'T', parent }, key);
+    return e2ee.openSubagent(owner, human, key, env);
+  };
+  expect(await open('review')).toMatchObject({ parent: 'review' });
+  for (const parent of ['bad key', 'tests', 7, 'x'.repeat(65)])
+    expect(await open(parent)).not.toHaveProperty('parent');
+  const { owner, env } = await raw('subagent', { state: 'idle', name: '' });
+  await expect(e2ee.openSubagent(owner, human, 'tests', env)).rejects.toThrow('name');
+});
 it('seals a layout to its member and rejects one for another member', async () => {
   const owner = await ownerKeys();
   const layout = {
