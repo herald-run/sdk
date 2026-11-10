@@ -98,6 +98,14 @@ it('validates input before sealing and seals secret offers', async () => {
   expect(body).toMatchObject({ kind: 'secret', asks: false, attachments: [] });
   expect(JSON.stringify(body)).not.toContain('Key');
   expect(body.sealed.ctx).toEqual({ t: 'message', account: keyring.account, id: body.id });
+  // A linked chat room travels sealed, never beside the envelope.
+  await expect(herald.send({ title: 'Room', room: 'not a room' })).rejects.toMatchObject({
+    status: 400,
+  });
+  await herald.send({ title: 'Room', room: 'r'.repeat(43) });
+  const linked = JSON.parse(seen.at(-1)!.body!);
+  expect(linked.room).toBeUndefined();
+  expect(seen.at(-1)!.body).not.toContain('r'.repeat(43));
 });
 it('binds logs and results to the task runner and refuses unsealed task content', async () => {
   const raw = (step('claim-task').response.body as { task: Message }).task;

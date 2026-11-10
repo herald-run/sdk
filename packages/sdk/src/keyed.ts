@@ -79,6 +79,7 @@ const CONTENT = [
   'checkpointId',
   'group',
   'refuseLabel',
+  'room',
 ] as const;
 const ENVELOPE_LIMIT = 20_000;
 const fileEntry = z.object({

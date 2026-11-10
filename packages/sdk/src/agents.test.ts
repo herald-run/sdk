@@ -113,6 +113,33 @@ it('seals a subagent name under its key and lists or removes them', async () => 
   await agents.removeSubagent('review');
   expect(seen.at(-1)!.route).toBe('DELETE /api/v1/agents/me/subagents/review');
 });
+it('seals task, links and a parent, and refuses bad ones', async () => {
+  const seen = serve({ ...keysRoute, 'PUT /api/v1/agents/me/': { expiresAt: 5 } });
+  const agents = client();
+  const links = [{ label: 'Pull request', url: 'https://example.com/pr/1' }];
+  await agents.setPresence({ state: 'busy', task: 'Fixing the login bug', links });
+  await agents.setSubagent('tests', { name: 'Tests', state: 'busy', parent: 'review' });
+  const [presence, sub] = seen.filter((s) => s.route.startsWith('PUT')).map((s) => s.body!);
+  const owner = await ownerKeys();
+  const env = (body: Record<string, unknown>) => body.envelope as e2ee.SealedEnvelope;
+  expect(await e2ee.openPresence(owner, agent, env(presence))).toMatchObject({
+    task: 'Fixing the login bug',
+    links,
+  });
+  expect(await e2ee.openSubagent(owner, agent, 'tests', env(sub))).toMatchObject({
+    parent: 'review',
+  });
+  const bad = (presence: Partial<e2ee.AgentPresence>) =>
+    agents.setPresence({ state: 'idle', ...presence });
+  await expect(bad({ task: 'x'.repeat(201) })).rejects.toThrow('task');
+  await expect(bad({ links: [{ label: 'a', url: 'javascript:alert(1)' }] })).rejects.toThrow();
+  await expect(bad({ links: [{ label: ' ', url: 'https://example.com' }] })).rejects.toThrow();
+  await expect(bad({ links: Array(9).fill(links[0]) })).rejects.toThrow('links');
+  const sub2 = (parent: string) =>
+    agents.setSubagent('tests', { name: 'T', state: 'idle', parent });
+  await expect(sub2('tests')).rejects.toThrow('parent');
+  await expect(sub2('bad key')).rejects.toThrow('parent');
+});
 it('seals a layout to its member and rejects one for another member', async () => {
   const owner = await ownerKeys();
   const layout = {

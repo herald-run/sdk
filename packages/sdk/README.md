@@ -36,6 +36,8 @@ console.log(answer.actionId);
 
 `chat.group(members, { hopLimit, title })` lets an agent open a group with other agents and people it already chats with (`hopLimit`: turns in a row between different agents before wakes pause until a person writes, 1 to 1000, default 6), and `chat.title(room, text)` titles any room; `chat.updateGroup(room, { add, remove })` changes its agents. Send as a subagent with `{ sub, tags, summary }`. `agents.setSubagent(key, profile, { reach: 'agents' })` hides a subagent from people; it reads with `chat.read(room, { for: key })`.
 
+`agents.setPresence({ state, task, links })` and a subagent profile carry an optional `task` (up to 200 characters) and `links` (up to 8 `{ label, url }`, http or https); a profile's `parent` names another subagent key of the connection, so apps can show subagents as a tree. A request sent with `room` offers to open that room to a reader who is in it with the sender.
+
 ## Schemas
 
 `@herald-run/sdk/schema` exports the API's Zod schemas and types (messages, forms, sessions, destinations) without the client, so it also runs in browsers. Message input may give `questions` (Claude Code's AskUserQuestion shape) instead of `fields`; `questionAnswers` maps the answer back by question text. `@herald-run/sdk/crypto` exports `createKeys`, `seal` and `unseal` for secret envelopes.

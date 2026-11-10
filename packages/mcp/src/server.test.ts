@@ -282,6 +282,8 @@ it('passes subagent reach and reads as a subagent', async () => {
   await call('subagent_set', { key: 'quiet', name: 'Q', state: 'idle', reach: 'agents' });
   const put = last((s) => s.method === 'PUT')!;
   expect(JSON.parse(put.body)).toMatchObject({ reach: 'agents' });
+  await call('subagent_set', { key: 'child', name: 'C', state: 'idle', parent: 'quiet' });
+  expect(last((s) => s.method === 'PUT')!.url).toContain('/subagents/child');
   await call('chat_read', { room: 'r'.repeat(43), for: 'quiet' });
   expect(seen.some((s) => s.url.includes('/messages?for=quiet'))).toBe(true);
 });

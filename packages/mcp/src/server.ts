@@ -41,6 +41,11 @@ const threadKey = z
   .max(200)
   .optional()
   .describe('A name you choose; messages sent with the same name share one thread');
+const room = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{1,64}$/)
+  .optional()
+  .describe('The chat room this message belongs to; apps offer to open it');
 
 /** Answers by question text when the request came from `questions`. */
 const answers = (m: Message) =>
@@ -129,6 +134,7 @@ export function createServer(client: () => Promise<Herald>) {
       files: files.optional(),
       replyTo,
       threadKey,
+      room,
       idempotencyKey: z.string().max(200).optional().describe('Reuse to make retries safe'),
     },
     async ({ files: paths, idempotencyKey, ...input }, herald) => {
@@ -171,6 +177,7 @@ export function createServer(client: () => Promise<Herald>) {
       files: files.optional(),
       replyTo,
       threadKey,
+      room,
       refuseLabel: z
         .string()
         .min(1)
@@ -192,6 +199,7 @@ export function createServer(client: () => Promise<Herald>) {
         kind: 'form',
         replyTo: input.replyTo,
         threadKey: input.threadKey,
+        room: input.room,
         refuseLabel: input.refuseLabel,
         expiresIn: deadline,
         attachments: await attach(herald, input.files),
@@ -498,7 +506,14 @@ export function createServer(client: () => Promise<Herald>) {
       .optional()
       .describe('Custom colour as #rrggbb'),
     ttl: z.number().int().min(10).max(86400).optional().describe('Seconds before it expires (300)'),
+    task: z.string().max(200).optional().describe('What it is working on'),
+    links: z
+      .array(z.object({ label: z.string().min(1).max(60), url: z.string().url().max(2048) }))
+      .max(8)
+      .optional()
+      .describe('http(s) links shown with it, such as a pull request'),
   };
+  const subagentKey = z.string().regex(/^[\w.-]{1,64}$/);
   tool(
     'presence_set',
     'Show the account owner whether this connection is idle, busy, blocked or offline, end-to-end encrypted. Expires after ttl seconds unless refreshed.',
@@ -510,8 +525,9 @@ export function createServer(client: () => Promise<Herald>) {
     'subagent_set',
     'Name a subagent of this connection for the account owner, end-to-end encrypted. It costs no connection and expires after ttl seconds unless renewed.',
     {
-      key: z.string().regex(/^[\w.-]{1,64}$/),
+      key: subagentKey,
       name: z.string().min(1).max(60),
+      parent: subagentKey.optional().describe('The subagent key that started this one'),
       ...look,
       reach: z
         .enum(['all', 'agents'])
@@ -524,7 +540,7 @@ export function createServer(client: () => Promise<Herald>) {
   tool(
     'subagent_remove',
     "Remove a subagent of this connection from the account owner's view.",
-    { key: z.string().regex(/^[\w.-]{1,64}$/) },
+    { key: subagentKey },
     async ({ key }, herald) => {
       await herald.agents.removeSubagent(key);
       return json({ key, removed: true });

@@ -67,6 +67,7 @@ export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
 export { AgentsClient } from './agents.js';
 export type {
+  AgentLink,
   AgentPresence,
   AgentPresenceOptions,
   OwnSubagent,

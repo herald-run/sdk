@@ -43,6 +43,14 @@ const common = {
   expiresIn: z.number().positive().max(86400).optional(),
   /** Team workspaces: the team inbox (id or slug); the connection's default when omitted. */
   team: z.string().min(1).max(200).optional(),
+  /**
+   * The chat room this message belongs to, sealed with it. Apps offer to open the room only to
+   * a reader who is in it with the sender.
+   */
+  room: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/)
+    .optional(),
 };
 const contentInputSchema = z.object({
   ...common,
@@ -220,6 +228,8 @@ interface StoredContent {
   replyTo?: string;
   group?: string;
   expiresAt?: string;
+  /** The chat room the sender linked; set by clients from the sealed content. */
+  room?: string;
 }
 interface StoredRecord extends StoredContent {
   id: string;

@@ -10,7 +10,7 @@ from .e2ee import E2eeError
 from .http import HeraldError
 
 NO_ENTRY = "No recipient entry for these keys."
-CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group")
+CONTENT = ("title", "body", "kind", "fields", "blocks", "actions", "requiresReview", "runId", "checkpointId", "group", "room")
 ENVELOPE_LIMIT = 20000
 FIELD_TYPES = ("text", "textarea", "number", "select", "multiselect", "boolean", "date", "secret", "file", "annotations")
 FIELD_KEYS = ("id", "label", "type", "default", "nullable", "uniqueItems", "integer", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems", "required", "attachmentId", "secret", "help", "placeholder", "options", "header", "other")
@@ -200,6 +200,8 @@ def check_input(message):
     m["fields"] = check_fields(m.get("fields", []))
     if "expiresAt" in m and "expiresIn" in m:
         _invalid("Use expiresAt or expiresIn, not both.")
+    if "room" in m and not (isinstance(m["room"], str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", m["room"])):
+        _invalid("A room is 1 to 64 base64url characters.")
     actions = m.get("actions")
     if actions is not None:
         if not isinstance(actions, list) or not 0 < len(actions) <= 8 or len({a.get("id") for a in actions}) != len(actions):
