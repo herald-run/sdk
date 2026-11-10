@@ -70,13 +70,17 @@ function checkShape(head: ChatHead) {
 const human = (p: string) => p.startsWith('h:');
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 /**
- * What an agent may sign. First head: every human in it is an owner. Later: it was an owner, keeps
- * the humans and human owners as they were, and makes no new agent an owner.
+ * What an agent may sign. First head: every human in it is an owner and the agent is the only agent
+ * owner. Later: it was an owner, keeps the humans and human owners as they were, and makes no new
+ * agent an owner.
  */
 export function checkAgentHead(prev: ChatHead | undefined, head: ChatHead, by: string) {
   if (!prev) {
-    if (!head.members.filter(human).every((m) => head.owners.includes(m)))
-      fail('An agent-created group makes its people owners.');
+    if (
+      !head.members.filter(human).every((m) => head.owners.includes(m)) ||
+      head.owners.some((o) => !human(o) && o !== by)
+    )
+      fail('An agent-created group makes its people owners, and no other agent.');
     return;
   }
   if (
@@ -105,8 +109,9 @@ export function maySign(
 }
 /**
  * Verifies a chain from the first head and returns its tip hash. A link whose signer has left the
- * roster or rotated keys cannot be checked directly, so a later verified link must commit to it,
- * or `trusted` (a pin or a verified recent message) must vouch for the tip.
+ * roster or rotated keys cannot be checked directly, so a later verified link signed by a person
+ * must commit to it, or `trusted` (a pin or a verified recent message) must vouch for the tip. An
+ * agent's link never vouches: its owner could collude with the server.
  *
  * A recovery link (signed by a non-owner once no owner was on the roster) must make its signer an
  * owner and no former owner one. If a former owner is back on the roster, today's roster cannot
@@ -147,9 +152,9 @@ export async function verifyHeadChain(
     if (who && who.kid === link.from) {
       if (!(await verify(who.sign, link.sig, await signingInput(keys.account, head))))
         fail('Bad head signature.');
-      unchecked = false;
+      if (human(by)) unchecked = false;
       // An owner from before the recovery signing a later link vouches for it.
-      if (stale && formerOwners.includes(by)) stale = 0;
+      if (stale && human(by) && formerOwners.includes(by)) stale = 0;
     } else unchecked = true;
     prev = head;
     prevHash = await headHash(head);

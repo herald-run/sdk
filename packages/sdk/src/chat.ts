@@ -102,7 +102,7 @@ type Frame =
       seq: number;
       subagent?: string;
     };
-type Socketed = { type?: string; room?: string };
+type Socketed = { type?: string; room?: string; subagent?: string };
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 const RECENT = 20;
@@ -485,19 +485,23 @@ export class ChatClient {
     if (!response.body) throw new HeraldError('Herald returned no file body.', response.status);
     return new Uint8Array(await new Response(e2ee.openFile(file.key, response.body)).arrayBuffer());
   }
-  /** Releases the wake up to `seq` and marks it read. */
-  async ack(room: string, seq: number): Promise<{ readSeq: number }> {
-    await this.#request(`${path(room)}/ack`, { seq });
+  /**
+   * Releases the wake up to `seq` and marks it read. A room keeps one wake per subagent: `subagent`
+   * ('' for the connection) releases only that one, and a subagent's ack leaves the read mark alone.
+   */
+  async ack(room: string, seq: number, subagent?: string): Promise<{ readSeq?: number }> {
+    await this.#request(`${path(room)}/ack`, subagent === undefined ? { seq } : { seq, subagent });
+    if (subagent) return {};
     return this.#request(`${path(room)}/read`, { seq });
   }
   /** Leases a room's wake and reads what it covers; undefined when absent or already held. */
-  async #take(room: string, ttl?: number): Promise<ChatWake | undefined> {
+  async #take(room: string, ttl?: number, subagent?: string): Promise<ChatWake | undefined> {
     let wake: Lease | null;
     try {
-      ({ wake } = await this.#request<{ wake: Lease | null }>(
-        `${path(room)}/lease`,
-        ttl === undefined ? {} : { ttl },
-      ));
+      ({ wake } = await this.#request<{ wake: Lease | null }>(`${path(room)}/lease`, {
+        ...(ttl === undefined ? {} : { ttl }),
+        ...(subagent === undefined ? {} : { subagent }),
+      }));
     } catch (error) {
       if (error instanceof HeraldError && error.code === 'LEASED') return undefined;
       throw error;
@@ -541,7 +545,7 @@ export class ChatClient {
         if (found || stop.signal.aborted) return;
         found = await this.#take(room.id, options.lease).catch(() => undefined);
         if (!found) return;
-        await this.ack(room.id, found.seq);
+        await this.ack(room.id, found.seq, found.subagent ?? '');
         stop.abort();
       });
     };
@@ -564,8 +568,9 @@ export class ChatClient {
     }
   }
   /**
-   * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect. A
-   * handler that throws is not acknowledged, so its wake fires again when the lease lapses.
+   * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect; each
+   * room keeps one wake per subagent. A handler that throws is not acknowledged, so its wake fires
+   * again when the lease lapses.
    */
   wakes(
     handler: (wake: ChatWake) => void | Promise<void>,
@@ -579,35 +584,37 @@ export class ChatClient {
     const { signal } = options;
     const allowed = options.rooms && new Set(options.rooms);
     const queues = new Map<string, Promise<void>>();
-    const drain = async (room: string) => {
+    const drain = async (room: string, subagent: string) => {
       while (!signal?.aborted) {
-        const wake = await this.#take(room, options.lease);
+        const wake = await this.#take(room, options.lease, subagent);
         if (!wake) return;
         if (wake.messages.length) await handler(wake);
-        await this.ack(room, wake.seq);
+        await this.ack(room, wake.seq, subagent);
       }
     };
-    const enqueue = (room: unknown) => {
+    const enqueue = (room: unknown, subagent: unknown) => {
       if (typeof room !== 'string' || !ROOM_ID.test(room) || (allowed && !allowed.has(room)))
         return;
+      const sub = typeof subagent === 'string' ? subagent : '';
+      const key = `${room} ${sub}`;
       queues.set(
-        room,
-        (queues.get(room) ?? Promise.resolve()).then(() =>
-          drain(room).catch((error) => {
+        key,
+        (queues.get(key) ?? Promise.resolve()).then(() =>
+          drain(room, sub).catch((error) => {
             if (!signal?.aborted) options.onError?.(error, room);
           }),
         ),
       );
     };
     const replay = () => {
-      void this.#request<{ wakes: { room: string }[] }>('/chats/wakes').then(
-        ({ wakes }) => wakes.forEach((w) => enqueue(w.room)),
+      void this.#request<{ wakes: { room: string; subagent?: string }[] }>('/chats/wakes').then(
+        ({ wakes }) => wakes.forEach((w) => enqueue(w.room, w.subagent)),
         (error) => options.onError?.(error, ''),
       );
     };
     return this.#sockets(
       (frame) => {
-        if (frame.type === 'wake') enqueue(frame.room);
+        if (frame.type === 'wake') enqueue(frame.room, frame.subagent);
       },
       replay,
       signal,

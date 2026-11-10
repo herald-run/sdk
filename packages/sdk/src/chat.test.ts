@@ -474,9 +474,9 @@ it("wakes a subagent with its sibling's messages", async () => {
   };
   const wake = { room: room.id, first: 1, seq: 1, reason: 'mention', subagent: 'b' };
   let leases = 0;
-  serve({
+  const calls = serve({
     ...keysRoute,
-    'GET /api/v1/chats/wakes': { wakes: [{ room: room.id }] },
+    'GET /api/v1/chats/wakes': { wakes: [{ room: room.id, subagent: 'b' }] },
     [`POST /api/v1/chats/${room.id}/lease`]: () => ({
       wake: leases++ ? null : { ...wake, context: 'message', contextFrom: 1 },
     }),
@@ -510,6 +510,10 @@ it("wakes a subagent with its sibling's messages", async () => {
   stop.abort();
   await done;
   expect(got).toEqual(['over to b']);
+  // The subagent's own wake is leased and acked alone, and leaves the read mark to its connection.
+  expect(calls.find((s) => s.route.endsWith('/lease'))!.body).toEqual({ subagent: 'b' });
+  expect(calls.find((s) => s.route.endsWith('/ack'))!.body).toEqual({ seq: 1, subagent: 'b' });
+  expect(calls.some((s) => s.route.endsWith('/read'))).toBe(false);
 });
 it('signs the next group head as an agent owner', async () => {
   const keys = await ownerKeys();

@@ -128,6 +128,40 @@ it('lets an agent create a group and change only its agents', async () => {
   ).resolves.toBeTruthy();
 });
 
+it('never lets an agent link vouch for an unchecked one or name another agent owner first', async () => {
+  const sets = await people(['a:orc', 'a:sub', 'h:ann', 'h:ben', 'h:cat']);
+  const nonce = 'n'.repeat(22);
+  const id = await e2ee.groupRoomId('h:ann', nonce);
+  const room = { id, nonce };
+  const keys = keysFor('h:cat', sets);
+  const owners = ['h:ann', 'h:ben', 'a:orc'];
+  const v1 = { room: id, version: 1, prev: '', owners, members: owners };
+  const next = async (prev: e2ee.ChatHead, change: Partial<e2ee.ChatHead>) => ({
+    ...prev,
+    version: prev.version + 1,
+    prev: await e2ee.headHash(prev),
+    ...change,
+  });
+  // Ben's "rotated" key cannot be checked: a forged link adds Cat and makes the agent's owner one.
+  const v2 = await next(v1, { members: [...owners, 'h:cat'], owners: [...owners, 'h:cat'] });
+  const forged = { ...(await link(sets, 'h:cat', v2)), by: 'h:ben', from: 'old-kid' };
+  const v3 = await next(v2, { members: [...v2.members, 'a:sub'] });
+  const chain = [await link(sets, 'h:ann', v1), forged];
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:orc', v3)]),
+  ).rejects.toThrow('not verified');
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'h:ann', v3)]),
+  ).resolves.toBeTruthy();
+  // An agent's first head makes no other agent an owner.
+  const agentId = await e2ee.groupRoomId('a:orc', nonce);
+  const both = ['a:orc', 'a:sub', 'h:ann'];
+  const first = { room: agentId, version: 1, prev: '', owners: both, members: both };
+  await expect(
+    e2ee.verifyHeadChain(keys, { id: agentId, nonce }, [await link(sets, 'a:orc', first)]),
+  ).rejects.toThrow('no other agent');
+});
+
 it('accepts only a policy the current chain head signed, never an older one', async () => {
   const head = await e2ee.workspaceIdentity();
   const other = await e2ee.workspaceIdentity();
