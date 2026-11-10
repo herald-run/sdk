@@ -70,8 +70,9 @@ export const commands: Record<string, Spec> = {
   thread: { args: '<message-id>', summary: 'List a thread, oldest first' },
   threads: {
     summary: 'List threads with a waiting request, newest first',
-    options: ['all', 'thread-key'],
-    detail: '--all lists every retained thread; --thread-key NAME finds the thread of that name.',
+    options: ['all', 'thread-key', 'before'],
+    detail:
+      '--all lists every retained thread; --thread-key NAME finds the thread of that name; --before CURSOR continues from the cursor a full page ends with.',
   },
   logs: { args: '<task-id>', summary: 'Print task logs', options: ['after'] },
   download: {
@@ -113,6 +114,7 @@ export const commands: Record<string, Spec> = {
       'after',
       'before',
       'limit',
+      'hop-limit',
       'timeout',
       'exec',
       'body-file',
@@ -183,6 +185,7 @@ const describe: Record<string, string> = {
   attach: '--attach PATH      Attach a file; repeatable',
   remove: '--remove           Remove the reaction',
   limit: '--limit N          Page size',
+  'hop-limit': '--hop-limit N      Agent turns in a row before wakes pause (1 to 1000, default 6)',
   state: '--state STATE     idle, busy, blocked or offline',
   color: '--color #RRGGBB',
   ttl: '--ttl SECONDS     Seconds until it expires (300)',

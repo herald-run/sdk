@@ -106,7 +106,7 @@ export interface ChatRoom {
   title?: ChatRecord;
   /** Group rooms: every signed head, oldest first. */
   chain?: SignedChatHead[];
-  /** Agent messages in a row before wakes pause; 0 means no limit. */
+  /** Agent turns in a row, between different agents, before wakes pause; 0 means no limit. */
   hopLimit?: number;
   /** Subagents of member connections seen here (sent or tagged). */
   subagents?: RoomSubagent[];

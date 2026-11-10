@@ -43,18 +43,6 @@ it('runs a handler with the message on stdin and rejects a non-zero exit', async
   await expect(runHandler(check, wake, env, 5)).resolves.toBeUndefined();
   await expect(runHandler('exit 7', wake, env, 5)).rejects.toThrow('exited with 7');
 });
-it('refuses an invalid chat form before sending', async () => {
-  const out = io();
-  const ask = vi.fn();
-  const form = JSON.stringify({
-    title: 'Pick',
-    fields: [{ id: 'a', type: 'choice', label: 'A' }],
-  });
-  await expect(chat(fake({ ask }), ['ask', 'room', form], base, out)).rejects.toThrow(
-    /Invalid form: fields 0 type/,
-  );
-  expect(ask).not.toHaveBeenCalled();
-});
 it('sends a valid chat form', async () => {
   const ask = vi.fn(async () => ({ seq: 1, id: 'x', room: 'room' }));
   const form = JSON.stringify({
@@ -80,8 +68,9 @@ it('sends as a subagent with tags and a summary, and reads for one', async () =>
 it('creates a titled group and titles a room', async () => {
   const group = vi.fn(async () => ({ id: 'g'.repeat(43) }) as ChatRoom);
   const title = vi.fn(async () => ({ seq: 1, id: 'x', room: 'room' }));
-  await chat(fake({ group }), ['group', 'a:one', 'h:two'], { ...base, title: 'Launch' }, io());
-  expect(group).toHaveBeenCalledWith(['a:one', 'h:two'], { title: 'Launch' });
+  const values = { ...base, title: 'Launch', hopLimit: 10 };
+  await chat(fake({ group }), ['group', 'a:one', 'h:two'], values, io());
+  expect(group).toHaveBeenCalledWith(['a:one', 'h:two'], { title: 'Launch', hopLimit: 10 });
   await chat(fake({ title }), ['title', 'room', 'New name'], base, io());
   expect(title).toHaveBeenCalledWith('room', 'New name');
   await expect(chat(fake({ group }), ['group'], base, io())).rejects.toThrow(/MEMBER/);

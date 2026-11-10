@@ -79,6 +79,7 @@ export { ChatClient } from './chat.js';
 export type {
   ChatFormRules,
   ChatGroupOptions,
+  ChatListing,
   ChatMessage,
   ChatPage,
   ChatReadOptions,

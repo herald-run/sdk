@@ -1,8 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import type { ChatMessage, ChatRoom, ChatWake, Herald } from '@herald-run/sdk';
-import { messageInputSchema } from '@herald-run/sdk/schema';
+import type { ChatListing, ChatMessage, ChatWake, Herald } from '@herald-run/sdk';
 import { UsageError } from './compose';
 export type ChatValues = {
   json?: boolean;
@@ -15,6 +14,7 @@ export type ChatValues = {
   tag?: string[];
   summary?: string;
   title?: string;
+  hopLimit?: number;
   for?: string;
   remove?: boolean;
   after?: number;
@@ -36,8 +36,16 @@ const USAGE =
 const clean = (text: string) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
 const line = (m: ChatMessage) =>
   `${m.seq}  ${clean(m.sender)}  ${m.locked ? '[could not be verified]' : clean(m.text)}`;
-const roomLine = (r: ChatRoom) =>
-  [r.id, r.kind, `${r.unread} unread`, r.members.map((m) => m.principal).join(' ')].join('  ');
+const roomLine = (r: ChatListing) =>
+  [
+    r.id,
+    r.kind,
+    r.title && clean(r.title),
+    `${r.unread} unread`,
+    r.members.map((m) => m.principal).join(' '),
+  ]
+    .filter(Boolean)
+    .join('  ');
 /** Runs `command` for one wake: JSON on stdin, identifiers in the environment. */
 export function runHandler(
   command: string,
@@ -142,7 +150,10 @@ export async function chat(
     case 'group': {
       const members = [room, ...rest].filter((m): m is string => !!m);
       if (!members.length) need(undefined, 'MEMBER');
-      const made = await client.chat.group(members, { title: values.title });
+      const made = await client.chat.group(members, {
+        title: values.title,
+        hopLimit: values.hopLimit,
+      });
       print(made.id, made);
       return 0;
     }
@@ -168,12 +179,6 @@ export async function chat(
     }
     case 'ask': {
       const { deadline, answerers, ...form } = await parsed(rest[0], 'FORM');
-      const valid = messageInputSchema.safeParse({ ...form, kind: 'form' });
-      if (!valid.success)
-        throw new UsageError(
-          'Invalid form: ' +
-            valid.error.issues.map((i) => [...i.path, i.message].join(' ')).join('; '),
-        );
       return done(
         await client.chat.ask(need(room, 'ROOM'), form, {
           deadline: deadline as number | undefined,
@@ -215,7 +220,8 @@ export async function chat(
       const options = {
         signal: stop.signal,
         rooms: room ? [room] : undefined,
-        onError: (error: unknown, id: string) => io.err(`${id}: ${(error as Error).message}`),
+        onError: (error: unknown, id?: string) =>
+          io.err((id ? id + ': ' : '') + (error as Error).message),
       };
       const exec = values.exec;
       await (exec

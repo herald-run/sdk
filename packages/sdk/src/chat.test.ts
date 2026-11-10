@@ -172,7 +172,6 @@ it('wait with an explicit cursor still reads past it', async () => {
   const seen = serve({
     ...keysRoute,
     [`POST /api/v1/chats/${room.id}/ack`]: null,
-    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
     [`GET /api/v1/chats/${room.id}/messages`]: { messages: [m1], through_seq: 1, hasMore: false },
     [`GET /api/v1/chats/${room.id}`]: room,
   });
@@ -196,7 +195,6 @@ it('wait returns pending messages from others and acks them', async () => {
       },
     },
     [`POST /api/v1/chats/${room.id}/ack`]: null,
-    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 2 },
     [`GET /api/v1/chats/${room.id}/messages`]: {
       messages: [m2],
       through_seq: 2,
@@ -206,7 +204,8 @@ it('wait returns pending messages from others and acks them', async () => {
   });
   const got = await client().wait(room.id, { timeout: 1 });
   expect(got.map((m) => m.text)).toEqual(['two']);
-  expect(seen.find((s) => s.route.endsWith('/read'))!.body).toEqual({ seq: 2 });
+  expect(seen.find((s) => s.route.endsWith('/ack'))!.body).toEqual({ seq: 2, subagent: '' });
+  expect(seen.some((s) => s.route.endsWith('/read'))).toBe(false);
 });
 class FakeSocket implements EventSocket {
   handlers = new Map<string, (d?: unknown) => void>();
@@ -238,7 +237,6 @@ it('listen delivers each message once, catches up on wake and gaps, and acks', a
   const seen = serve({
     ...keysRoute,
     [`POST /api/v1/chats/${room.id}/ack`]: null,
-    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
     [`GET /api/v1/chats/${room.id}/messages`]: () => {
       const page = after === 0 ? [m1] : [m4];
       after++;
@@ -257,19 +255,21 @@ it('listen delivers each message once, catches up on wake and gaps, and acks', a
   const stop = new AbortController();
   const done = chat.listen((m) => void got.push(m), { signal: stop.signal });
   await flush();
+  // Wait on results, not time: decryption and requests run slower under load.
+  const acks = () => seen.filter((s) => s.route.endsWith('/ack')).map((s) => s.body!.seq);
   socket.emit({ type: 'wake', room: room.id, seq: 1 });
-  await flush();
+  await vi.waitFor(() => expect(acks()).toEqual([1]));
   socket.emit({ type: 'message', room: room.id, prev: 1, ...m2 });
-  await flush();
+  await vi.waitFor(() => expect(acks()).toEqual([1, 2]));
   // A duplicate is ignored; seq 4 with prev 3 is a gap and is read back.
   socket.emit({ type: 'message', room: room.id, prev: 1, ...m2 });
   socket.emit({ type: 'message', room: room.id, prev: 3, seq: 4, hint: true });
+  await vi.waitFor(() => expect(acks()).toEqual([1, 2, 4]));
   await flush();
   stop.abort();
   await done;
   expect(got.map((m) => m.text)).toEqual(['one', 'two', 'four']);
-  const acks = seen.filter((s) => s.route.endsWith('/read')).map((s) => s.body!.seq);
-  expect(acks).toEqual([1, 2, 4]);
+  expect(acks()).toEqual([1, 2, 4]);
 });
 async function groupOf(over: Partial<e2ee.ChatRoom> = {}) {
   const owner = await ownerKeys();
@@ -316,7 +316,6 @@ it('wakes runs once per lease, then acks and re-leases the rest', async () => {
           : null,
     }),
     [`POST /api/v1/chats/${room.id}/ack`]: null,
-    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
     [`GET /api/v1/chats/${room.id}/messages`]: {
       messages: [first],
       through_seq: 1,
@@ -545,7 +544,6 @@ it("wakes a subagent with its sibling's messages", async () => {
       wake: leases++ ? null : { ...wake, context: 'message', contextFrom: 1 },
     }),
     [`POST /api/v1/chats/${room.id}/ack`]: null,
-    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
     [`GET /api/v1/chats/${room.id}/messages`]: {
       messages: [record],
       through_seq: 1,
@@ -577,7 +575,6 @@ it("wakes a subagent with its sibling's messages", async () => {
   // The subagent's own wake is leased and acked alone, and leaves the read mark to its connection.
   expect(calls.find((s) => s.route.endsWith('/lease'))!.body).toEqual({ subagent: 'b' });
   expect(calls.find((s) => s.route.endsWith('/ack'))!.body).toEqual({ seq: 1, subagent: 'b' });
-  expect(calls.some((s) => s.route.endsWith('/read'))).toBe(false);
 });
 it('signs the next group head as an agent owner', async () => {
   const keys = await ownerKeys();
@@ -599,4 +596,99 @@ it('signs the next group head as an agent owner', async () => {
   expect(signed).toMatchObject({ by: agent, head: { version: 2, prev: room.head } });
   expect(signed.head.members).toEqual([human, agent, 'a:two']);
   expect(signed.head.owners).toEqual([human, agent]);
+});
+const withSocket = (socket: FakeSocket) => {
+  const h = new Herald({ apiKey: token, url });
+  const parsed = e2ee.parseToken(token);
+  const session = new KeyedSession(parsed.seed!, parsed.fingerprint!, () => h.request('/keys'));
+  return new ChatClient(
+    (p, b, o) => h.request(p, b, o),
+    () => session,
+    () => socket,
+    () => Promise.reject(new Error('unused')),
+  );
+};
+it('lists rooms with the title opened and without chains', async () => {
+  const room = await makeRoom();
+  const id = crypto.randomUUID();
+  const envelope = await e2ee.sealChat(await ownerKeys(), room, {
+    id,
+    text: 'Launch',
+    kind: 'title',
+  });
+  const title = {
+    seq: 1,
+    id,
+    sender: human,
+    sub: '',
+    at: 1,
+    kind: 'title',
+    audience: 'all',
+    envelope,
+  };
+  serve({
+    ...keysRoute,
+    'GET /api/v1/chats': { rooms: [{ ...room, title, lastSeq: 1, unread: 2, chain: [] }] },
+  });
+  expect(await client().list()).toEqual([
+    { id: room.id, kind: 'dm', title: 'Launch', unread: 2, lastSeq: 1, members: room.members },
+  ]);
+});
+it('next takes the oldest wake of any subagent and acks it as that subagent', async () => {
+  const room = await makeRoom();
+  const m1 = await fromOwner(room, 1, 'hi');
+  const wake = { room: room.id, first: 1, seq: 1, reason: 'mention', context: 'message' };
+  const seen = serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/lease`]: { wake: { ...wake, contextFrom: 1, subagent: 'b' } },
+    [`POST /api/v1/chats/${room.id}/ack`]: { readSeq: 1 },
+    [`GET /api/v1/chats/${room.id}/messages`]: { messages: [m1], through_seq: 1, hasMore: false },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const got = await client().next(room.id, { timeout: 1 });
+  expect(got).toMatchObject({ subagent: 'b', messages: [{ text: 'hi' }] });
+  expect(seen.find((s) => s.route.endsWith('/lease'))!.body).toEqual({});
+  expect(seen.find((s) => s.route.endsWith('/ack'))!.body).toEqual({ seq: 1, subagent: 'b' });
+});
+it('next fails on a refused lease instead of waiting out the timeout', async () => {
+  const room = await makeRoom();
+  serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/lease`]: Response.json({ error: 'No.' }, { status: 403 }),
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  await expect(client().next(room.id, { timeout: 5 })).rejects.toMatchObject({ status: 403 });
+});
+it('wait reads back messages that landed before the socket opened', async () => {
+  const room = await makeRoom();
+  const m1 = await fromOwner(room, 1, 'one');
+  const empty = { messages: [], through_seq: 0, hasMore: false };
+  let reads = 0;
+  serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/ack`]: { readSeq: 1 },
+    [`GET /api/v1/chats/${room.id}/messages`]: () =>
+      reads++ ? { messages: [m1], through_seq: 1, hasMore: false } : empty,
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const socket = new FakeSocket();
+  const got = withSocket(socket).wait(room.id, { after: 0, timeout: 1 });
+  await flush();
+  socket.handlers.get('open')?.();
+  expect((await got).map((m) => m.text)).toEqual(['one']);
+});
+it('wait ignores messages that could not be verified', async () => {
+  const room = await makeRoom();
+  const spoofed = { ...(await fromOwner(room, 1)), sender: agent };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [spoofed],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  expect(await withSocket(new FakeSocket()).wait(room.id, { after: 0, timeout: 0.05 })).toEqual([]);
+  expect(seen.some((s) => s.route.endsWith('/ack'))).toBe(false);
 });

@@ -130,6 +130,15 @@ it('keys threads by a name the server never sees and lists them', async () => {
   expect(last((s) => s.url.startsWith('/api/v1/threads'))!.url).toMatch(
     /^\/api\/v1\/threads\?state=all&key=/,
   );
+  await call('threads', { before: 'cursor' });
+  expect(last((s) => s.url.startsWith('/api/v1/threads'))!.url).toBe(
+    '/api/v1/threads?before=cursor',
+  );
+});
+it('refuses members or a hop limit on an existing group; chat_wait is not read-only', async () => {
+  expect((await call('chat_group', { room: 'r'.repeat(43), hopLimit: 3 })).error).toBe(true);
+  const { tools } = await client.listTools();
+  expect(tools.find((t) => t.name === 'chat_wait')!.annotations?.readOnlyHint).toBe(false);
 });
 
 it('sends markdown with uploaded files', async () => {

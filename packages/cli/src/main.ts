@@ -115,6 +115,7 @@ const options = {
   attach: { type: 'string', multiple: true },
   remove: { type: 'boolean' },
   limit: { type: 'string' },
+  'hop-limit': { type: 'string' },
   state: { type: 'string' },
   color: { type: 'string' },
   ttl: { type: 'string' },
@@ -257,6 +258,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
       if (values.json) io.out(JSON.stringify(shown(message, stored)));
       else if (message.status === 'answered') io.out(format.answer(message, stored) || 'Answered.');
       else io.err(`Request ${message.status}. Message ID: ${message.id}`);
+      // stderr keeps stdout the answer for scripts.
+      if (!values.json && message.threadId) io.err(`thread ${message.threadId}`);
       return outcome[message.status] ?? 1;
     };
     const waitFor = async (id: string) => report(await client.wait(id, { waitTimeout: timeout }));
@@ -451,13 +454,16 @@ export async function main(argv: string[], io: Io): Promise<number> {
         return 0;
       }
       case 'threads': {
-        const list = await client.threads({ all: values.all, threadKey: values['thread-key'] });
-        print(
-          list.threads
-            .map((t) => [t.id, `${t.pending} waiting`, `${t.count} sent`, t.updatedAt].join('  '))
-            .join('\n'),
-          list,
+        const list = await client.threads({
+          all: values.all,
+          threadKey: values['thread-key'],
+          before: values.before,
+        });
+        const lines = list.threads.map((t) =>
+          [t.id, `${t.pending} waiting`, `${t.count} sent`, t.updatedAt].join('  '),
         );
+        if (list.next) lines.push(`More: --before ${list.next}`);
+        print(lines.join('\n'), list);
         return 0;
       }
       case 'logs': {
@@ -577,6 +583,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
             after: integer(values.after, '--after'),
             before: integer(values.before, '--before'),
             limit: integer(values.limit, '--limit'),
+            hopLimit: integer(values['hop-limit'], '--hop-limit'),
             timeout,
             bodyFile: values['body-file'],
           },

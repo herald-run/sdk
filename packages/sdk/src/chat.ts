@@ -33,8 +33,10 @@ export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   mentionsMismatch?: true;
   /** The subagent keys the sender addressed, as signed. */
   tags?: string[];
-  /** The runtime subagent the sender tagged, when this connection owns it. */
-  subagent?: string;
+};
+/** A room in a listing, with its title opened. */
+export type ChatListing = Pick<ChatRoom, 'id' | 'kind' | 'unread' | 'lastSeq' | 'members'> & {
+  title?: string;
 };
 export type WakeReason = 'form_answer' | 'mention' | 'reply' | 'message';
 /** One handled batch: new `messages` from others, and earlier `history` per the context mode. */
@@ -78,7 +80,7 @@ export type ChatGroupOptions = {
   /** Default: the creator, plus every person when an agent creates it. */
   owners?: string[];
   team?: string;
-  /** Agent messages in a row before wakes pause; 0 turns the limit off. Default 6. */
+  /** Agent turns in a row, between different agents, before wakes pause until a person writes (1 to 1000, default 6). */
   hopLimit?: number;
   /** Titles the room after creating it. */
   title?: string;
@@ -99,7 +101,7 @@ type Posted = {
   rules?: ChatFormRules;
 };
 type Frame =
-  | (ChatRecord & { type: 'message'; room: string; prev: number; hint?: true; subagent?: string })
+  | (ChatRecord & { type: 'message'; room: string; prev: number; hint?: true })
   | {
       type: 'wake' | 'read';
       room: string;
@@ -107,6 +109,7 @@ type Frame =
       subagent?: string;
     };
 type Socketed = { type?: string; room?: string; subagent?: string };
+const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 const RECENT = 20;
@@ -154,22 +157,27 @@ export class ChatClient {
     return keyed.chatKeys(false, await this.#policy!.value);
   };
   /** Rooms the connection can verify, newest first; others are left out. */
-  async list(options: { before?: number; limit?: number } = {}): Promise<ChatRoom[]> {
+  async list(options: { before?: number; limit?: number } = {}): Promise<ChatListing[]> {
     const query = new URLSearchParams();
     if (options.before !== undefined) query.set('before', String(options.before));
     if (options.limit !== undefined) query.set('limit', String(options.limit));
     const q = query.size ? '?' + query : '';
     const { rooms } = await this.#request<{ rooms: ChatRoom[] }>('/chats' + q);
     const keys = await this.#keys(true);
-    const out: ChatRoom[] = [];
-    for (const room of rooms)
-      if (
-        await e2ee.verifyChatRoom(keys, room, this.#trust(room.id)).then(
-          () => true,
-          () => false,
-        )
-      )
-        out.push(room);
+    const out: ChatListing[] = [];
+    for (const room of rooms) {
+      const ok = await e2ee.verifyChatRoom(keys, room, this.#trust(room.id)).then(
+        () => true,
+        () => false,
+      );
+      if (!ok) continue;
+      const { id, kind, unread, lastSeq, members } = room;
+      // A title needs only the verified chain; reading it costs no request per room.
+      const heads = room.kind === 'group' ? { heads: await e2ee.roomHeads(room) } : {};
+      const title =
+        room.title && (await e2ee.openChat(keys, id, room.title, heads).catch(() => undefined));
+      out.push({ id, kind, title: title?.text || undefined, unread, lastSeq, members });
+    }
     return out;
   }
   /** The room for an id, or the DM with `h:…`, `a:…` or `owner`, created if needed. */
@@ -505,10 +513,8 @@ export class ChatClient {
    * Releases the wake up to `seq` and marks it read. A room keeps one wake per subagent: `subagent`
    * ('' for the connection) releases only that one, and a subagent's ack leaves the read mark alone.
    */
-  async ack(room: string, seq: number, subagent?: string): Promise<{ readSeq?: number }> {
-    await this.#request(`${path(room)}/ack`, subagent === undefined ? { seq } : { seq, subagent });
-    if (subagent) return {};
-    return this.#request(`${path(room)}/read`, { seq });
+  ack(room: string, seq: number, subagent?: string): Promise<{ readSeq?: number }> {
+    return this.#request(`${path(room)}/ack`, subagent === undefined ? { seq } : { seq, subagent });
   }
   /** Leases a room's wake and reads what it covers; undefined when absent or already held. */
   async #take(room: string, ttl?: number, subagent?: string): Promise<ChatWake | undefined> {
@@ -542,7 +548,8 @@ export class ChatClient {
     };
   }
   /**
-   * Waits for one wake in a room, leases and acknowledges it. Undefined when the timeout passes.
+   * Waits for one wake in a room, the oldest of the connection or any of its subagents, leases and
+   * acknowledges it. Undefined when the timeout passes.
    * `lease` is how long, in seconds, a crashed caller holds the wake before it fires again.
    */
   async next(
@@ -555,19 +562,26 @@ export class ChatClient {
     options.signal?.addEventListener('abort', onAbort, { once: true });
     const timer = setTimeout(onAbort, (options.timeout ?? 3600) * 1000);
     let found: ChatWake | undefined;
+    let failure: unknown;
     let queue = Promise.resolve();
     const attempt = () => {
-      queue = queue.then(async () => {
-        if (found || stop.signal.aborted) return;
-        found = await this.#take(room.id, options.lease).catch(() => undefined);
-        if (!found) return;
-        await this.ack(room.id, found.seq, found.subagent ?? '');
-        stop.abort();
-      });
+      queue = queue
+        .then(async () => {
+          if (found || stop.signal.aborted) return;
+          found = await this.#take(room.id, options.lease);
+          if (!found) return;
+          await this.ack(room.id, found.seq, found.subagent ?? '');
+          stop.abort();
+        })
+        .catch((error) => {
+          failure = error;
+          stop.abort();
+        });
     };
     try {
       attempt();
       await queue;
+      if (failure) throw failure;
       if (found) return found;
       await this.#sockets(
         (frame) => {
@@ -577,6 +591,7 @@ export class ChatClient {
         stop.signal,
       );
       await queue;
+      if (failure) throw failure;
       return found;
     } finally {
       clearTimeout(timer);
@@ -594,7 +609,7 @@ export class ChatClient {
       signal?: AbortSignal;
       rooms?: string[];
       lease?: number;
-      onError?: (error: unknown, room: string) => void;
+      onError?: (error: unknown, room?: string) => void;
     } = {},
   ): Promise<void> {
     const { signal } = options;
@@ -625,7 +640,7 @@ export class ChatClient {
     const replay = () => {
       void this.#request<{ wakes: { room: string; subagent?: string }[] }>('/chats/wakes').then(
         ({ wakes }) => wakes.forEach((w) => enqueue(w.room, w.subagent)),
-        (error) => options.onError?.(error, ''),
+        (error) => options.onError?.(error),
       );
     };
     return this.#sockets(
@@ -656,7 +671,7 @@ export class ChatClient {
       const drain = async () => {
         for (let cursor = after; ;) {
           const page = await this.read(room.id, { after: cursor, limit: PAGE });
-          found.push(...page.messages.filter((m) => !m.mine && m.kind === 'message'));
+          found.push(...page.messages.filter(fromOthers));
           cursor = page.through_seq;
           if (!page.hasMore) break;
         }
@@ -705,14 +720,8 @@ export class ChatClient {
     const allowed = options.rooms && new Set(options.rooms);
     const verified = new Set<string>();
     const queues = new Map<string, Promise<void>>();
-    const tagged = new Map<string, string>();
     const deliver = async (message: ChatMessage) => {
-      const tag = tagged.get(`${message.room}:${message.seq}`);
-      if (tag) {
-        tagged.delete(`${message.room}:${message.seq}`);
-        message = { ...message, subagent: tag };
-      }
-      if (!message.mine && message.kind === 'message' && !message.locked) {
+      if (fromOthers(message)) {
         await handler(message);
         if (options.ack) await this.ack(message.room, message.seq);
       }
@@ -745,8 +754,6 @@ export class ChatClient {
     const enqueue = (frame: Frame) => {
       if (typeof frame?.room !== 'string' || !ROOM_ID.test(frame.room)) return;
       if (allowed && !allowed.has(frame.room)) return;
-      if (typeof frame.subagent === 'string' && tagged.size < 1000)
-        tagged.set(`${frame.room}:${frame.seq}`, frame.subagent);
       const previous = queues.get(frame.room) ?? Promise.resolve();
       queues.set(
         frame.room,
@@ -757,7 +764,10 @@ export class ChatClient {
         ),
       );
     };
-    await this.#sockets(enqueue as (frame: Socketed) => void, undefined, signal);
+    // A reconnect reads back what arrived while the socket was down.
+    const resume = () =>
+      cursors.forEach((seq, room) => enqueue({ type: 'wake', room, seq: seq + 1 }));
+    await this.#sockets(enqueue as (frame: Socketed) => void, resume, signal);
     await Promise.allSettled(queues.values());
   }
   /** Keeps one socket open until the signal aborts; `onOpen` runs on every connect. */

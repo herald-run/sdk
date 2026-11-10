@@ -232,10 +232,11 @@ export function createServer(client: () => Promise<Herald>) {
 
   tool(
     'threads',
-    "List this integration's threads, newest first: id, message count, requests still waiting. Defaults to threads with a waiting request; all includes every retained thread. threadKey finds the thread of that name.",
+    "List this integration's threads, newest first: id, message count, requests still waiting. Defaults to threads with a waiting request; all includes every retained thread. threadKey finds the thread of that name; a full page returns next, which before continues from.",
     {
       all: z.boolean().optional(),
       threadKey: threadKey,
+      before: z.string().min(1).optional().describe('The next cursor of the previous page'),
     },
     async (input, herald) => json(await herald.threads(input)),
     true,
@@ -368,7 +369,7 @@ export function createServer(client: () => Promise<Herald>) {
   const principals = z.array(z.string().regex(/^[ha]:/)).describe('h:<user> or a:<integration>');
   tool(
     'chat_group',
-    'Create an encrypted group from members (with an optional title), or with room add or remove members. An agent may add agents it can reach and people it already chats with, who own the group; as an owner it changes agents only.',
+    'Create an encrypted group from members (with an optional title), or with room add or remove members and set the title. An agent may add agents it can reach and people it already chats with, who own the group; as an owner it changes agents only.',
     {
       room: chatTarget.optional().describe('A group to change; omit to create one'),
       members: principals.optional(),
@@ -377,18 +378,22 @@ export function createServer(client: () => Promise<Herald>) {
       hopLimit: z
         .number()
         .int()
-        .min(0)
+        .min(1)
         .max(1000)
         .optional()
-        .describe('Agent messages in a row before wakes pause; 0 is no limit (6)'),
-      title: z.string().min(1).max(200).optional().describe('Titles a new group'),
+        .describe(
+          'Agent turns in a row, between different agents, before wakes pause until a person writes (default 6)',
+        ),
+      title: z.string().min(1).max(200).optional().describe('Titles the group'),
     },
-    async ({ room, members, add, remove, hopLimit, title }, herald) =>
-      json(
-        room
-          ? await herald.chat.updateGroup(room, { add, remove })
-          : await herald.chat.group(members ?? [], { hopLimit, title }),
-      ),
+    async ({ room, members, add, remove, hopLimit, title }, herald) => {
+      if (!room) return json(await herald.chat.group(members ?? [], { hopLimit, title }));
+      if (members || hopLimit !== undefined)
+        return failure('members and hopLimit only apply when creating a group; use add or remove.');
+      if (add || remove) await herald.chat.updateGroup(room, { add, remove });
+      if (title) await herald.chat.title(room, title);
+      return json(await herald.chat.open(room));
+    },
   );
   const seq = z.number().int().positive();
   tool(
@@ -483,7 +488,6 @@ export function createServer(client: () => Promise<Herald>) {
         });
       return json((await herald.chat.next(input.room, { timeout })) ?? { messages: [] });
     },
-    true,
   );
 
   const look = {
