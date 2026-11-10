@@ -118,6 +118,11 @@ const options = {
   state: { type: 'string' },
   color: { type: 'string' },
   ttl: { type: 'string' },
+  sub: { type: 'string' },
+  tag: { type: 'string', multiple: true },
+  summary: { type: 'string' },
+  for: { type: 'string' },
+  reach: { type: 'string' },
 } as const;
 const globalOptions = ['help', 'version', 'json', 'profile', 'url', 'pin-file'];
 /** A team workspace pin file: absent means no pin yet; anything else must be a valid pin. */
@@ -543,6 +548,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
           state: values.state,
           color: values.color,
           ttl: integer(values.ttl, '--ttl'),
+          reach: values.reach,
         };
         return await (command === 'presence' ? presence : subagents)(
           client,
@@ -562,6 +568,10 @@ export async function main(argv: string[], io: Io): Promise<number> {
             humans: values.humans,
             mention: values.mention,
             attach: values.attach,
+            sub: values.sub,
+            tag: values.tag,
+            summary: values.summary,
+            for: values.for,
             remove: values.remove,
             after: integer(values.after, '--after'),
             before: integer(values.before, '--before'),

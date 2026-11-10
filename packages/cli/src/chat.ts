@@ -11,6 +11,10 @@ export type ChatValues = {
   humans?: boolean;
   mention?: string[];
   attach?: string[];
+  sub?: string;
+  tag?: string[];
+  summary?: string;
+  for?: string;
   remove?: boolean;
   after?: number;
   before?: number;
@@ -109,6 +113,7 @@ export async function chat(
         after: values.after,
         before: values.before,
         limit: values.limit,
+        for: values.for,
       });
       print(page.messages.map(line).join('\n') || 'No messages.', page);
       return 0;
@@ -127,6 +132,9 @@ export async function chat(
           audience: values.humans ? 'humans' : undefined,
           mentions: values.mention,
           attachments: attachments.length ? attachments : undefined,
+          sub: values.sub,
+          tags: values.tag,
+          summary: values.summary,
         }),
       );
     }
@@ -160,6 +168,8 @@ export async function chat(
         await client.chat.ask(need(room, 'ROOM'), form, {
           deadline: deadline as number | undefined,
           answerers: answerers as 'humans' | 'any' | undefined,
+          sub: values.sub,
+          summary: values.summary,
         }),
       );
     }

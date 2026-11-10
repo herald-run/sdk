@@ -71,16 +71,21 @@ export type {
   AgentPresenceOptions,
   OwnSubagent,
   PresenceState,
+  SubagentOptions,
   SubagentProfile,
+  SubagentReach,
 } from './agents.js';
 export { ChatClient } from './chat.js';
 export type {
   ChatFormRules,
+  ChatGroupOptions,
   ChatMessage,
   ChatPage,
+  ChatReadOptions,
   ChatRoom,
   ChatSendOptions,
   ChatWake,
+  RoomSubagent,
   WakeReason,
 } from './chat.js';
 export { backoff, LiveSocket } from './socket.js';

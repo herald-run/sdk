@@ -17,7 +17,7 @@ export interface ChatHead {
 }
 export interface SignedChatHead {
   head: ChatHead;
-  /** The human principal that signed. */
+  /** The principal that signed: an owner, a human or an agent. */
   by: string;
   /** The kid of the signing key. */
   from: string;
@@ -63,18 +63,41 @@ function checkShape(head: ChatHead) {
     members.length > MAX_HEAD_MEMBERS ||
     new Set(owners).size !== owners.length ||
     new Set(members).size !== members.length ||
-    owners.some((o) => !members.includes(o) || !o.startsWith('h:'))
+    owners.some((o) => !members.includes(o) || !/^[ha]:/.test(o))
   )
     fail('The group head is malformed.');
 }
-/** Who may sign the head after `prev`: an owner, or if none is left the earliest remaining human. */
+const human = (p: string) => p.startsWith('h:');
+const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+/**
+ * What an agent may sign. First head: every human in it is an owner. Later: it was an owner, keeps
+ * the humans and human owners as they were, and makes no new agent an owner.
+ */
+export function checkAgentHead(prev: ChatHead | undefined, head: ChatHead, by: string) {
+  if (!prev) {
+    if (!head.members.filter(human).every((m) => head.owners.includes(m)))
+      fail('An agent-created group makes its people owners.');
+    return;
+  }
+  if (
+    !prev.owners.includes(by) ||
+    !same(head.members.filter(human), prev.members.filter(human)) ||
+    !same(head.owners.filter(human), prev.owners.filter(human)) ||
+    head.owners.some((o) => !human(o) && !prev.owners.includes(o))
+  )
+    fail('An agent owner can only add or remove agents.');
+}
+/**
+ * Who may sign the head after `prev`: an owner, or once no human owner is left the earliest
+ * remaining human. Agents never recover a group.
+ */
 export function maySign(
   prev: Pick<ChatHead, 'owners' | 'members'>,
   signer: string,
   onRoster: (principal: string) => boolean,
 ) {
   if (prev.owners.includes(signer)) return true;
-  if (prev.owners.some(onRoster)) return false;
+  if (!human(signer) || prev.owners.some((o) => human(o) && onRoster(o))) return false;
   // A signer who has since left cannot be placed in today's order; a later link vouches for it.
   return (
     !onRoster(signer) || prev.members.find((m) => m.startsWith('h:') && onRoster(m)) === signer
@@ -110,7 +133,7 @@ export async function verifyHeadChain(
     if (head.room !== room.id || head.version !== i + 1 || head.prev !== prevHash)
       fail('The group head chain is broken.');
     checkShape(head);
-    if (!by.startsWith('h:')) fail('Only people can change a group.');
+    if (!human(by)) checkAgentHead(prev, head, by);
     if (!prev) {
       if ((await groupRoomId(by, room.nonce)) !== room.id || !head.owners.includes(by))
         fail('The group creator does not match its id.');

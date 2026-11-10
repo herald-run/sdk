@@ -64,3 +64,16 @@ it('sends a valid chat form', async () => {
   await chat(fake({ ask }), ['ask', 'room', form], base, io());
   expect(ask).toHaveBeenCalledTimes(1);
 });
+it('sends as a subagent with tags and a summary, and reads for one', async () => {
+  const send = vi.fn(async () => ({ seq: 1, id: 'x', room: 'room' }));
+  const read = vi.fn(async () => ({ messages: [], through_seq: 0, hasMore: false }));
+  const values = { ...base, sub: 'a', tag: ['b'], summary: 'Plan', for: 'b' };
+  await chat(fake({ send, read }), ['send', 'room', 'go'], values, io());
+  expect(send).toHaveBeenCalledWith(
+    'room',
+    'go',
+    expect.objectContaining({ sub: 'a', tags: ['b'], summary: 'Plan' }),
+  );
+  await chat(fake({ send, read }), ['read', 'room'], values, io());
+  expect(read).toHaveBeenCalledWith('room', expect.objectContaining({ for: 'b' }));
+});

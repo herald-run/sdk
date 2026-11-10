@@ -94,6 +94,7 @@ it('lists every tool with a description', async () => {
       'chat_delete',
       'chat_download',
       'chat_edit',
+      'chat_group',
       'chat_list',
       'chat_react',
       'chat_read',
@@ -267,4 +268,11 @@ it('uses a keyed CLI login and reports locked records plainly', async () => {
   expect(await get(locked.id)).toMatchObject({ title: 'Encrypted message', locked: true });
   expect(seen.every((s) => s.auth === `Bearer ${auth}`)).toBe(true);
   await other.close();
+});
+it('passes subagent reach and reads as a subagent', async () => {
+  await call('subagent_set', { key: 'quiet', name: 'Q', state: 'idle', reach: 'agents' });
+  const put = last((s) => s.method === 'PUT')!;
+  expect(JSON.parse(put.body)).toMatchObject({ reach: 'agents' });
+  await call('chat_read', { room: 'r'.repeat(43), for: 'quiet' });
+  expect(seen.some((s) => s.url.includes('/messages?for=quiet'))).toBe(true);
 });

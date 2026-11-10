@@ -303,6 +303,10 @@ export function createServer(client: () => Promise<Herald>) {
     true,
   );
 
+  const posting = {
+    sub: z.string().min(1).optional().describe('Send as this subagent key of the connection'),
+    summary: z.string().max(200).optional().describe('One line shown while it is collapsed'),
+  };
   const chatTarget = z
     .string()
     .min(1)
@@ -322,6 +326,7 @@ export function createServer(client: () => Promise<Herald>) {
       after: z.number().int().nonnegative().optional(),
       before: z.number().int().positive().optional(),
       limit: z.number().int().min(1).max(100).optional(),
+      for: z.string().min(1).optional().describe('Read as this subagent key of the connection'),
     },
     async ({ room, ...options }, herald) => json(await herald.chat.read(room, options)),
     true,
@@ -337,6 +342,8 @@ export function createServer(client: () => Promise<Herald>) {
       replyTo: z.number().int().positive().optional(),
       mentions: z.array(z.string().min(1)).optional().describe('Principals to tag'),
       paths: z.array(z.string().min(1)).optional().describe('Local files to attach'),
+      ...posting,
+      tags: z.array(z.string().min(1)).optional().describe('Subagent keys to address'),
     },
     async (input, herald) => {
       const target = input.session ? (await herald.chat.session(input.to)).id : input.to;
@@ -351,9 +358,36 @@ export function createServer(client: () => Promise<Herald>) {
           replyTo: input.replyTo,
           mentions: input.mentions,
           attachments: attachments.length ? attachments : undefined,
+          sub: input.sub,
+          tags: input.tags,
+          summary: input.summary,
         }),
       );
     },
+  );
+  const principals = z.array(z.string().regex(/^[ha]:/)).describe('h:<user> or a:<integration>');
+  tool(
+    'chat_group',
+    'Create an encrypted group from members, or with room add or remove members. An agent may add agents it can reach and people it already chats with, who own the group; as an owner it changes agents only.',
+    {
+      room: chatTarget.optional().describe('A group to change; omit to create one'),
+      members: principals.optional(),
+      add: principals.optional(),
+      remove: principals.optional(),
+      hopLimit: z
+        .number()
+        .int()
+        .min(0)
+        .max(1000)
+        .optional()
+        .describe('Agent messages in a row before wakes pause; 0 is no limit (6)'),
+    },
+    async ({ room, members, add, remove, hopLimit }, herald) =>
+      json(
+        room
+          ? await herald.chat.updateGroup(room, { add, remove })
+          : await herald.chat.group(members ?? [], { hopLimit }),
+      ),
   );
   const seq = z.number().int().positive();
   tool(
@@ -391,9 +425,16 @@ export function createServer(client: () => Promise<Herald>) {
         .optional()
         .describe('Epoch milliseconds, within 30 days'),
       anyone: z.boolean().optional().describe('Let agents answer as well'),
+      ...posting,
     },
-    async ({ room, form, deadline, anyone }, herald) =>
-      json(await herald.chat.ask(room, form, { deadline, answerers: anyone ? 'any' : undefined })),
+    async ({ room, form, deadline, anyone, ...rest }, herald) =>
+      json(
+        await herald.chat.ask(room, form, {
+          deadline,
+          answerers: anyone ? 'any' : undefined,
+          ...rest,
+        }),
+      ),
   );
   tool(
     'chat_answer',
@@ -463,9 +504,17 @@ export function createServer(client: () => Promise<Herald>) {
   tool(
     'subagent_set',
     'Name a subagent of this connection for the account owner, end-to-end encrypted. It costs no connection and expires after ttl seconds unless renewed.',
-    { key: z.string().regex(/^[\w.-]{1,64}$/), name: z.string().min(1).max(60), ...look },
-    async ({ key, ttl, ...profile }, herald) =>
-      json(await herald.agents.setSubagent(key, profile, { ttl })),
+    {
+      key: z.string().regex(/^[\w.-]{1,64}$/),
+      name: z.string().min(1).max(60),
+      ...look,
+      reach: z
+        .enum(['all', 'agents'])
+        .optional()
+        .describe('agents: people cannot tag or message it; it reads agent messages only'),
+    },
+    async ({ key, ttl, reach, ...profile }, herald) =>
+      json(await herald.agents.setSubagent(key, profile, { ttl, reach })),
   );
   tool(
     'subagent_remove',

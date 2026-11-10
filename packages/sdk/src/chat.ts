@@ -13,7 +13,7 @@ import { messageInputSchema } from './schema/index.js';
 import { HeraldError, readError, sleep } from './http.js';
 import type { KeyedSession } from './keyed.js';
 import { backoff, KEEPALIVE, type EventSocket } from './socket.js';
-export type { ChatRoom } from './e2ee/index.js';
+export type { ChatRoom, RoomSubagent } from './e2ee/index.js';
 /** An opened chat message; `locked` when it could not be decrypted or verified. */
 export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   room: string;
@@ -27,6 +27,8 @@ export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   secrets?: Record<string, unknown>;
   attachments?: ChatAttachment[];
   reference?: Record<string, unknown>;
+  /** The sender's one-line stand-in while the message is collapsed. */
+  summary?: string;
   /** The declared mentions differ from the signed ones, which `mentions` holds. */
   mentionsMismatch?: true;
   /** The runtime subagent the sender tagged, when this connection owns it. */
@@ -57,6 +59,25 @@ export type ChatSendOptions = {
   attachments?: ChatAttachment[];
   /** A quoted snapshot of an Inbox request, sealed with the message. */
   reference?: Record<string, unknown>;
+  /** Subagent keys this message addresses; their connection's wake names one. */
+  tags?: string[];
+  /** A one-line stand-in, max 200 chars, shown while the message is collapsed. */
+  summary?: string;
+};
+export type ChatReadOptions = {
+  after?: number;
+  before?: number;
+  limit?: number;
+  signal?: AbortSignal;
+  /** Read as this subagent of the connection: one people cannot reach sees no human messages. */
+  for?: string;
+};
+export type ChatGroupOptions = {
+  /** Default: the creator, plus every person when an agent creates it. */
+  owners?: string[];
+  team?: string;
+  /** Agent messages in a row before wakes pause; 0 turns the limit off. Default 6. */
+  hopLimit?: number;
 };
 export type ChatFormRules = { deadline?: number; answerers?: 'humans' | 'any' };
 type ChatRequest = <T>(
@@ -228,6 +249,7 @@ export class ChatClient {
     if (!payload) return { ...out, locked: true };
     const { text, event, form, answers, attachments, reference, mentions, mentionsMismatch } =
       payload;
+    const summary = typeof payload.summary === 'string' ? payload.summary.slice(0, 200) : undefined;
     const sealed = await e2ee.openChatSecrets(current, room, record).catch(() => undefined);
     return {
       ...out,
@@ -238,6 +260,7 @@ export class ChatClient {
         answers,
         attachments,
         reference,
+        summary,
         mentions,
         mentionsMismatch,
         secrets: sealed?.answers as Record<string, unknown> | undefined,
@@ -245,11 +268,9 @@ export class ChatClient {
     };
   }
   /** One page, oldest first; pass `after` to read forward and `before` to read back. */
-  async read(
-    room: string,
-    options: { after?: number; before?: number; limit?: number; signal?: AbortSignal } = {},
-  ): Promise<ChatPage> {
+  async read(room: string, options: ChatReadOptions = {}): Promise<ChatPage> {
     const query = new URLSearchParams();
+    if (options.for) query.set('for', options.for);
     if (options.after !== undefined) query.set('after', String(options.after));
     if (options.before !== undefined) query.set('before', String(options.before));
     if (options.limit !== undefined) query.set('limit', String(options.limit));
@@ -298,9 +319,60 @@ export class ChatClient {
     const room = await this.open(target);
     await this.#request(`${path(room.id)}/messages/${seq}`, undefined, { method: 'DELETE' });
   }
+  /** A new group; an agent may add other agents and the people it already chats with. */
+  async group(members: string[], options: ChatGroupOptions = {}): Promise<ChatRoom> {
+    const keys = await this.#keys();
+    const me = keys.principal;
+    const nonce = e2ee.b64u.encode(crypto.getRandomValues(new Uint8Array(16)));
+    const all = [me, ...new Set(members.filter((m) => m !== me))];
+    const owners =
+      options.owners ??
+      (me.startsWith('a:') ? all.filter((p) => p === me || p.startsWith('h:')) : [me]);
+    const head: e2ee.ChatHead = {
+      room: await e2ee.groupRoomId(me, nonce),
+      version: 1,
+      prev: '',
+      owners,
+      members: all,
+      ...(options.team ? { team: options.team } : {}),
+    };
+    const signed = await e2ee.signChatHead({ ...keys, principal: me }, head);
+    const body = { kind: 'group', nonce, head: signed, ...defined({ hopLimit: options.hopLimit }) };
+    return this.#verified(await this.#request<ChatRoom>('/chats', body));
+  }
+  /** Signs the next head; an agent owner may add or remove agents only. */
+  async updateGroup(
+    target: string,
+    change: { add?: string[]; remove?: string[]; owners?: string[] },
+  ): Promise<ChatRoom> {
+    const room = await this.open(target);
+    const tip =
+      room.chain?.at(-1)?.head ??
+      (() => {
+        throw new HeraldError('Only groups have members to change.', 400);
+      })();
+    const gone = new Set(change.remove ?? []);
+    const members = [
+      ...tip.members.filter((m) => !gone.has(m)),
+      ...new Set((change.add ?? []).filter((m) => !tip.members.includes(m))),
+    ];
+    const head: e2ee.ChatHead = {
+      ...tip,
+      version: tip.version + 1,
+      prev: await e2ee.headHash(tip),
+      members,
+      owners: change.owners ?? tip.owners.filter((o) => members.includes(o)),
+    };
+    const keys = await this.#keys();
+    const signed = await e2ee.signChatHead(keys, head);
+    return this.#verified(await this.#request<ChatRoom>(`${path(room.id)}/heads`, signed));
+  }
   async #post(target: string, text: string, options: ChatSendOptions, extra: Posted = {}) {
     const id = options.id ?? crypto.randomUUID();
-    const { audience, sub, replyTo, mentions, attachments, reference, signal } = options;
+    const { audience, sub, replyTo, mentions, attachments, reference, signal, tags, summary } =
+      options;
+    if (summary !== undefined && summary.length > 200)
+      throw new HeraldError('A summary is at most 200 characters.', 400);
     const { kind, event, form, rules } = extra;
     for (let attempt = 0; ; attempt++) {
       const room = await this.open(target);
@@ -308,7 +380,7 @@ export class ChatClient {
       const input = {
         id,
         text,
-        ...defined({ kind, audience, sub, mentions, attachments, reference, event, form }),
+        ...defined({ kind, audience, sub, mentions, attachments, reference, event, form, summary }),
       };
       const body = {
         id,
@@ -316,6 +388,7 @@ export class ChatClient {
         headVersion: room.headVersion,
         ...defined({ audience, replyTo, kind, mentions }),
         ...(sub ? { sub } : {}),
+        ...(tags?.length ? { tags } : {}),
         ...(attachments?.length ? { attachments: attachments.map((a) => a.id) } : {}),
         ...(event ? { event: { type: event.type, target: event.target } } : {}),
         ...(form ? { form: defined(rules ?? {}) } : {}),
@@ -432,7 +505,7 @@ export class ChatClient {
     if (!wake) return undefined;
     const seen: ChatMessage[] = [];
     for (let cursor = wake.contextFrom - 1; cursor < wake.seq;) {
-      const page = await this.read(room, { after: cursor, limit: PAGE });
+      const page = await this.read(room, { after: cursor, limit: PAGE, for: wake.subagent });
       seen.push(...page.messages);
       cursor = page.through_seq;
       if (!page.hasMore) break;
@@ -441,7 +514,10 @@ export class ChatClient {
       m.seq <= wake.seq && !m.locked && m.kind !== 'event' && m.kind !== 'tombstone';
     return {
       ...wake,
-      messages: seen.filter((m) => usable(m) && m.seq >= wake.first && !m.mine),
+      // A sibling subagent's message is new to the one woken; only its own are not.
+      messages: seen.filter(
+        (m) => usable(m) && m.seq >= wake.first && !(m.mine && m.sub === (wake.subagent ?? '')),
+      ),
       history: seen.filter((m) => usable(m) && m.seq < wake.first),
     };
   }

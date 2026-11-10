@@ -75,6 +75,59 @@ it('ties ownership to the current head when a recovered owner returns', async ()
   await expect(e2ee.verifyHeadChain(back, room, full)).resolves.toBeTruthy();
 });
 
+it('lets an agent create a group and change only its agents', async () => {
+  const sets = await people(['a:orc', 'a:sub', 'a:two', 'h:ann', 'h:ben']);
+  const nonce = 'n'.repeat(22);
+  const id = await e2ee.groupRoomId('a:orc', nonce);
+  const room = { id, nonce };
+  const keys = keysFor('h:ann', sets);
+  const v1 = {
+    room: id,
+    version: 1,
+    prev: '',
+    owners: ['a:orc', 'h:ann'],
+    members: ['a:orc', 'h:ann'],
+  };
+  const next = async (prev: e2ee.ChatHead, change: Partial<e2ee.ChatHead>) => ({
+    ...prev,
+    version: prev.version + 1,
+    prev: await e2ee.headHash(prev),
+    ...change,
+  });
+  const first = await link(sets, 'a:orc', v1);
+  await expect(e2ee.verifyHeadChain(keys, room, [first])).resolves.toBeTruthy();
+  // The creator's people are owners; the id commits to the creator.
+  const loose = { ...v1, owners: ['a:orc'] };
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [await link(sets, 'a:orc', loose)]),
+  ).rejects.toThrow();
+  await expect(e2ee.verifyHeadChain(keys, room, [await link(sets, 'a:sub', v1)])).rejects.toThrow();
+  const v2 = await next(v1, { members: [...v1.members, 'a:sub'] });
+  const chain = [first, await link(sets, 'a:orc', v2)];
+  await expect(e2ee.verifyHeadChain(keys, room, chain)).resolves.toBeTruthy();
+  for (const bad of [
+    await next(v2, { members: [...v2.members, 'h:ben'] }),
+    await next(v2, { members: ['a:orc', 'a:sub'], owners: ['a:orc'] }),
+    await next(v2, { owners: [...v2.owners, 'a:sub'] }),
+  ])
+    await expect(
+      e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:orc', bad)]),
+    ).rejects.toThrow();
+  // A member agent that is no owner signs nothing.
+  const v3 = await next(v2, { members: [...v2.members, 'a:two'] });
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:sub', v3)]),
+  ).rejects.toThrow();
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'a:orc', v3)]),
+  ).resolves.toBeTruthy();
+  // A person still adds people.
+  const v4 = await next(v2, { members: [...v2.members, 'h:ben'] });
+  await expect(
+    e2ee.verifyHeadChain(keys, room, [...chain, await link(sets, 'h:ann', v4)]),
+  ).resolves.toBeTruthy();
+});
+
 it('accepts only a policy the current chain head signed, never an older one', async () => {
   const head = await e2ee.workspaceIdentity();
   const other = await e2ee.workspaceIdentity();

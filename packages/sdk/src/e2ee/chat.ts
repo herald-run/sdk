@@ -106,7 +106,17 @@ export interface ChatRoom {
   title?: ChatRecord;
   /** Group rooms: every signed head, oldest first. */
   chain?: SignedChatHead[];
+  /** Agent messages in a row before wakes pause; 0 means no limit. */
   hopLimit?: number;
+  /** Subagents of member connections seen here (sent or tagged). */
+  subagents?: RoomSubagent[];
+}
+/** `agents`: people's messages never reach it, nor do their tags wake it. */
+export type SubagentReach = 'all' | 'agents';
+export interface RoomSubagent {
+  connection: string;
+  key: string;
+  reach: SubagentReach;
 }
 export interface ChatAttachment {
   id: string;
@@ -126,6 +136,8 @@ export interface ChatPayload extends Record<string, unknown> {
   form?: Record<string, unknown>;
   answers?: Record<string, unknown>;
   attachments?: ChatAttachment[];
+  /** A one-line stand-in (max 200 chars) clients show while the message is collapsed. */
+  summary?: string;
   /** A sender-quoted copy of an Inbox request; never fetched or re-verified from the Inbox. */
   reference?: Record<string, unknown>;
 }

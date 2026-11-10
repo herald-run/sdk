@@ -394,3 +394,141 @@ it('sends a valid form', async () => {
   await client().ask(room.id, form);
   expect(seen.filter((s) => s.route.startsWith('POST'))).toHaveLength(1);
 });
+it('seals a summary, sends tags and refuses a long summary', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  await client().send(room.id, 'long prompt', { sub: 'a', tags: ['b'], summary: 'Plan' });
+  const post = seen.find((s) => s.route.startsWith('POST'))!;
+  expect(post.body).toMatchObject({ sub: 'a', tags: ['b'] });
+  expect(JSON.stringify(post)).not.toContain('Plan');
+  const record = {
+    ...{ seq: 1, id: post.body!.id as string, sender: agent, sub: 'a', at: 1 },
+    ...{ kind: 'message' as const, audience: 'all' as const },
+    envelope: post.body!.envelope as e2ee.SealedEnvelope,
+  };
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [record],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const { messages } = await client().read(room.id, { for: 'b' });
+  expect(messages[0]).toMatchObject({ text: 'long prompt', summary: 'Plan' });
+  const urls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
+  expect(urls.some((u) => u.includes('/messages?for=b'))).toBe(true);
+  await expect(client().send(room.id, 'x', { summary: 's'.repeat(201) })).rejects.toThrow(/200/);
+});
+it('lets an agent create a group owned by it and its people', async () => {
+  const seen = serve({
+    ...keysRoute,
+    'POST /api/v1/chats': () => {
+      const body = seen.at(-1)!.body!;
+      const signed = body.head as e2ee.SignedChatHead;
+      return {
+        id: signed.head.room,
+        kind: 'group',
+        nonce: body.nonce,
+        head: 'x',
+        headVersion: 1,
+        chain: [signed],
+        lastSeq: 0,
+        lastAt: 0,
+        readSeq: 0,
+        unread: 0,
+        members: [],
+      };
+    },
+  });
+  await client()
+    .group([human], { hopLimit: 0 })
+    .catch((e: Error) => e);
+  const body = seen.find((s) => s.route === 'POST /api/v1/chats')!.body!;
+  const signed = body.head as e2ee.SignedChatHead;
+  expect(body).toMatchObject({ kind: 'group', hopLimit: 0 });
+  expect(signed).toMatchObject({ by: agent, head: { owners: [agent, human] } });
+  expect(signed.head.members).toEqual([agent, human]);
+  expect(signed.head.room).toBe(await e2ee.groupRoomId(agent, body.nonce as string));
+});
+it("wakes a subagent with its sibling's messages", async () => {
+  const { room } = await groupOf({ lastSeq: 1 });
+  const empty = { messages: [], through_seq: 0, hasMore: false };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: empty,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  await client().send(room.id, 'over to b', { sub: 'a', tags: ['b'] });
+  const post = seen.find((s) => s.route.startsWith('POST'))!;
+  const record = {
+    ...{ seq: 1, id: post.body!.id as string, sender: agent, sub: 'a', at: 1 },
+    ...{ kind: 'message' as const, audience: 'all' as const },
+    envelope: post.body!.envelope as e2ee.SealedEnvelope,
+  };
+  const wake = { room: room.id, first: 1, seq: 1, reason: 'mention', subagent: 'b' };
+  let leases = 0;
+  serve({
+    ...keysRoute,
+    'GET /api/v1/chats/wakes': { wakes: [{ room: room.id }] },
+    [`POST /api/v1/chats/${room.id}/lease`]: () => ({
+      wake: leases++ ? null : { ...wake, context: 'message', contextFrom: 1 },
+    }),
+    [`POST /api/v1/chats/${room.id}/ack`]: null,
+    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 1 },
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [record],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const h = new Herald({ apiKey: token, url });
+  const parsed = e2ee.parseToken(token);
+  const session = new KeyedSession(parsed.seed!, parsed.fingerprint!, () => h.request('/keys'));
+  const socket = new FakeSocket();
+  const chat = new ChatClient(
+    (p, b, o) => h.request(p, b, o),
+    () => session,
+    () => socket,
+    () => Promise.reject(new Error('unused')),
+  );
+  const got: string[] = [];
+  const stop = new AbortController();
+  const done = chat.wakes((w) => void got.push(...w.messages.map((m) => m.text)), {
+    signal: stop.signal,
+  });
+  await flush();
+  socket.handlers.get('open')?.();
+  await flush();
+  stop.abort();
+  await done;
+  expect(got).toEqual(['over to b']);
+});
+it('signs the next group head as an agent owner', async () => {
+  const keys = await ownerKeys();
+  const id = await e2ee.groupRoomId(human, nonce);
+  const first = await e2ee.signChatHead(keys, {
+    ...{ room: id, version: 1, prev: '', owners: [human, agent], members: [human, agent] },
+  });
+  const { room } = await groupOf({ head: await e2ee.headHash(first.head), chain: [first] });
+  const empty = { messages: [], through_seq: 0, hasMore: false };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${id}/messages`]: empty,
+    [`POST /api/v1/chats/${id}/heads`]: new Response('{"error":"stop"}', { status: 418 }),
+    [`GET /api/v1/chats/${id}`]: room,
+  });
+  await expect(client().updateGroup(id, { add: ['a:two'] })).rejects.toThrow();
+  const signed = seen.find((s) => s.route.endsWith('/heads'))!
+    .body as unknown as e2ee.SignedChatHead;
+  expect(signed).toMatchObject({ by: agent, head: { version: 2, prev: room.head } });
+  expect(signed.head.members).toEqual([human, agent, 'a:two']);
+  expect(signed.head.owners).toEqual([human, agent]);
+});

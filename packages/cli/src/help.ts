@@ -104,6 +104,10 @@ export const commands: Record<string, Spec> = {
       'humans',
       'mention',
       'attach',
+      'sub',
+      'tag',
+      'summary',
+      'for',
       'remove',
       'after',
       'before',
@@ -123,7 +127,7 @@ export const commands: Record<string, Spec> = {
   subagents: {
     args: 'list|set|remove [KEY] [NAME]',
     summary: 'Name subagents of this connection',
-    options: ['state', 'color', 'ttl'],
+    options: ['state', 'color', 'ttl', 'reach'],
   },
   watch: { summary: 'Print messages as they change', options: ['after'] },
   account: { summary: 'Show the account holder, this connection, plan and usage' },
@@ -182,6 +186,11 @@ const describe: Record<string, string> = {
   color: '--color #RRGGBB',
   ttl: '--ttl SECONDS     Seconds until it expires (300)',
   exec: '--exec CMD         Shell command to run per wake',
+  sub: '--sub KEY          Send as this subagent',
+  tag: '--tag KEY          Address a subagent; repeatable',
+  summary: '--summary TEXT     One line shown while collapsed (200)',
+  for: '--for KEY          Read as this subagent',
+  reach: '--reach all|agents  agents: people cannot reach it',
 };
 const globals = `Global options:
   --json             Machine-readable JSON output

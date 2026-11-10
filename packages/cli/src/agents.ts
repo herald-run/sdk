@@ -1,7 +1,13 @@
 import type { AgentPresence, Herald, PresenceState } from '@herald-run/sdk';
 import { UsageError } from './compose';
 
-export type AgentValues = { json?: boolean; state?: string; color?: string; ttl?: number };
+export type AgentValues = {
+  json?: boolean;
+  state?: string;
+  color?: string;
+  ttl?: number;
+  reach?: string;
+};
 type Io = { out: (line: string) => void };
 const STATES: PresenceState[] = ['idle', 'busy', 'blocked', 'offline'];
 const state = (value: string | undefined): PresenceState => {
@@ -49,7 +55,10 @@ export async function subagents(
       ...shape(values.state ? state(values.state) : 'idle', undefined, values.color),
       name,
     };
-    const stored = await client.agents.setSubagent(key, profile, { ttl: values.ttl });
+    if (values.reach && values.reach !== 'all' && values.reach !== 'agents')
+      throw new UsageError('Reach is all or agents.');
+    const reach = values.reach as 'all' | 'agents' | undefined;
+    const stored = await client.agents.setSubagent(key, profile, { ttl: values.ttl, reach });
     print(`${key}  ${name}`, stored);
   } else if (action === 'remove') {
     if (!key) throw new UsageError('Usage: herald subagents remove KEY');

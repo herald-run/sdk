@@ -93,9 +93,15 @@ it('seals a subagent name under its key and lists or removes them', async () => 
     'DELETE /api/v1/agents/me/subagents/review': {},
   });
   const agents = client();
-  await agents.setSubagent('review', { name: 'Reviewer', state: 'busy' }, { ttl: 60 });
+  await agents.setSubagent(
+    'review',
+    { name: 'Reviewer', state: 'busy' },
+    { ttl: 60, reach: 'agents' },
+  );
   const put = seen.find((s) => s.route.startsWith('PUT'))!.body!;
-  expect(put.ttl).toBe(60);
+  expect(put).toMatchObject({ ttl: 60, reach: 'agents' });
+  await agents.renewSubagent('review', { reach: 'all' });
+  expect(seen.at(-1)!.body).toEqual({ ttl: 300, reach: 'all' });
   expect(JSON.stringify(put)).not.toContain('Reviewer');
   const env = put.envelope as e2ee.SealedEnvelope;
   const owner = await ownerKeys();

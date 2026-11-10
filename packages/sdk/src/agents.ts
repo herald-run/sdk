@@ -1,13 +1,14 @@
-import type { AgentPresence, SubagentProfile } from './e2ee/index.js';
+import type { AgentPresence, SubagentProfile, SubagentReach } from './e2ee/index.js';
 import * as e2ee from './e2ee/index.js';
 import type { KeyedSession } from './keyed.js';
 
-export type { AgentPresence, PresenceState, SubagentProfile } from './e2ee/index.js';
+export type { AgentPresence, PresenceState, SubagentProfile, SubagentReach } from './e2ee/index.js';
 export type AgentPresenceOptions = {
   /** Seconds the presence stands without a refresh (10 to 86400, default 300). */
   ttl?: number;
 };
-export type OwnSubagent = { key: string; expiresAt: number };
+export type SubagentOptions = AgentPresenceOptions & { reach?: SubagentReach };
+export type OwnSubagent = { key: string; expiresAt: number; reach: SubagentReach };
 type AgentsRequest = <T>(
   path: string,
   body?: unknown,
@@ -61,22 +62,22 @@ export class AgentsClient {
   async setSubagent(
     key: string,
     profile: SubagentProfile,
-    options: AgentPresenceOptions = {},
+    options: SubagentOptions = {},
   ): Promise<Stored> {
     if (!KEY.test(key)) throw new Error('A subagent key is 1 to 64 letters, digits, . _ or -.');
     const keys = await this.#keyed().chatKeys();
     const envelope = await e2ee.sealSubagent(keys, await this.#keyed().owner(), key, profile);
     return this.#request<Stored>(
       `/agents/me/subagents/${encodeURIComponent(key)}`,
-      { envelope, ttl: options.ttl ?? 300 },
+      { envelope, ttl: options.ttl ?? 300, ...(options.reach ? { reach: options.reach } : {}) },
       { method: 'PUT' },
     );
   }
   /** Keeps a subagent listed for another `ttl` seconds without changing it. */
-  renewSubagent(key: string, options: AgentPresenceOptions = {}): Promise<Stored> {
+  renewSubagent(key: string, options: SubagentOptions = {}): Promise<Stored> {
     return this.#request<Stored>(
       `/agents/me/subagents/${encodeURIComponent(key)}`,
-      { ttl: options.ttl ?? 300 },
+      { ttl: options.ttl ?? 300, ...(options.reach ? { reach: options.reach } : {}) },
       { method: 'PUT' },
     );
   }
