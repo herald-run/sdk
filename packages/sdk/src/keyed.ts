@@ -254,11 +254,12 @@ export class KeyedSession {
       if (this.#options.pin) this.#setPin({ ...this.#options.pin, policy: verified.version });
     }
     // A member signed a newer version than the server can show: admin read is off till it can.
-    const observers = verified?.adminRead && verified.version >= this.#policyClaim
-      ? [...ws!.members.values()]
-          .filter((m) => m.caps.includes('keys'))
-          .map((m) => ({ kid: m.inboxKid, box: m.inbox }))
-      : [];
+    const observers =
+      verified?.adminRead && verified.version >= this.#policyClaim
+        ? [...ws!.members.values()]
+            .filter((m) => m.caps.includes('keys'))
+            .map((m) => ({ kid: m.inboxKid, box: m.inbox }))
+        : [];
     const id = [...s.kids].find(([, kid]) => kid === s.me.kid)?.[0];
     if (!id) fail("This token's key is not certified.");
     const user = (p: string) => (s.ws ? s.ws.members.get(p.slice(2)) : undefined);

@@ -8,7 +8,7 @@ export type AgentPresenceOptions = {
   ttl?: number;
 };
 export type OwnSubagent = { key: string; expiresAt: number };
-type Request = <T>(
+type AgentsRequest = <T>(
   path: string,
   body?: unknown,
   options?: { method?: string; signal?: AbortSignal },
@@ -22,10 +22,10 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
  * key, so Herald only sees when they expire. A connected chat stream keeps presence alive.
  */
 export class AgentsClient {
-  #request: Request;
+  #request: AgentsRequest;
   #keyed: () => KeyedSession;
   #last?: { presence: AgentPresence; at: number; ttl: number };
-  constructor(request: Request, keyed: () => KeyedSession) {
+  constructor(request: AgentsRequest, keyed: () => KeyedSession) {
     this.#request = request;
     this.#keyed = keyed;
   }

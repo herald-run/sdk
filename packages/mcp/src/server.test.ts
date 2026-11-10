@@ -89,7 +89,13 @@ it('lists every tool with a description', async () => {
     [
       'ask',
       'cancel',
+      'chat_answer',
+      'chat_ask',
+      'chat_delete',
+      'chat_download',
+      'chat_edit',
       'chat_list',
+      'chat_react',
       'chat_read',
       'chat_send',
       'chat_wait',

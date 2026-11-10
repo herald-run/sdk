@@ -234,7 +234,10 @@ const recipients = (keys: ChatKeys, room: ChatRoom, audience: ChatRecord['audien
     .filter((key): key is RecipientKey => !!key);
   const kids = new Set(out.map((k) => k.kid));
   for (const key of keys.observers?.() ?? [])
-    if (!kids.has(key.kid)) (out.push(key), kids.add(key.kid));
+    if (!kids.has(key.kid)) {
+      out.push(key);
+      kids.add(key.kid);
+    }
   return out;
 };
 /**
@@ -279,8 +282,8 @@ export async function sealChat(
   trust?: RoomTrust,
 ): Promise<SealedEnvelope> {
   await verifyChatRoom(keys, room, trust);
-  const audience = input.audience ?? 'all';
-  const { id, text, kind, sub, seen, to, ctxAudience, audience: _a, ...extra } = input;
+  const { id, text, kind, sub, seen, to, ctxAudience, audience: chosen, ...extra } = input;
+  const audience = chosen ?? 'all';
   const payload: ChatPayload = {
     ...extra,
     kind: kind ?? 'message',

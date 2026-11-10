@@ -59,7 +59,7 @@ export type ChatSendOptions = {
   reference?: Record<string, unknown>;
 };
 export type ChatFormRules = { deadline?: number; answerers?: 'humans' | 'any' };
-type Request = <T>(
+type ChatRequest = <T>(
   path: string,
   body?: unknown,
   options?: { idempotencyKey?: string; signal?: AbortSignal; method?: string },
@@ -90,7 +90,7 @@ const path = (room: string) => '/chats/' + encodeURIComponent(room);
 const ROOM_ID = /^[\w-]{43}$/;
 /** Decrypted chat for one connection: rooms are verified and every message is opened locally. */
 export class ChatClient {
-  #request: Request;
+  #request: ChatRequest;
   #keyed: () => KeyedSession;
   #connect: () => EventSocket;
   #raw: Raw;
@@ -98,7 +98,12 @@ export class ChatClient {
   #pins = new Map<string, { version: number; hash: string }>();
   #heads = new Map<string, ReadonlyMap<string, string[]> | null>();
   #recent = new Map<string, Set<string>>();
-  constructor(request: Request, keyed: () => KeyedSession, connect: () => EventSocket, raw: Raw) {
+  constructor(
+    request: ChatRequest,
+    keyed: () => KeyedSession,
+    connect: () => EventSocket,
+    raw: Raw,
+  ) {
     this.#request = request;
     this.#keyed = keyed;
     this.#connect = connect;
