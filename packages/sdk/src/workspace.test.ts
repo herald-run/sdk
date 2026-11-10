@@ -315,7 +315,7 @@ it('chat fetches the signed policy, pins its version and verifies a member-signe
   const all = [ben.inboxKid, integration.kid, ana.inboxKid].sort();
   expect(await sent()).toMatchObject({ kids: all, ctx: { member: me, policy: 2 } });
   expect(pins.at(-1)).toEqual({ ...W.pin, policy: 2 });
-  // Ben signed 3, which the server cannot show: one refetch, then admin read is off, not an error.
+  // Ben signed 3, which the server cannot show: one refetch, then `adminRead` is off, not an error.
   expect((await chat.read(room.id)).messages[0]).toMatchObject({ text: 'v3' });
   expect(await sent()).toMatchObject({ kids: [ben.inboxKid, integration.kid].sort() });
   expect(fetches()).toBe(2);

@@ -253,7 +253,7 @@ export class KeyedSession {
       this.#policyVersion = verified.version;
       if (this.#options.pin) this.#setPin({ ...this.#options.pin, policy: verified.version });
     }
-    // A member signed a newer version than the server can show: admin read is off till it can.
+    // A member signed a newer version than the server can show: `adminRead` is off till it can.
     const observers =
       verified?.adminRead && verified.version >= this.#policyClaim
         ? [...ws!.members.values()]
