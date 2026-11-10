@@ -517,7 +517,14 @@ export function createServer(client: () => Promise<Herald>) {
     links: z
       .array(link)
       .max(8)
-      .refine((links) => new Set(links.map((l) => l.url)).size === links.length, 'Duplicate URL.')
+      .superRefine((links, ctx) => {
+        const urls = new Set<string>();
+        links.forEach((l, i) => {
+          if (urls.has(l.url))
+            ctx.addIssue({ code: 'custom', path: [i, 'url'], message: 'Duplicate URL.' });
+          urls.add(l.url);
+        });
+      })
       .optional()
       .describe('http(s) links shown with it, such as a pull request'),
   };

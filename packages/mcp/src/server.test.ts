@@ -291,7 +291,10 @@ it('takes the links the SDK accepts and names the one it refuses', async () => {
     (await call('presence_set', { state: 'idle', links })).text;
   expect(await bad([{ label: ' ', url: link.url }])).toContain('label of 1 to 60');
   expect(await bad([{ label: 'x', url: 'javascript:alert(1)' }])).toContain('http or https');
-  expect(await bad([link, link])).toContain('Duplicate URL');
+  expect(await bad([{ label: 'x', url: 'https://user:pass@example.com/' }])).toContain(
+    'credentials',
+  );
+  expect(await bad([link, link])).toContain('Duplicate URL. at links[1].url');
 });
 it('passes subagent reach and reads as a subagent', async () => {
   await call('subagent_set', { key: 'quiet', name: 'Q', state: 'idle', reach: 'agents' });

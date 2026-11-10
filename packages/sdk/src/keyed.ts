@@ -13,7 +13,7 @@ import {
   answersSchema,
   matchesAction,
   messageInputSchema,
-  roomId,
+  roomIdSchema,
   sealedMessageInputSchema,
   sessionInputSchema,
   sessionValues,
@@ -504,7 +504,7 @@ export class KeyedSession {
     const { attachments, room, ...rest } = opened;
     const files = fileList.safeParse(attachments);
     // A malformed room loses the link, not the message.
-    const linked = roomId.safeParse(room);
+    const linked = roomIdSchema.safeParse(room);
     const parsed = messageInputSchema.safeParse({
       ...rest,
       ...(linked.success && { room: linked.data }),

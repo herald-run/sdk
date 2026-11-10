@@ -141,6 +141,9 @@ it('seals task, links and a parent, and refuses bad ones', async () => {
   await expect(bad({ links: [links[0], links[0]] })).rejects.toThrow(
     'Invalid presence link 2: duplicate URL',
   );
+  await expect(
+    bad({ links: [{ label: 'a', url: 'https://user:pass@example.com/x' }] }),
+  ).rejects.toThrow('Invalid presence link 1: the URL must not contain credentials');
   await expect(bad({ links: Array(9).fill(links[0]) })).rejects.toThrow('links');
   const sub2 = (parent: string) =>
     agents.setSubagent('tests', { name: 'T', state: 'idle', parent });
@@ -177,6 +180,7 @@ it('opens presence tolerantly: an invalid optional field is dropped, not the pre
   const bad = [
     { label: ' ', url: 'https://example.com/a' },
     { label: 'js', url: 'javascript:alert(1)' },
+    { label: 'cred', url: 'https://user:pass@example.com/x' },
     null,
     { label: 'L1', url: 'https://example.com/1' },
     { label: 'again', url: 'https://example.com/1' },

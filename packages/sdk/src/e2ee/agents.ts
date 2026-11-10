@@ -78,7 +78,11 @@ export const agentLinkError = (link: unknown): string | undefined => {
   const message = `the URL must be http or https, up to ${agentLinkLimits.url} characters`;
   if (typeof url !== 'string' || url.length > agentLinkLimits.url) return message;
   try {
-    if (['http:', 'https:'].includes(new URL(url).protocol)) return undefined;
+    const parsed = new URL(url);
+    if (['http:', 'https:'].includes(parsed.protocol))
+      return parsed.username || parsed.password
+        ? 'the URL must not contain credentials'
+        : undefined;
   } catch {
     // An unparsable URL is invalid.
   }
