@@ -278,12 +278,29 @@ it('uses a keyed CLI login and reports locked records plainly', async () => {
   expect(seen.every((s) => s.auth === `Bearer ${auth}`)).toBe(true);
   await other.close();
 });
+it('takes the links the SDK accepts and names the one it refuses', async () => {
+  const link = { label: 'Pull request', url: 'https://example.com/pr/1' };
+  await call('presence_set', { state: 'busy', task: 'Fixing', links: [link] });
+  const put = JSON.parse(last((s) => s.method === 'PUT')!.body);
+  const ctx = { t: 'presence', principal: 'a:' + sealed.runnerId };
+  expect(await sealed.openForOwner(put.envelope, ctx)).toMatchObject({
+    task: 'Fixing',
+    links: [link],
+  });
+  const bad = async (links: unknown[]) =>
+    (await call('presence_set', { state: 'idle', links })).text;
+  expect(await bad([{ label: ' ', url: link.url }])).toContain('label of 1 to 60');
+  expect(await bad([{ label: 'x', url: 'javascript:alert(1)' }])).toContain('http or https');
+  expect(await bad([link, link])).toContain('Duplicate URL');
+});
 it('passes subagent reach and reads as a subagent', async () => {
   await call('subagent_set', { key: 'quiet', name: 'Q', state: 'idle', reach: 'agents' });
   const put = last((s) => s.method === 'PUT')!;
   expect(JSON.parse(put.body)).toMatchObject({ reach: 'agents' });
   await call('subagent_set', { key: 'child', name: 'C', state: 'idle', parent: 'quiet' });
-  expect(last((s) => s.method === 'PUT')!.url).toContain('/subagents/child');
+  const child = JSON.parse(last((s) => s.method === 'PUT')!.body).envelope;
+  const ctx = { t: 'subagent', principal: 'a:' + sealed.runnerId, key: 'child' };
+  expect(await sealed.openForOwner(child, ctx)).toMatchObject({ name: 'C', parent: 'quiet' });
   await call('chat_read', { room: 'r'.repeat(43), for: 'quiet' });
   expect(seen.some((s) => s.url.includes('/messages?for=quiet'))).toBe(true);
 });

@@ -135,6 +135,34 @@ class KeyedTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("session", injected.wire())
             self.assertIsNone(injected.response.action_id)
 
+    async def test_opens_a_message_room_and_drops_a_malformed_one(self):
+        other = e2ee.key_set()
+        cert = e2ee.certify(SCENARIO["keyring"], sign=other.sign_pub, box=other.box_pub)
+        sender = "00000000-0000-4000-8000-0000000000bb"
+        keys = {**DIRECTORY, "certificates": [*DIRECTORY["certificates"], {"integrationId": sender, **cert}]}
+        owner = e2ee.keyring_keys(SCENARIO["keyring"])
+        runner = DIRECTORY["certificates"][0]["certificate"]
+        to = [{"kid": owner.inbox_kid, "box": owner.inbox[0].box_pub}, {"kid": runner["kid"], "box": runner["box"]}]
+        ctx = {"t": "message", "account": SCENARIO["keyring"]["account"], "id": SENT["id"]}
+        async with client({"GET /api/v1/keys": keys}, []) as herald:
+            async def opened(room):
+                payload = {"v": 1, "kind": "message", "title": "Linked", "attachments": [], "room": room}
+                sealed = e2ee.seal(payload=payload, ctx=ctx, signer=other, to=to)
+                return await herald._open({**SENT, "senderId": sender, "sealed": sealed})
+            good = await opened("r" * 43)
+            self.assertEqual((good["title"], good["room"]), ("Linked", "r" * 43))
+            for bad in ("not a room", 7, "r" * 65, None):
+                message = await opened(bad)
+                self.assertEqual(message["title"], "Linked")
+                self.assertNotIn("room", message)
+                self.assertIsNone(message.get("unverified"))
+
+    def test_secret_offers_check_the_room(self):
+        self.assertEqual(keyed.check_secret_offer({"title": "k", "room": "abc_1"})["room"], "abc_1")
+        for bad in ("not a room", 7, ""):
+            with self.assertRaises(HeraldError):
+                keyed.check_secret_offer({"title": "k", "room": bad})
+
     def test_sync_wrapper(self):
         with client({"GET /api/v1/keys": DIRECTORY, "GET /api/v1/messages/": STEP["get"]["response"]["body"]}, [], SyncHerald) as herald:
             self.assertEqual(herald.get(SENT["id"]).title, "Deploy v2?")

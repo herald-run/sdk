@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { sealedContracts } from '../fixtures/contracts';
 import * as e2ee from './e2ee/index';
+import * as sealed from '../fixtures/sealed';
 import { E2eeError, Herald, HeraldError, type KeyDirectory, type Message } from './index';
 afterEach(() => vi.restoreAllMocks());
 const { token, keyring, steps } = sealedContracts;
@@ -106,6 +107,21 @@ it('validates input before sealing and seals secret offers', async () => {
   const linked = JSON.parse(seen.at(-1)!.body!);
   expect(linked.room).toBeUndefined();
   expect(seen.at(-1)!.body).not.toContain('r'.repeat(43));
+});
+it('opens a sealed room and drops a malformed one without losing the message', async () => {
+  const room = 'r'.repeat(43);
+  const get = async (content: object) => {
+    const record = await sealed.sealedMessage({ title: 'Linked', ...content });
+    serve({ 'GET /api/v1/keys': directory, [`GET /api/v1/messages/${record.id}`]: record });
+    return new Herald({ apiKey: token, url }).get(record.id);
+  };
+  expect(await get({ room })).toMatchObject({ title: 'Linked', room });
+  for (const bad of ['not a room', 7, 'r'.repeat(65)]) {
+    const opened = await get({ room: bad });
+    expect(opened).toMatchObject({ title: 'Linked' });
+    expect(opened.room).toBeUndefined();
+    expect(opened.unverified).toBeUndefined();
+  }
 });
 it('binds logs and results to the task runner and refuses unsealed task content', async () => {
   const raw = (step('claim-task').response.body as { task: Message }).task;

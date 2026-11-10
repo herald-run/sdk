@@ -42,6 +42,15 @@ it('sets a task and links, and nests a subagent under a parent', async () => {
   await expect(
     presence(client, ['set', 'busy'], { link: ['https://example.com'] }, io()),
   ).rejects.toThrow('LABEL=URL');
+  // A label may hold `=`; the split is at the first `=` before a URL scheme.
+  await presence(client, ['set', 'busy'], { link: ['a=b=http://example.com/?x=https://y'] }, io());
+  expect(setPresence).toHaveBeenLastCalledWith(
+    { state: 'busy', links: [{ label: 'a=b', url: 'http://example.com/?x=https://y' }] },
+    { ttl: undefined },
+  );
+  await expect(presence(client, ['set', 'busy'], { link: ['a=ftp://x'] }, io())).rejects.toThrow(
+    'LABEL=URL',
+  );
 });
 it('rejects an unknown state or action', async () => {
   const client = fake({});

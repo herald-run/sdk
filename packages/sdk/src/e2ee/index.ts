@@ -33,6 +33,7 @@ export {
   type RoomTrust,
 } from './chat';
 export {
+  agentLinkError,
   agentLinkLimits,
   layoutContext,
   openLayout,

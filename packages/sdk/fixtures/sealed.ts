@@ -152,3 +152,15 @@ export async function opened(envelope: SealedEnvelope): Promise<Payload> {
     expect: { t: envelope.ctx.t, account: keyring.account },
   });
 }
+/** What this connection sealed to its owner, opened with the owner's keys. */
+export async function openForOwner(envelope: SealedEnvelope, ctx: Ctx) {
+  const owner = await e2ee.keyringKeys(keyring);
+  const cert = directory.certificates[0].certificate;
+  return e2ee.open(envelope, {
+    recipients: [
+      { kid: owner.inboxKid, boxPub: owner.inbox[0].boxPub, boxPriv: owner.inbox[0].boxPriv },
+    ],
+    signers: (kid) => (kid === cert.kid ? cert.sign : undefined),
+    expect: { ...ctx, account: keyring.account },
+  });
+}

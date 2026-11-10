@@ -18,11 +18,11 @@ const state = (value: string | undefined): PresenceState => {
     throw new UsageError(`State is one of ${STATES.join(', ')}.`);
   return value as PresenceState;
 };
-/** `--link LABEL=URL`, split at the first `=`. */
+/** `--link LABEL=URL`: split at the first `=` followed by `http://` or `https://`. */
 const link = (value: string): AgentLink => {
-  const at = value.indexOf('=');
-  if (at < 1) throw new UsageError('Links are LABEL=URL.');
-  return { label: value.slice(0, at), url: value.slice(at + 1) };
+  const match = /^(.+?)=(https?:\/\/.*)$/is.exec(value);
+  if (!match) throw new UsageError('Links are LABEL=URL with an http or https URL.');
+  return { label: match[1], url: match[2] };
 };
 const shape = (state: PresenceState, text: string | undefined, values: AgentValues) => {
   const presence: AgentPresence = { state };

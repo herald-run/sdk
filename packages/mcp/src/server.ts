@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
+  agentLinkError,
   duration,
   HeraldError,
   version,
@@ -498,6 +499,12 @@ export function createServer(client: () => Promise<Herald>) {
     },
   );
 
+  const link = z
+    .object({ label: z.string().max(60), url: z.string().max(2048) })
+    .superRefine((value, ctx) => {
+      const message = agentLinkError(value);
+      if (message) ctx.addIssue({ code: 'custom', message });
+    });
   const look = {
     state: z.enum(['idle', 'busy', 'blocked', 'offline']),
     color: z
@@ -508,8 +515,9 @@ export function createServer(client: () => Promise<Herald>) {
     ttl: z.number().int().min(10).max(86400).optional().describe('Seconds before it expires (300)'),
     task: z.string().max(200).optional().describe('What it is working on'),
     links: z
-      .array(z.object({ label: z.string().min(1).max(60), url: z.string().url().max(2048) }))
+      .array(link)
       .max(8)
+      .refine((links) => new Set(links.map((l) => l.url)).size === links.length, 'Duplicate URL.')
       .optional()
       .describe('http(s) links shown with it, such as a pull request'),
   };

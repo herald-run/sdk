@@ -70,39 +70,74 @@ const fail = (message: string): never => {
   throw new E2eeError(message);
 };
 const COLOR = /^#[0-9a-f]{6}$/i;
-const checkPresence = <T extends AgentPresence>(value: T): T => {
+/** Why a link cannot be shown, or undefined when it can. */
+export const agentLinkError = (link: unknown): string | undefined => {
+  const { label, url } = (link ?? {}) as Partial<AgentLink>;
+  if (typeof label !== 'string' || !label.trim() || label.length > agentLinkLimits.label)
+    return `a label of 1 to ${agentLinkLimits.label} characters is required`;
+  const message = `the URL must be http or https, up to ${agentLinkLimits.url} characters`;
+  if (typeof url !== 'string' || url.length > agentLinkLimits.url) return message;
+  try {
+    if (['http:', 'https:'].includes(new URL(url).protocol)) return undefined;
+  } catch {
+    // An unparsable URL is invalid.
+  }
+  return message;
+};
+/** Sealing refuses what opening drops: a bad `task`, `links` or `parent` never costs the profile. */
+const checkLinks = (links: unknown[]) => {
+  const urls = new Set<string>();
+  links.forEach((link, i) => {
+    const error = agentLinkError(link);
+    if (error) fail(`Invalid presence link ${i + 1}: ${error}.`);
+    const { url } = link as AgentLink;
+    if (urls.has(url)) fail(`Invalid presence link ${i + 1}: duplicate URL.`);
+    urls.add(url);
+  });
+};
+const keepLinks = (links: unknown): AgentLink[] => {
+  const urls = new Set<string>();
+  const kept: AgentLink[] = [];
+  for (const link of Array.isArray(links) ? links : []) {
+    if (agentLinkError(link) || urls.has(link.url)) continue;
+    urls.add(link.url);
+    kept.push({ label: link.label, url: link.url });
+    if (kept.length === agentLinkLimits.links) break;
+  }
+  return kept;
+};
+const checkPresence = <T extends AgentPresence>(value: T, strict = true): T => {
   if (!value || !presenceStates.includes(value.state)) fail('Invalid presence state.');
   if (value.color !== undefined && (typeof value.color !== 'string' || !COLOR.test(value.color)))
     fail('Invalid presence colour.');
   if (value.text !== undefined && (typeof value.text !== 'string' || value.text.length > 120))
     fail('Invalid presence text.');
   const { task, links } = value;
-  if (task !== undefined && (typeof task !== 'string' || task.length > agentLinkLimits.task))
-    fail('Invalid presence task.');
-  if (links !== undefined && (!Array.isArray(links) || links.length > agentLinkLimits.links))
-    fail('Invalid presence links.');
-  for (const link of links ?? []) if (!validLink(link)) fail('Invalid presence link.');
-  return value;
-};
-const validLink = (link: AgentLink) => {
-  const { label, url } = link ?? {};
-  if (typeof label !== 'string' || !label.trim() || label.length > agentLinkLimits.label)
-    return false;
-  if (typeof url !== 'string' || url.length > agentLinkLimits.url) return false;
-  try {
-    return ['http:', 'https:'].includes(new URL(url).protocol);
-  } catch {
-    return false;
+  const badTask =
+    task !== undefined && (typeof task !== 'string' || task.length > agentLinkLimits.task);
+  if (strict) {
+    if (badTask) fail('Invalid presence task.');
+    if (links !== undefined && (!Array.isArray(links) || links.length > agentLinkLimits.links))
+      fail('Invalid presence links.');
+    checkLinks(links ?? []);
+    return value;
   }
+  const kept = keepLinks(links);
+  const out = { ...value };
+  delete out.task;
+  delete out.links;
+  if (task !== undefined && !badTask) out.task = task;
+  if (kept.length) out.links = kept;
+  return out;
 };
-const checkSubagent = (key: string, value: SubagentProfile) => {
-  const { parent } = value;
-  if (
-    parent !== undefined &&
-    (typeof parent !== 'string' || !subagentKey.test(parent) || parent === key)
-  )
-    fail('Invalid subagent parent.');
-  return checkPresence(value);
+const validParent = (key: string, parent: unknown) =>
+  typeof parent === 'string' && subagentKey.test(parent) && parent !== key;
+const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
+  const { parent, ...rest } = checkPresence(value, strict);
+  if (parent === undefined) return rest as SubagentProfile;
+  if (validParent(key, parent)) return { ...rest, parent } as SubagentProfile;
+  if (strict) fail('Invalid subagent parent.');
+  return rest as SubagentProfile;
 };
 const checkLayout = (value: AgentLayout): AgentLayout => {
   if (!value || !Array.isArray(value.groups) || !value.places || typeof value.places !== 'object')
@@ -141,7 +176,7 @@ export async function openPresence(keys: ChatKeys, connection: string, envelope:
     account: keys.account,
     principal: connection,
   });
-  return checkPresence(value);
+  return checkPresence(value, false);
 }
 export const sealSubagent = (
   keys: ChatKeys,
@@ -171,7 +206,7 @@ export async function openSubagent(
     key,
   });
   if (typeof value.name !== 'string' || !value.name) fail('Invalid subagent name.');
-  return checkSubagent(key, value);
+  return checkSubagent(key, value, false);
 }
 /** A member seals their own layout to themselves. */
 export const sealLayout = (keys: ChatKeys, layout: AgentLayout) =>

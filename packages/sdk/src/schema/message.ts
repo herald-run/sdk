@@ -25,6 +25,8 @@ export const attachmentSchema = z.object({
 });
 export type Attachment = z.infer<typeof attachmentSchema>;
 
+/** A chat room ID: 1 to 64 base64url characters. */
+export const roomId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const common = {
   title: z.string().min(1).max(180),
   body: z.string().max(50_000).default(''),
@@ -47,10 +49,7 @@ const common = {
    * The chat room this message belongs to, sealed with it. Apps offer to open the room only to
    * a reader who is in it with the sender.
    */
-  room: z
-    .string()
-    .regex(/^[A-Za-z0-9_-]{1,64}$/)
-    .optional(),
+  room: roomId.optional(),
 };
 const contentInputSchema = z.object({
   ...common,
