@@ -27,6 +27,8 @@ export interface AgentPresence extends Record<string, unknown> {
   order?: number;
   /** Where a chat with it opens: the connection's direct chat, or a room. Absent: no chat. */
   chat?: AgentChat;
+  /** The room it is working in now; viewers show its state and text there. */
+  room?: string;
   /** Whether people can send it new requests. */
   requests?: boolean;
   /** About text, up to 500 characters. */
@@ -63,6 +65,7 @@ const entryChecks: Record<string, (v: unknown) => boolean> = {
       typeof v === 'object' &&
       typeof (v as { room?: unknown }).room === 'string' &&
       ROOM.test((v as { room: string }).room)),
+  room: (v) => typeof v === 'string' && ROOM.test(v),
   requests: (v) => typeof v === 'boolean',
   about: (v) => typeof v === 'string' && v.length <= agentEntryLimits.about,
 };
@@ -81,6 +84,8 @@ export interface LayoutPlace {
 export interface AgentLayout extends Record<string, unknown> {
   groups: LayoutGroup[];
   places: Record<string, LayoutPlace>;
+  /** Hues (0 to 360) given once to automatically coloured connections and agents, by id. */
+  colors?: Record<string, number>;
 }
 export const presenceContext = (account: string, principal: string): Ctx => ({
   t: 'presence',
