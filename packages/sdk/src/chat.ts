@@ -860,13 +860,15 @@ export class ChatClient {
           }
           resolve();
         };
+        let opened = false;
         const ping = setInterval(() => {
-          // A socket still connecting after a keepalive is stuck: retry instead of sending.
-          if (!alive || socket.readyState !== socket.OPEN) return finish();
+          // A socket not open by the next keepalive is stuck: retry instead of sending.
+          if (!alive || !opened) return finish();
           alive = false;
           socket.send('ping');
         }, KEEPALIVE);
         socket.on('open', () => {
+          opened = true;
           attempt = -1;
           onOpen?.();
         });

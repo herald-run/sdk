@@ -222,6 +222,29 @@ class FakeSocket implements EventSocket {
   }
 }
 const flush = () => new Promise((r) => setTimeout(r, 20));
+it('retries a socket that has not opened by the next keepalive', async () => {
+  vi.useFakeTimers();
+  const opened: FakeSocket[] = [];
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(
+    unused,
+    unused as never,
+    () => {
+      opened.push(new FakeSocket());
+      return opened.at(-1)!;
+    },
+    unused,
+  );
+  const stop = new AbortController();
+  const done = chat.wakes(() => {}, { signal: stop.signal });
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(opened).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(opened).toHaveLength(2);
+  stop.abort();
+  await done;
+  vi.useRealTimers();
+});
 it('listen delivers each message once, catches up on wake and gaps, and acks', async () => {
   const room = await makeRoom();
   const m1 = await fromOwner(room, 1, 'one');
