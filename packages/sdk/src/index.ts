@@ -95,6 +95,7 @@ export type {
   ChatRoom,
   ChatSendOptions,
   ChatWake,
+  ChatStop,
   RoomAgent,
   WakeReason,
 } from './chat.js';

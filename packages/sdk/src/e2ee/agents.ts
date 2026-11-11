@@ -31,6 +31,8 @@ export interface AgentPresence extends Record<string, unknown> {
   room?: string;
   /** Whether people can send it new requests. */
   requests?: boolean;
+  /** Whether people who may send it requests can stop its current work (see `ChatClient.wakes`). */
+  stoppable?: boolean;
   /** About text, up to 500 characters. */
   about?: string;
 }
@@ -69,6 +71,7 @@ const entryChecks: Record<string, (v: unknown) => boolean> = {
       ROOM.test((v as { room: string }).room)),
   room: (v) => typeof v === 'string' && ROOM.test(v),
   requests: (v) => typeof v === 'boolean',
+  stoppable: (v) => typeof v === 'boolean',
   about: (v) => typeof v === 'string' && v.length <= agentEntryLimits.about,
 };
 export interface LayoutGroup {

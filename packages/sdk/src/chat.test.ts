@@ -247,6 +247,26 @@ it('retries a socket that has not opened by the next keepalive', async () => {
   await done;
   vi.useRealTimers();
 });
+it('wakes passes stop requests to onStop', async () => {
+  const socket = new FakeSocket();
+  const [a, b] = ['a'.repeat(43), 'b'.repeat(43)];
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(unused, unused as never, () => socket, unused);
+  const stop = new AbortController();
+  const got: unknown[] = [];
+  const done = chat.wakes(() => {}, {
+    signal: stop.signal,
+    rooms: [a],
+    onStop: (s) => void got.push(s),
+  });
+  socket.emit({ type: 'stop', room: a, subagent: 'lead', by: 'h:ann' });
+  socket.emit({ type: 'stop', room: b, subagent: 'lead', by: 'h:ann' });
+  socket.emit({ type: 'stop', room: a, by: 'h:ann' });
+  expect(got).toEqual([{ room: a, subagent: 'lead', by: 'h:ann' }]);
+  stop.abort();
+  socket.close();
+  await done;
+});
 it('listen delivers each message once, catches up on wake and gaps, and acks', async () => {
   const room = await makeRoom();
   const m1 = await fromOwner(room, 1, 'one');

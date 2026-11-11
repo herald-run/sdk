@@ -165,6 +165,7 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
     chat: { room: 'room_1' },
     room: 'room_1',
     requests: true,
+    stoppable: true,
     about: 'Leads one task.',
   };
   await agents.register('lead', { name: 'Lead', state: 'busy', ...entry }, { reach: 'all' });
@@ -205,6 +206,7 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
   await expect(bad({ chat: { room: 'a b' } })).rejects.toThrow('chat');
   await expect(bad({ room: 'a b' })).rejects.toThrow('room');
   await expect(bad({ requests: 'yes' as never })).rejects.toThrow('requests');
+  await expect(bad({ stoppable: 1 as never })).rejects.toThrow('stoppable');
   await expect(bad({ about: 'x'.repeat(501) })).rejects.toThrow('about');
 });
 it('opens entry fields tolerantly', async () => {
@@ -215,12 +217,14 @@ it('opens entry fields tolerantly', async () => {
     chat: { room: 'ok', extra: 1 },
     room: 'a b',
     requests: 1,
+    stoppable: 'yes',
     about: 'x'.repeat(501),
   });
   const opened = await e2ee.openPresence(owner, human, env);
   expect(opened).toMatchObject({ state: 'idle', chat: { room: 'ok' } });
   expect(Object.keys(opened)).not.toContain('section');
-  for (const k of ['order', 'requests', 'about', 'room']) expect(opened).not.toHaveProperty(k);
+  for (const k of ['order', 'requests', 'stoppable', 'about', 'room'])
+    expect(opened).not.toHaveProperty(k);
   expect(opened.chat).toEqual({ room: 'ok' });
 });
 /** The owner seals raw content as if it came from the connection `human`, to test opening. */
