@@ -659,6 +659,7 @@ export class Herald {
           redirect: 'manual',
         }),
       (key) => this.agents.agentName(key),
+      (room, key) => this.agents.left(room, key),
     ));
   }
   /** The agents this connection registers, shown end-to-end encrypted to its owner. */

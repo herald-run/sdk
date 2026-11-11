@@ -143,6 +143,7 @@ export class ChatClient {
   #connect: () => EventSocket;
   #raw: Raw;
   #names: (key: string) => string | undefined;
+  #left: (room: string, key: string) => void;
   /** Newest head verified per group, so the server cannot roll one back during this process. */
   #pins = new Map<string, { version: number; hash: string }>();
   #heads = new Map<string, ReadonlyMap<string, string[]> | null>();
@@ -153,12 +154,14 @@ export class ChatClient {
     connect: () => EventSocket,
     raw: Raw,
     names: (key: string) => string | undefined = () => undefined,
+    left: (room: string, key: string) => void = () => {},
   ) {
     this.#request = request;
     this.#keyed = keyed;
     this.#connect = connect;
     this.#raw = raw;
     this.#names = names;
+    this.#left = left;
   }
   /** Sealed names for `keys`: explicit ones first, then the profiles this client set. */
   #sealedNames(keys: (string | undefined)[], explicit: Record<string, string> = {}) {
@@ -243,11 +246,13 @@ export class ChatClient {
   }
   /** Removes one of this connection's agents from a room; its pending wakes there go too. */
   async removeAgent(room: string, key: string): Promise<ChatRoom> {
-    return this.#verified(
-      await this.#request<ChatRoom>(`${path(room)}/agents/${encodeURIComponent(key)}`, undefined, {
-        method: 'DELETE',
-      }),
+    const left = await this.#request<ChatRoom>(
+      `${path(room)}/agents/${encodeURIComponent(key)}`,
+      undefined,
+      { method: 'DELETE' },
     );
+    this.#left(room, key);
+    return this.#verified(left);
   }
   /** A new session room with a principal. */
   async session(target: string): Promise<ChatRoom> {

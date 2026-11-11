@@ -113,6 +113,11 @@ export class AgentsClient {
     await this.#request(`/agents/me/subagents/${encodeURIComponent(key)}`, undefined, {
       method: 'DELETE',
     });
+    for (const r of this.#rooms) if (r.endsWith('/' + key)) this.#rooms.delete(r);
+  }
+  /** @internal The agent left a room, so the next `register` adds it back. */
+  left(room: string, key: string): void {
+    this.#rooms.delete(`${room}/${key}`);
   }
   /** This connection's registered agents. */
   async list(): Promise<OwnAgent[]> {

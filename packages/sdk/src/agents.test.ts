@@ -182,6 +182,9 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
   await agents.unregister('lead');
   expect(seen.at(-1)!.route).toBe('DELETE /api/v1/agents/me/subagents/lead');
   expect(agents.agentName('lead')).toBe('Lead');
+  // Registered again, it rejoins its room.
+  await agents.register('lead', { name: 'Lead', state: 'busy', ...entry });
+  expect(seen.filter((s) => s.route.includes('/chats/'))).toHaveLength(2);
   // The old names still work.
   await agents.setSubagent('old', { name: 'Old', state: 'idle' });
   await agents.renewSubagent('old');
