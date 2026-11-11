@@ -753,7 +753,7 @@ export class ChatClient {
       rooms?: string[];
       lease?: number;
       onError?: (error: unknown, room?: string) => void;
-      onStop?: (stop: ChatStop) => void;
+      onStop?: (stop: ChatStop) => void | Promise<void>;
     } = {},
   ): Promise<void> {
     const { signal } = options;
@@ -800,7 +800,8 @@ export class ChatClient {
           typeof by === 'string'
         )
           try {
-            options.onStop?.({ room, subagent, by });
+            const done: unknown = options.onStop?.({ room, subagent, by });
+            if (done instanceof Promise) done.catch((error) => options.onError?.(error, room));
           } catch (error) {
             options.onError?.(error, room);
           }
