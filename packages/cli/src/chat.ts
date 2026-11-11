@@ -6,11 +6,11 @@ import { UsageError } from './compose';
 export type ChatValues = {
   json?: boolean;
   exec?: string;
-  session?: boolean;
   humans?: boolean;
   mention?: string[];
   attach?: string[];
-  sub?: string;
+  as?: string;
+  agent?: string[];
   tag?: string[];
   summary?: string;
   title?: string;
@@ -29,6 +29,7 @@ type Io = {
   env: Record<string, string | undefined>;
   signal?: AbortSignal;
 };
+const ROOM_ID = /^[\w-]{43}$/;
 const USAGE =
   'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|group|title [ROOM] [SEQ] [TEXT]';
 /** Chat text is written by another party: terminal control sequences are dropped. */
@@ -111,6 +112,12 @@ export async function chat(
     print(`${sent.room}  ${sent.seq}`, sent);
     return 0;
   };
+  /** A person's DM is with one of this connection's agents; its room id serves any attachment. */
+  const dm = async (to: string) => {
+    if (ROOM_ID.test(to)) return to;
+    const agent = need(values.as, '--as KEY');
+    return values.attach?.length ? (await client.chat.open(to, { agent })).id : to;
+  };
   switch (action) {
     case 'list': {
       const rooms = await client.chat.list({ limit: values.limit, before: values.before });
@@ -130,7 +137,7 @@ export async function chat(
     case 'send': {
       const to = need(room, 'ROOM, owner, h:ID or a:ID');
       const text = await body(rest[0], 'TEXT');
-      const target = values.session ? (await client.chat.session(to)).id : to;
+      const target = await dm(to);
       const attachments = [];
       for (const file of values.attach ?? [])
         attachments.push(
@@ -141,7 +148,7 @@ export async function chat(
           audience: values.humans ? 'humans' : undefined,
           mentions: values.mention,
           attachments: attachments.length ? attachments : undefined,
-          sub: values.sub,
+          sub: values.as,
           tags: values.tag,
           summary: values.summary,
         }),
@@ -150,7 +157,9 @@ export async function chat(
     case 'group': {
       const members = [room, ...rest].filter((m): m is string => !!m);
       if (!members.length) need(undefined, 'MEMBER');
+      if (!values.agent?.length) need(undefined, '--agent KEY');
       const made = await client.chat.group(members, {
+        agents: values.agent ?? [],
         title: values.title,
         hopLimit: values.hopLimit,
       });
@@ -158,43 +167,47 @@ export async function chat(
       return 0;
     }
     case 'title':
-      return done(await client.chat.title(need(room, 'ROOM'), need(rest[0], 'TEXT')));
+      return done(
+        await client.chat.title(need(room, 'ROOM'), need(rest[0], 'TEXT'), { sub: values.as }),
+      );
     case 'react':
       return done(
-        await client.chat.react(
-          need(room, 'ROOM'),
-          seqAt(0),
-          need(rest[1], 'EMOJI'),
-          values.remove,
-        ),
+        await client.chat.react(need(room, 'ROOM'), seqAt(0), need(rest[1], 'EMOJI'), {
+          remove: values.remove,
+          sub: values.as,
+        }),
       );
     case 'edit':
       return done(
-        await client.chat.edit(need(room, 'ROOM'), seqAt(0), await body(rest[1], 'TEXT')),
+        await client.chat.edit(need(room, 'ROOM'), seqAt(0), await body(rest[1], 'TEXT'), {
+          sub: values.as,
+        }),
       );
     case 'delete': {
-      await client.chat.delete(need(room, 'ROOM'), seqAt(0));
+      await client.chat.delete(need(room, 'ROOM'), seqAt(0), { sub: values.as });
       print('Deleted.', { deleted: true });
       return 0;
     }
     case 'ask': {
       const { deadline, answerers, ...form } = await parsed(rest[0], 'FORM');
       return done(
-        await client.chat.ask(need(room, 'ROOM'), form, {
+        await client.chat.ask(await dm(need(room, 'ROOM')), form, {
           deadline: deadline as number | undefined,
           answerers: answerers as 'humans' | 'any' | undefined,
-          sub: values.sub,
+          sub: values.as,
           summary: values.summary,
         }),
       );
     }
     case 'answer':
       return done(
-        await client.chat.answer(need(room, 'ROOM'), seqAt(0), await parsed(rest[1], 'ANSWERS')),
+        await client.chat.answer(need(room, 'ROOM'), seqAt(0), await parsed(rest[1], 'ANSWERS'), {
+          sub: values.as,
+        }),
       );
     case 'wait': {
       const target = need(room, 'ROOM');
-      const options = { timeout: values.timeout, signal: io.signal };
+      const options = { timeout: values.timeout, signal: io.signal, for: values.for };
       if (values.after !== undefined) {
         const messages = await client.chat.wait(target, { ...options, after: values.after });
         if (!messages.length) {
@@ -220,6 +233,7 @@ export async function chat(
       const options = {
         signal: stop.signal,
         rooms: room ? [room] : undefined,
+        for: values.for,
         onError: (error: unknown, id?: string) =>
           io.err((id ? id + ': ' : '') + (error as Error).message),
       };

@@ -66,7 +66,7 @@ function serve(routes: Record<string, Reply>) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const u = new URL(String(input));
     const route = `${init?.method || 'GET'} ${u.pathname}`;
-    seen.push({ route, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    seen.push({ route, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
     const key = Object.keys(routes).find((r) => route.startsWith(r));
     if (!key) return Response.json({ error: 'Not found.' }, { status: 404 });
     const value = routes[key];
@@ -175,9 +175,11 @@ it('wait with an explicit cursor still reads past it', async () => {
     [`GET /api/v1/chats/${room.id}/messages`]: { messages: [m1], through_seq: 1, hasMore: false },
     [`GET /api/v1/chats/${room.id}`]: room,
   });
-  const got = await client().wait(room.id, { after: 0, timeout: 1 });
+  const got = await client().wait(room.id, { after: 0, timeout: 1, for: 'lead' });
   expect(got.map((m) => m.text)).toEqual(['one']);
   expect(seen.some((s) => s.route.endsWith('/lease'))).toBe(false);
+  // The ack settles the agent's wake.
+  expect(seen.find((s) => s.route.endsWith('/ack'))?.body).toEqual({ seq: 1, subagent: 'lead' });
 });
 it('wait returns pending messages from others and acks them', async () => {
   const room = await makeRoom({ readSeq: 1 });
@@ -476,9 +478,9 @@ it('titles a room, and a new group when asked', async () => {
     [`GET /api/v1/chats/${room.id}`]: room,
     [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
   });
-  await client().title(room.id, 'Launch Checklist');
+  await client().title(room.id, 'Launch Checklist', { sub: 'lead' });
   const post = seen.find((s) => s.route.startsWith('POST'))!;
-  expect(post.body).toMatchObject({ kind: 'title' });
+  expect(post.body).toMatchObject({ kind: 'title', sub: 'lead' });
   const empty = { messages: [], through_seq: 0, hasMore: false };
   const calls = serve({
     ...keysRoute,
@@ -507,9 +509,46 @@ it('titles a room, and a new group when asked', async () => {
     },
   });
   let created: Record<string, unknown> = {};
-  await client().group([human], { title: 'Launch Checklist' });
+  await client().group([human], { agents: ['lead'], title: 'Launch Checklist' });
   const titled = calls.find((s) => s.route.endsWith('/messages') && s.route.startsWith('POST'));
-  expect(titled?.body).toMatchObject({ kind: 'title' });
+  expect(titled?.body).toMatchObject({ kind: 'title', sub: 'lead' });
+});
+it('names its agent on a reaction, an edit and an answer', async () => {
+  const room = await makeRoom();
+  const owner = await ownerKeys();
+  const id = crypto.randomUUID();
+  const fields = [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }];
+  const form = { title: 'Pick', fields };
+  const envelope = await e2ee.sealChat(owner, room, { id, text: '', kind: 'form', form });
+  const record = { seq: 1, id, sender: human, sub: '', at: 1, kind: 'form', audience: 'all' };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [{ ...record, envelope }],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 2, id: 'x' },
+  });
+  await client().react(room.id, 1, '+1', { remove: true, sub: 'lead' });
+  await client().edit(room.id, 1, 'fixed', { sub: 'lead' });
+  await client().answer(room.id, 1, { a: 'y' }, { sub: 'qa' });
+  const posts = seen.filter((s) => s.route.startsWith('POST')).map((s) => s.body);
+  expect(posts[0]).toMatchObject({ kind: 'event', event: { type: 'reaction' }, sub: 'lead' });
+  expect(posts[1]).toMatchObject({ kind: 'event', event: { type: 'edit' }, sub: 'lead' });
+  expect(posts[2]).toMatchObject({ sub: 'qa' });
+  const answered = {
+    ...{ seq: 2, id: posts[2]!.id as string, sender: agent, sub: 'qa', at: 1 },
+    kind: 'answer' as const,
+  };
+  const opened = await e2ee.openChat(owner, room.id, {
+    ...answered,
+    audience: 'all',
+    envelope: posts[2]!.envelope as e2ee.SealedEnvelope,
+  });
+  expect(opened).toMatchObject({ answers: { a: 'y' } });
+  expect((posts[2]!.envelope as e2ee.SealedEnvelope).ctx).toMatchObject({ sub: 'qa' });
 });
 it('lets an agent create a group owned by it and its people', async () => {
   const seen = serve({
@@ -533,11 +572,15 @@ it('lets an agent create a group owned by it and its people', async () => {
     },
   });
   await client()
-    .group([human], { hopLimit: 0 })
+    .group([human], { agents: ['lead'], hopLimit: 0 })
     .catch((e: Error) => e);
   const body = seen.find((s) => s.route === 'POST /api/v1/chats')!.body!;
   const signed = body.head as e2ee.SignedChatHead;
-  expect(body).toMatchObject({ kind: 'group', hopLimit: 0 });
+  expect(body).toMatchObject({
+    kind: 'group',
+    hopLimit: 0,
+    agents: [{ connection: agent, key: 'lead' }],
+  });
   expect(signed).toMatchObject({ by: agent, head: { owners: [agent, human] } });
   expect(signed.head.members).toEqual([agent, human]);
   expect(signed.head.room).toBe(await e2ee.groupRoomId(agent, body.nonce as string));
@@ -765,14 +808,154 @@ it('opens agent DMs and adds or removes room agents', async () => {
   });
   const chat = client();
   await chat.open(human, { agent: 'lead' });
-  await chat.open(human);
   await chat.addAgent(room.id, 'lead', { notify: 'all' });
   await chat.removeAgent(room.id, 'lead');
   const posts = seen.filter((s) => s.route === 'POST /api/v1/chats');
-  expect(posts.map((p) => p.body)).toEqual([
-    { kind: 'dm', with: human, agent: 'lead' },
-    { kind: 'dm', with: human },
-  ]);
+  expect(posts.map((p) => p.body)).toEqual([{ kind: 'dm', with: human, agent: 'lead' }]);
   expect(seen.find((s) => s.route.startsWith('PUT'))!.body).toEqual({ notify: 'all' });
   expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}/agents/lead`)).toBe(true);
+});
+it('requires an agent to open a person, and has no session rooms', async () => {
+  const seen = serve({ ...keysRoute });
+  const chat = client();
+  for (const target of [human, 'owner', 'a:other'])
+    await expect(chat.open(target as string, undefined as never)).rejects.toMatchObject({
+      status: 400,
+      code: 'AGENT_REQUIRED',
+    });
+  expect(seen.some((s) => s.route === 'POST /api/v1/chats')).toBe(false);
+  expect('session' in chat).toBe(false);
+});
+it('opens the agent DM with sub when sending to a person or owner', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  await chat.send(human, 'hi', { sub: 'lead' });
+  await chat.send('owner', 'hi', { sub: 'lead' });
+  const dms = seen.filter((s) => s.route === 'POST /api/v1/chats');
+  expect(dms.map((d) => d.body)).toEqual([
+    { kind: 'dm', with: human, agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+  ]);
+  expect(
+    seen.filter((s) => s.route.endsWith('/messages')).every((s) => s.body?.sub === 'lead'),
+  ).toBe(true);
+  await expect(chat.send(human, 'hi')).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
+  const form = {
+    title: 'Pick',
+    fields: [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }],
+  };
+  await expect(chat.ask('owner', form)).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
+  expect(dms).toHaveLength(2);
+});
+it('resolves owner through the DM for reading and waiting, and requires the agent', async () => {
+  const room = await makeRoom();
+  const m1 = await fromOwner(room, 1, 'hi');
+  const wake = { room: room.id, first: 1, seq: 1, reason: 'message', context: 'message' };
+  const seen = serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/lease`]: { wake: { ...wake, contextFrom: 1 } },
+    [`POST /api/v1/chats/${room.id}/ack`]: { readSeq: 1 },
+    [`GET /api/v1/chats/${room.id}/messages`]: { messages: [m1], through_seq: 1, hasMore: false },
+    [`GET /api/v1/chats/${room.id}`]: room,
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  expect((await chat.next('owner', { timeout: 1, for: 'lead' }))?.messages).toHaveLength(1);
+  expect(await chat.wait(human, { timeout: 1, for: 'lead' })).toHaveLength(1);
+  expect(await chat.wait('owner', { after: 0, timeout: 1, for: 'lead' })).toHaveLength(1);
+  expect((await chat.read('owner', { for: 'lead' })).messages).toHaveLength(1);
+  const dms = seen.filter((s) => s.route === 'POST /api/v1/chats').map((s) => s.body);
+  expect(dms).toEqual([
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+    { kind: 'dm', with: human, agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+  ]);
+  for (const call of [
+    () => chat.next('owner', { timeout: 1 }),
+    () => chat.wait('owner', { timeout: 1 }),
+    () => chat.wait('a:other', { after: 0, timeout: 1 }),
+    () => chat.read('owner'),
+  ])
+    await expect(call()).rejects.toMatchObject({ status: 400, code: 'AGENT_REQUIRED' });
+  expect(seen.filter((s) => s.route === 'POST /api/v1/chats')).toHaveLength(4);
+});
+it('resolves owner through the DM for answer, delete and attach, and requires sub', async () => {
+  const room = await makeRoom();
+  const owner = await ownerKeys();
+  const id = crypto.randomUUID();
+  const fields = [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }];
+  const envelope = await e2ee.sealChat(owner, room, {
+    id,
+    text: '',
+    kind: 'form',
+    form: { title: 'Pick', fields },
+  });
+  const record = { seq: 1, id, sender: human, sub: '', at: 1, kind: 'form', audience: 'all' };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [{ ...record, envelope }],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`POST /api/v1/chats/${room.id}/messages/1/response`]: { seq: 2, id: 'x' },
+    [`DELETE /api/v1/chats/${room.id}/messages/1`]: null,
+    [`POST /api/v1/chats/${room.id}/files`]: { id: 'f1' },
+    [`PUT /api/v1/chats/${room.id}/files/f1`]: new Response(null),
+    [`GET /api/v1/chats/${room.id}`]: room,
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  await chat.answer('owner', 1, { a: 'y' }, { sub: 'qa' });
+  await chat.delete(human, 1, { sub: 'lead' });
+  const file = await chat.attach('owner', 'a.txt', new Uint8Array([1]), 'text/plain', {
+    sub: 'lead',
+  });
+  expect(file.id).toBe('f1');
+  const dms = seen.filter((s) => s.route === 'POST /api/v1/chats').map((s) => s.body);
+  expect(dms).toEqual([
+    { kind: 'dm', with: 'owner', agent: 'qa' },
+    { kind: 'dm', with: human, agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+  ]);
+  for (const call of [
+    () => chat.answer('owner', 1, { a: 'y' }),
+    () => chat.delete('a:other', 1),
+    () => chat.attach('owner', 'a.txt', new Uint8Array([1])),
+  ])
+    await expect(call()).rejects.toMatchObject({ status: 400, code: 'AGENT_REQUIRED' });
+  expect(seen.filter((s) => s.route === 'POST /api/v1/chats')).toHaveLength(3);
+});
+it('download and updateGroup take a room id only', async () => {
+  const seen = serve({ ...keysRoute });
+  const file = { id: 'f1', name: 'a', type: 't', size: 1, key: 'k' };
+  await expect(client().download('owner', file)).rejects.toMatchObject({ status: 400 });
+  await expect(client().updateGroup('owner', { add: [human] })).rejects.toMatchObject({
+    status: 400,
+  });
+  expect(seen.filter((s) => s.route !== 'GET /api/v1/keys')).toEqual([]);
+});
+it('sends the agents of a new group with their connections', async () => {
+  const seen = serve({
+    ...keysRoute,
+    'POST /api/v1/chats': () => {
+      throw new Error('stop');
+    },
+  });
+  await client()
+    .group([human, 'a:other'], {
+      agents: ['lead', { connection: 'a:other', key: 'r', notify: 'all' }],
+    })
+    .catch((e: Error) => e);
+  const body = seen.find((s) => s.route === 'POST /api/v1/chats')!.body!;
+  expect(body.agents).toEqual([
+    { connection: agent, key: 'lead' },
+    { connection: 'a:other', key: 'r', notify: 'all' },
+  ]);
 });
