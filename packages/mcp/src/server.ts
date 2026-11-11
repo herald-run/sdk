@@ -321,6 +321,11 @@ export function createServer(client: () => Promise<Herald>) {
       .describe('Send as this registered agent key of the connection; required for a person'),
     summary: z.string().max(200).optional().describe('One line shown while it is collapsed'),
   };
+  const acting = z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Act as this registered agent key of the connection');
   const chatTarget = z
     .string()
     .min(1)
@@ -423,8 +428,11 @@ export function createServer(client: () => Promise<Herald>) {
           'Agent turns in a row, between different agents, before wakes pause until a person writes (default 6)',
         ),
       title: z.string().min(1).max(200).optional().describe('Titles the group'),
+      as: acting.describe(
+        'Title as this registered agent key of the connection, for an existing group',
+      ),
     },
-    async ({ room, members, agents, add, remove, hopLimit, title }, herald) => {
+    async ({ room, members, agents, add, remove, hopLimit, title, as }, herald) => {
       if (!room) {
         if (!agents?.length) return failure('Creating a group needs agents.');
         return json(await herald.chat.group(members ?? [], { agents, hopLimit, title }));
@@ -434,7 +442,7 @@ export function createServer(client: () => Promise<Herald>) {
           'members, agents and hopLimit only apply when creating a group; use add or remove.',
         );
       if (add || remove) await herald.chat.updateGroup(room, { add, remove });
-      if (title) await herald.chat.title(room, title);
+      if (title) await herald.chat.title(room, title, { sub: as });
       return json(await herald.chat.open(room));
     },
   );
@@ -442,15 +450,27 @@ export function createServer(client: () => Promise<Herald>) {
   tool(
     'chat_react',
     'Add or remove an emoji reaction on a chat message. Wakes nobody.',
-    { room: chatTarget, seq, emoji: z.string().min(1).max(32), remove: z.boolean().optional() },
+    {
+      room: chatTarget,
+      seq,
+      emoji: z.string().min(1).max(32),
+      remove: z.boolean().optional(),
+      as: acting,
+    },
     async (input, herald) =>
-      json(await herald.chat.react(input.room, input.seq, input.emoji, input.remove)),
+      json(
+        await herald.chat.react(input.room, input.seq, input.emoji, {
+          remove: input.remove,
+          sub: input.as,
+        }),
+      ),
   );
   tool(
     'chat_edit',
     'Replace the text of a message this connection sent. Wakes nobody.',
-    { room: chatTarget, seq, text: z.string().min(1) },
-    async (input, herald) => json(await herald.chat.edit(input.room, input.seq, input.text)),
+    { room: chatTarget, seq, text: z.string().min(1), as: acting },
+    async (input, herald) =>
+      json(await herald.chat.edit(input.room, input.seq, input.text, { sub: input.as })),
   );
   tool(
     'chat_delete',
@@ -494,9 +514,10 @@ export function createServer(client: () => Promise<Herald>) {
       seq,
       answers: z.record(z.string(), z.unknown()),
       secrets: z.record(z.string(), z.unknown()).optional(),
+      as: acting,
     },
-    async ({ room, seq: form, answers, secrets }, herald) =>
-      json(await herald.chat.answer(room, form, answers, { secrets })),
+    async ({ room, seq: form, answers, secrets, as }, herald) =>
+      json(await herald.chat.answer(room, form, answers, { secrets, sub: as })),
   );
   tool(
     'chat_download',

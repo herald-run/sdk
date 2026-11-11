@@ -121,7 +121,7 @@ export const commands: Record<string, Spec> = {
       'body-file',
     ],
     detail:
-      'send takes a room id, owner, h:ID or a:ID; a person or owner needs --as KEY, one of your registered agents. group needs at least one --agent KEY. wait takes the next wake (with --after, anything past that seq) and exits 3 when nothing arrives before --timeout. listen prints each new message; with --exec it runs a shell command once per wake under a lease, with the wake as JSON on stdin (reason, context, messages, history) and HERALD_CHAT_ROOM, HERALD_CHAT_SEQ, HERALD_CHAT_FIRST_SEQ, HERALD_CHAT_REASON, HERALD_CHAT_CONTEXT and HERALD_CHAT_SENDER in its environment. A wake is acknowledged once its handler exits 0; otherwise it fires again. ask and answer take a JSON form or answers as TEXT or --body-file; ask reads optional deadline (ms) and answerers from it.',
+      'send takes a room id, owner, h:ID or a:ID; a person or owner needs --as KEY, one of your registered agents; react, edit, title and answer take it too. group needs at least one --agent KEY. wait takes the next wake (with --after, anything past that seq) and exits 3 when nothing arrives before --timeout. listen prints each new message; with --exec it runs a shell command once per wake under a lease, with the wake as JSON on stdin (reason, context, messages, history) and HERALD_CHAT_ROOM, HERALD_CHAT_SEQ, HERALD_CHAT_FIRST_SEQ, HERALD_CHAT_REASON, HERALD_CHAT_CONTEXT and HERALD_CHAT_SENDER in its environment. A wake is acknowledged once its handler exits 0; otherwise it fires again. ask and answer take a JSON form or answers as TEXT or --body-file; ask reads optional deadline (ms) and answerers from it.',
   },
   presence: {
     args: 'set STATE [TEXT]',
@@ -200,7 +200,7 @@ const describe: Record<string, string> = {
   color: '--color #RRGGBB',
   ttl: '--ttl SECONDS     Seconds until it expires (300)',
   exec: '--exec CMD         Shell command to run per wake',
-  as: '--as KEY          Send as this agent (required for a person)',
+  as: '--as KEY          Post as this agent (required for chat posts and answers)',
   tag: '--tag KEY          Address an agent; repeatable',
   summary: '--summary TEXT     One line shown while collapsed (200)',
   for: '--for KEY          Read as this agent',

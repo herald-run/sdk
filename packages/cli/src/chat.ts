@@ -167,19 +167,21 @@ export async function chat(
       return 0;
     }
     case 'title':
-      return done(await client.chat.title(need(room, 'ROOM'), need(rest[0], 'TEXT')));
+      return done(
+        await client.chat.title(need(room, 'ROOM'), need(rest[0], 'TEXT'), { sub: values.as }),
+      );
     case 'react':
       return done(
-        await client.chat.react(
-          need(room, 'ROOM'),
-          seqAt(0),
-          need(rest[1], 'EMOJI'),
-          values.remove,
-        ),
+        await client.chat.react(need(room, 'ROOM'), seqAt(0), need(rest[1], 'EMOJI'), {
+          remove: values.remove,
+          sub: values.as,
+        }),
       );
     case 'edit':
       return done(
-        await client.chat.edit(need(room, 'ROOM'), seqAt(0), await body(rest[1], 'TEXT')),
+        await client.chat.edit(need(room, 'ROOM'), seqAt(0), await body(rest[1], 'TEXT'), {
+          sub: values.as,
+        }),
       );
     case 'delete': {
       await client.chat.delete(need(room, 'ROOM'), seqAt(0));
@@ -199,7 +201,9 @@ export async function chat(
     }
     case 'answer':
       return done(
-        await client.chat.answer(need(room, 'ROOM'), seqAt(0), await parsed(rest[1], 'ANSWERS')),
+        await client.chat.answer(need(room, 'ROOM'), seqAt(0), await parsed(rest[1], 'ANSWERS'), {
+          sub: values.as,
+        }),
       );
     case 'wait': {
       const target = need(room, 'ROOM');

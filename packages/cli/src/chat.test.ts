@@ -89,6 +89,19 @@ it('creates a titled group and titles a room', async () => {
   });
   await expect(chat(fake({ group }), ['group', 'h:two'], base, io())).rejects.toThrow('--agent');
   await chat(fake({ title }), ['title', 'room', 'New name'], base, io());
-  expect(title).toHaveBeenCalledWith('room', 'New name');
+  expect(title).toHaveBeenCalledWith('room', 'New name', { sub: undefined });
+  await chat(fake({ title }), ['title', 'room', 'New name'], { ...base, as: 'lead' }, io());
+  expect(title).toHaveBeenLastCalledWith('room', 'New name', { sub: 'lead' });
   await expect(chat(fake({ group }), ['group'], values, io())).rejects.toThrow(/MEMBER/);
+});
+it('passes --as to react, edit and answer', async () => {
+  const post = vi.fn(async () => ({ seq: 2, id: 'x', room: 'room' }));
+  const values = { ...base, as: 'lead', remove: true };
+  const c = fake({ react: post, edit: post, answer: post });
+  await chat(c, ['react', 'room', '1', '+1'], values, io());
+  expect(post).toHaveBeenLastCalledWith('room', 1, '+1', { remove: true, sub: 'lead' });
+  await chat(c, ['edit', 'room', '1', 'fixed'], values, io());
+  expect(post).toHaveBeenLastCalledWith('room', 1, 'fixed', { sub: 'lead' });
+  await chat(c, ['answer', 'room', '1', '{"a":"y"}'], values, io());
+  expect(post).toHaveBeenLastCalledWith('room', 1, { a: 'y' }, { sub: 'lead' });
 });

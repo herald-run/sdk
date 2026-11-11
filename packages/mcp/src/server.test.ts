@@ -343,6 +343,8 @@ it('chats as an agent: as replaces sub, a person needs it, there are no session 
   expect(props('chat_send')).not.toContain('sub');
   expect(props('chat_send')).not.toContain('session');
   expect(props('chat_group')).toContain('agents');
+  for (const name of ['chat_react', 'chat_edit', 'chat_answer'])
+    expect(props(name)).toContain('as');
   const missing = await call('chat_send', { to: 'owner', text: 'hi' });
   expect(missing.error).toBe(true);
   expect(missing.text).toContain('`as`');

@@ -476,9 +476,9 @@ it('titles a room, and a new group when asked', async () => {
     [`GET /api/v1/chats/${room.id}`]: room,
     [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
   });
-  await client().title(room.id, 'Launch Checklist');
+  await client().title(room.id, 'Launch Checklist', { sub: 'lead' });
   const post = seen.find((s) => s.route.startsWith('POST'))!;
-  expect(post.body).toMatchObject({ kind: 'title' });
+  expect(post.body).toMatchObject({ kind: 'title', sub: 'lead' });
   const empty = { messages: [], through_seq: 0, hasMore: false };
   const calls = serve({
     ...keysRoute,
@@ -509,7 +509,44 @@ it('titles a room, and a new group when asked', async () => {
   let created: Record<string, unknown> = {};
   await client().group([human], { agents: ['lead'], title: 'Launch Checklist' });
   const titled = calls.find((s) => s.route.endsWith('/messages') && s.route.startsWith('POST'));
-  expect(titled?.body).toMatchObject({ kind: 'title' });
+  expect(titled?.body).toMatchObject({ kind: 'title', sub: 'lead' });
+});
+it('names its agent on a reaction, an edit and an answer', async () => {
+  const room = await makeRoom();
+  const owner = await ownerKeys();
+  const id = crypto.randomUUID();
+  const fields = [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }];
+  const form = { title: 'Pick', fields };
+  const envelope = await e2ee.sealChat(owner, room, { id, text: '', kind: 'form', form });
+  const record = { seq: 1, id, sender: human, sub: '', at: 1, kind: 'form', audience: 'all' };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [{ ...record, envelope }],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 2, id: 'x' },
+  });
+  await client().react(room.id, 1, '+1', { remove: true, sub: 'lead' });
+  await client().edit(room.id, 1, 'fixed', { sub: 'lead' });
+  await client().answer(room.id, 1, { a: 'y' }, { sub: 'qa' });
+  const posts = seen.filter((s) => s.route.startsWith('POST')).map((s) => s.body);
+  expect(posts[0]).toMatchObject({ kind: 'event', event: { type: 'reaction' }, sub: 'lead' });
+  expect(posts[1]).toMatchObject({ kind: 'event', event: { type: 'edit' }, sub: 'lead' });
+  expect(posts[2]).toMatchObject({ sub: 'qa' });
+  const answered = {
+    ...{ seq: 2, id: posts[2]!.id as string, sender: agent, sub: 'qa', at: 1 },
+    kind: 'answer' as const,
+  };
+  const opened = await e2ee.openChat(owner, room.id, {
+    ...answered,
+    audience: 'all',
+    envelope: posts[2]!.envelope as e2ee.SealedEnvelope,
+  });
+  expect(opened).toMatchObject({ answers: { a: 'y' } });
+  expect((posts[2]!.envelope as e2ee.SealedEnvelope).ctx).toMatchObject({ sub: 'qa' });
 });
 it('lets an agent create a group owned by it and its people', async () => {
   const seen = serve({

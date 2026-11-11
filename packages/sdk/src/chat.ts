@@ -396,18 +396,27 @@ export class ChatClient {
     const { deadline, answerers, ...rest } = options;
     return this.#post(target, '', rest, { kind: 'form', form, rules: { deadline, answerers } });
   }
-  react(target: string, seq: number, emoji: string, remove = false) {
+  /** `sub`: the agent of this connection that reacts. */
+  react(
+    target: string,
+    seq: number,
+    emoji: string,
+    { remove, sub }: { remove?: boolean; sub?: string } = {},
+  ) {
     const event: ChatEvent = {
       type: 'reaction',
       target: seq,
       emoji,
       ...(remove ? { remove: true } : {}),
     };
-    return this.#post(target, '', {}, { kind: 'event', event });
+    return this.#post(target, '', { sub }, { kind: 'event', event });
   }
   /** Replaces a message's text; only its sender's edit counts. */
-  edit(target: string, seq: number, text: string) {
-    return this.#post(target, text, {}, { kind: 'event', event: { type: 'edit', target: seq } });
+  edit(target: string, seq: number, text: string, options: { sub?: string } = {}) {
+    return this.#post(target, text, options, {
+      kind: 'event',
+      event: { type: 'edit', target: seq },
+    });
   }
   /** Removes a message's content, leaving a tombstone. */
   async delete(target: string, seq: number): Promise<void> {
@@ -447,12 +456,16 @@ export class ChatClient {
     };
     const room = await this.#verified(await this.#request<ChatRoom>('/chats', body));
     if (!options.title) return room;
-    await this.title(room.id, options.title);
+    // A connection titles as its own first agent; a person needs none.
+    const sub = options.agents.find((a) => typeof a === 'string' || a.connection === me);
+    await this.title(room.id, options.title, {
+      sub: typeof sub === 'string' ? sub : sub?.key,
+    });
     return this.open(room.id);
   }
-  /** Sets the room's title; any member may. */
-  title(target: string, text: string) {
-    return this.#post(target, text, {}, { kind: 'title' });
+  /** Sets the room's title; any member may. A connection passes `sub`, one of its agents. */
+  title(target: string, text: string, options: { sub?: string } = {}) {
+    return this.#post(target, text, options, { kind: 'title' });
   }
   /** Signs the next head; an agent owner may add or remove agents only. */
   async updateGroup(
@@ -535,12 +548,17 @@ export class ChatClient {
       }
     }
   }
-  /** Answers a form; `secrets` are sealed to the asker alone. */
+  /** Answers a form as `sub`, the answering agent of this connection; `secrets` are sealed to the asker alone. */
   async answer(
     target: string,
     seq: number,
     answers: Record<string, unknown>,
-    options: { secrets?: Record<string, unknown>; id?: string; signal?: AbortSignal } = {},
+    options: {
+      secrets?: Record<string, unknown>;
+      sub?: string;
+      id?: string;
+      signal?: AbortSignal;
+    } = {},
   ) {
     const id = options.id ?? crypto.randomUUID();
     for (let attempt = 0; ; attempt++) {
@@ -552,13 +570,19 @@ export class ChatClient {
       if (!asker) throw new e2ee.E2eeError('The asker is not verified.');
       const seal = (input: e2ee.ChatSealInput) =>
         e2ee.sealChat(keys, room, input, this.#trust(room.id));
-      const names = this.#sealedNames([form.sub]);
-      const input = { id, text: '', kind: 'answer' as const, sub: form.sub, ...defined({ names }) };
+      const names = this.#sealedNames([options.sub]);
+      const input = {
+        id,
+        text: '',
+        kind: 'answer' as const,
+        sub: options.sub,
+        ...defined({ names }),
+      };
       const body = {
         id,
         envelope: await seal({ ...input, audience: form.audience, answers }),
         headVersion: room.headVersion,
-        ...(form.sub ? { sub: form.sub } : {}),
+        ...(options.sub ? { sub: options.sub } : {}),
         ...(options.secrets
           ? {
               secrets: await seal({
