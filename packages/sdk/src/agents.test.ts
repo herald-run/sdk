@@ -289,3 +289,28 @@ it('seals a layout to its member and rejects one for another member', async () =
     e2ee.openLayout(owner, { ...env, ctx: { ...env.ctx, principal: 'h:other' } }),
   ).rejects.toThrow();
 });
+it('refuses bad layout colours when sealing and drops them when opening', async () => {
+  const owner = await ownerKeys();
+  const base = { groups: [], places: {} };
+  const ok = { a: 0, b: 359.5 };
+  expect(
+    await e2ee.openLayout(owner, await e2ee.sealLayout(owner, { ...base, colors: ok })),
+  ).toMatchObject({ ...base, colors: ok });
+  const many = Object.fromEntries(
+    Array.from({ length: e2ee.agentLayoutLimits.colors + 1 }, (_, i) => [`c${i}`, 1]),
+  );
+  for (const colors of [{ a: 360 }, { a: Number.NaN }, { a: '1' }, { ['x'.repeat(201)]: 1 }, many])
+    await expect(async () => e2ee.sealLayout(owner, { ...base, colors } as never)).rejects.toThrow(
+      'colors',
+    );
+  const env = await e2ee.seal({
+    payload: { ...base, colors: { a: 10, b: -1, c: 'x', ...many } } as unknown as e2ee.Payload,
+    ctx: e2ee.layoutContext(owner.account, owner.principal),
+    signer: owner.signer,
+    to: [owner.recipient(owner.principal)!],
+  });
+  const opened = await e2ee.openLayout(owner, env);
+  expect(opened.colors?.a).toBe(10);
+  expect(opened.colors).not.toHaveProperty('b');
+  expect(Object.keys(opened.colors ?? {})).toHaveLength(e2ee.agentLayoutLimits.colors);
+});

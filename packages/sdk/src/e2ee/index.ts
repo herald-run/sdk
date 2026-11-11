@@ -35,6 +35,7 @@ export {
 } from './chat';
 export {
   agentEntryLimits,
+  agentLayoutLimits,
   agentLinkError,
   agentLinkLimits,
   layoutContext,

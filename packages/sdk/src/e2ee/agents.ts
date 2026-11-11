@@ -51,6 +51,8 @@ export type AgentProfile = SubagentProfile;
 export const subagentKey = /^[\w.-]{1,64}$/;
 export const agentLinkLimits = { links: 8, label: 60, url: 2048, task: 200 } as const;
 export const agentEntryLimits = { section: 60, sectionDepth: 4, about: 500 } as const;
+/** At most `colors` stored hues, keyed by ids of up to `id` characters. */
+export const agentLayoutLimits = { colors: 512, id: 200 } as const;
 const ROOM = /^[A-Za-z0-9_-]{1,64}$/;
 const entryChecks: Record<string, (v: unknown) => boolean> = {
   section: (v) =>
@@ -188,10 +190,28 @@ const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
   if (strict) fail('Invalid subagent parent.');
   return rest as SubagentProfile;
 };
-const checkLayout = (value: AgentLayout): AgentLayout => {
+const goodHue = ([id, hue]: [string, unknown]) =>
+  !!id &&
+  id.length <= agentLayoutLimits.id &&
+  typeof hue === 'number' &&
+  Number.isFinite(hue) &&
+  hue >= 0 &&
+  hue < 360;
+/** Sealing refuses bad `colors`; opening keeps the valid entries, up to the limit. */
+const checkLayout = (value: AgentLayout, strict = true): AgentLayout => {
   if (!value || !Array.isArray(value.groups) || !value.places || typeof value.places !== 'object')
     fail('Invalid layout.');
-  return value;
+  const { colors } = value;
+  if (colors === undefined) return value;
+  const all = colors && typeof colors === 'object' && !Array.isArray(colors);
+  const entries = all ? Object.entries(colors) : [];
+  if (strict) {
+    if (!all || entries.length > agentLayoutLimits.colors || !entries.every(goodHue))
+      fail('Invalid layout colors.');
+    return value;
+  }
+  const kept = entries.filter(goodHue).slice(0, agentLayoutLimits.colors);
+  return { ...value, colors: Object.fromEntries(kept) };
 };
 const owners = (keys: ChatKeys, owner: string): RecipientKey[] => [
   keys.recipient(owner) ?? fail(`Unverified owner ${owner}.`),
@@ -271,5 +291,5 @@ export async function openLayout(keys: ChatKeys, envelope: SealedEnvelope) {
     account: keys.account,
     principal: keys.principal,
   });
-  return checkLayout(value);
+  return checkLayout(value, false);
 }
