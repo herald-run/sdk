@@ -12,6 +12,7 @@ import type {
   Message,
   MessageFilter,
   MessageRequest,
+  MessageSender,
   Scope,
   SealedEnvelope,
   TaskLog,
@@ -49,6 +50,7 @@ export type {
   MessageFilter,
   MessageInput,
   MessageRequest,
+  MessageSender,
   MessageStatus,
   RequestType,
   Scope,
@@ -67,9 +69,14 @@ export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
 export { AgentsClient } from './agents.js';
 export type {
+  AgentChat,
   AgentLink,
+  AgentOptions,
   AgentPresence,
   AgentPresenceOptions,
+  AgentProfile,
+  AgentReach,
+  OwnAgent,
   OwnSubagent,
   PresenceState,
   SubagentOptions,
@@ -87,6 +94,7 @@ export type {
   ChatRoom,
   ChatSendOptions,
   ChatWake,
+  RoomAgent,
   RoomSubagent,
   WakeReason,
 } from './chat.js';
@@ -122,7 +130,18 @@ export type FileDownload = {
   bytes(): Promise<Uint8Array>;
 };
 export type WaitOptions = { waitTimeout?: number; signal?: AbortSignal };
-export type AskInput = MessageRequest & { timeout?: number | string; idempotencyKey?: string };
+type WithSender<T> = T extends unknown
+  ? Omit<T, 'as'> & {
+      /**
+       * Sends as one of this connection's agents: its key, named from `agents.register`, or
+       * `{ key, name }`. The name is sealed, so it stays after the agent is unregistered.
+       */
+      as?: string | MessageSender;
+    }
+  : never;
+/** A message to send; `as` may name an agent key this client registered. */
+export type SendInput = WithSender<MessageRequest>;
+export type AskInput = SendInput & { timeout?: number | string; idempotencyKey?: string };
 export type ActionAnswer<T extends Answers = Answers> = { actionId: string; values: T };
 export type RequestOptions = {
   method?: string;
@@ -370,16 +389,27 @@ export class Herald {
   }
   /** Sends a message; it is validated locally and its content sealed first. */
   async send(
-    input: MessageRequest,
+    input: SendInput,
     options: string | { idempotencyKey?: string } = crypto.randomUUID(),
   ): Promise<Message> {
     const idempotencyKey =
       (typeof options === 'string' ? options : options.idempotencyKey) || crypto.randomUUID();
+    const request = this.#sender(input);
     const post = async () => {
-      const body = await this.#keys.sealMessage(input, idempotencyKey);
+      const body = await this.#keys.sealMessage(request, idempotencyKey);
       return this.request<Message>('/messages', body, { idempotencyKey });
     };
     return this.#open(await this.#sealed(post));
+  }
+  #sender(input: SendInput): MessageRequest {
+    if (typeof input.as !== 'string') return input as MessageRequest;
+    const name = this.agents.agentName(input.as);
+    if (!name)
+      throw new HeraldError(
+        `No agent ${input.as} was registered by this client; pass as: { key, name }.`,
+        400,
+      );
+    return { ...input, as: { key: input.as, name } } as MessageRequest;
   }
   async get(id: string): Promise<Message> {
     return this.#open(await this.request<Message>('/messages/' + path(id)));
@@ -628,9 +658,10 @@ export class Herald {
           headers: this.#headers(),
           redirect: 'manual',
         }),
+      (key) => this.agents.agentName(key),
     ));
   }
-  /** This connection's presence and runtime subagents, shown end-to-end encrypted to its owner. */
+  /** The agents this connection registers, shown end-to-end encrypted to its owner. */
   get agents(): AgentsClient {
     return (this.#agents ??= new AgentsClient(
       (path, body, options) => this.request(path, body, options),

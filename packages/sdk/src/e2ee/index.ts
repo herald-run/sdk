@@ -20,6 +20,8 @@ export {
   type ChatPayload,
   type ChatRecord,
   type ChatRoom,
+  type AgentReach,
+  type RoomAgent,
   type RoomSubagent,
   type SubagentReach,
   type ChatAttachment,
@@ -33,6 +35,7 @@ export {
   type RoomTrust,
 } from './chat';
 export {
+  agentEntryLimits,
   agentLinkError,
   agentLinkLimits,
   layoutContext,
@@ -46,9 +49,11 @@ export {
   sealSubagent,
   subagentContext,
   subagentKey,
+  type AgentChat,
   type AgentLayout,
   type AgentLink,
   type AgentPresence,
+  type AgentProfile,
   type LayoutGroup,
   type LayoutPlace,
   type PresenceState,
