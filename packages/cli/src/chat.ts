@@ -233,6 +233,7 @@ export async function chat(
       const options = {
         signal: stop.signal,
         rooms: room ? [room] : undefined,
+        for: values.for,
         onError: (error: unknown, id?: string) =>
           io.err((id ? id + ': ' : '') + (error as Error).message),
       };

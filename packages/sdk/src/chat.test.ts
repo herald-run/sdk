@@ -175,9 +175,11 @@ it('wait with an explicit cursor still reads past it', async () => {
     [`GET /api/v1/chats/${room.id}/messages`]: { messages: [m1], through_seq: 1, hasMore: false },
     [`GET /api/v1/chats/${room.id}`]: room,
   });
-  const got = await client().wait(room.id, { after: 0, timeout: 1 });
+  const got = await client().wait(room.id, { after: 0, timeout: 1, for: 'lead' });
   expect(got.map((m) => m.text)).toEqual(['one']);
   expect(seen.some((s) => s.route.endsWith('/lease'))).toBe(false);
+  // The ack settles the agent's wake.
+  expect(seen.find((s) => s.route.endsWith('/ack'))?.body).toEqual({ seq: 1, subagent: 'lead' });
 });
 it('wait returns pending messages from others and acks them', async () => {
   const room = await makeRoom({ readSeq: 1 });

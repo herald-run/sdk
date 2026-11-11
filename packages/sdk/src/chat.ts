@@ -820,7 +820,7 @@ export class ChatClient {
       };
       await drain();
       if (found.length) {
-        await this.ack(room.id, found.at(-1)!.seq);
+        await this.ack(room.id, found.at(-1)!.seq, options.for);
         return found;
       }
       await this.#subscribe(
@@ -828,7 +828,13 @@ export class ChatClient {
           found.push(message);
           stop.abort();
         },
-        { signal: stop.signal, rooms: [room.id], cursors: new Map([[room.id, after]]), ack: true },
+        {
+          signal: stop.signal,
+          rooms: [room.id],
+          cursors: new Map([[room.id, after]]),
+          ack: true,
+          for: options.for,
+        },
       );
       return found;
     } finally {
@@ -836,12 +842,16 @@ export class ChatClient {
       options.signal?.removeEventListener('abort', onAbort);
     }
   }
-  /** Delivers each new message from others, in order per room, until the signal aborts. */
+  /**
+   * Delivers each new message from others, in order per room, until the signal aborts, settling
+   * the wakes of `for` (an agent DM's own agent by default).
+   */
   listen(
     handler: (message: ChatMessage) => void | Promise<void>,
     options: {
       signal?: AbortSignal;
       rooms?: string[];
+      for?: string;
       onError?: (error: unknown, room: string) => void;
     } = {},
   ): Promise<void> {
@@ -854,6 +864,7 @@ export class ChatClient {
       rooms?: string[];
       cursors?: Map<string, number>;
       ack: boolean;
+      for?: string;
       onError?: (error: unknown, room: string) => void;
     },
   ): Promise<void> {
@@ -865,7 +876,7 @@ export class ChatClient {
     const deliver = async (message: ChatMessage) => {
       if (fromOthers(message)) {
         await handler(message);
-        if (options.ack) await this.ack(message.room, message.seq);
+        if (options.ack) await this.ack(message.room, message.seq, options.for);
       }
       cursors.set(message.room, message.seq);
     };
