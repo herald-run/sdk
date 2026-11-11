@@ -861,7 +861,8 @@ export class ChatClient {
           resolve();
         };
         const ping = setInterval(() => {
-          if (!alive) return finish();
+          // A socket still connecting after a keepalive is stuck: retry instead of sending.
+          if (!alive || socket.readyState !== socket.OPEN) return finish();
           alive = false;
           socket.send('ping');
         }, KEEPALIVE);
