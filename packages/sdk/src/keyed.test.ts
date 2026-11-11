@@ -323,3 +323,28 @@ it('reveals secret file fields as downloadable attachments, refusing malformed o
   });
   await expect(herald.revealSecrets(sent.id)).rejects.toThrow('Malformed secret');
 });
+it('sends as a registered agent with its name sealed, and opens it', async () => {
+  const seen = serve({
+    'GET /api/v1/keys': directory,
+    'PUT /api/v1/agents/me/subagents/lead': { expiresAt: 5 },
+    'POST /api/v1/messages': sent,
+  });
+  const herald = new Herald({ apiKey: token, url });
+  await expect(herald.send({ title: 'Hi', as: 'lead' })).rejects.toMatchObject({ status: 400 });
+  await herald.agents.register('lead', { name: 'Lead Agent', state: 'busy' });
+  await herald.send({ title: 'Hi', as: 'lead' });
+  expect(seen.at(-1)!.body).not.toContain('Lead Agent');
+  await expect(herald.send({ title: 'Hi', as: { key: 'x', name: ' ' } })).rejects.toMatchObject({
+    status: 400,
+  });
+  const get = async (content: object) => {
+    const record = await sealed.sealedMessage({ title: 'From', ...content });
+    serve({ 'GET /api/v1/keys': directory, [`GET /api/v1/messages/${record.id}`]: record });
+    return new Herald({ apiKey: token, url }).get(record.id);
+  };
+  const as = { key: 'lead', name: 'Lead Agent' };
+  expect(await get({ as })).toMatchObject({ title: 'From', as });
+  const bad = await get({ as: { key: 'bad key', name: 'X' } });
+  expect(bad).toMatchObject({ title: 'From' });
+  expect(bad.as).toBeUndefined();
+});

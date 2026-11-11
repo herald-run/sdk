@@ -27,6 +27,15 @@ export type Attachment = z.infer<typeof attachmentSchema>;
 
 /** A chat room ID: 1 to 64 base64url characters. */
 export const roomIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+/** The agent a message is sent as: its key and the name it had when sent. */
+export const messageSenderSchema = z.object({
+  key: z.string().regex(/^[\w.-]{1,64}$/),
+  name: z
+    .string()
+    .max(60)
+    .refine((name) => !!name.trim(), 'A name is 1 to 60 characters.'),
+});
+export type MessageSender = z.infer<typeof messageSenderSchema>;
 const common = {
   title: z.string().min(1).max(180),
   body: z.string().max(50_000).default(''),
@@ -50,6 +59,8 @@ const common = {
    * a reader who is in it with the sender.
    */
   room: roomIdSchema.optional(),
+  /** The agent of this connection that sends it, sealed with its name. */
+  as: messageSenderSchema.optional(),
 };
 const contentInputSchema = z.object({
   ...common,
@@ -229,6 +240,8 @@ interface StoredContent {
   expiresAt?: string;
   /** The chat room the sender linked; set by clients from the sealed content. */
   room?: string;
+  /** The agent the sender sent it as, with its name then; set from the sealed content. */
+  as?: MessageSender;
 }
 interface StoredRecord extends StoredContent {
   id: string;

@@ -21,19 +21,51 @@ export interface AgentPresence extends Record<string, unknown> {
   task?: string;
   /** Up to 8 links shown with the agent. */
   links?: AgentLink[];
+  /** A path of nested section names, each 1 to 60 characters, at most 4 deep. */
+  section?: string[];
+  /** Sort position within its section or parent, then by name. */
+  order?: number;
+  /** Where a chat with it opens: the connection's direct chat, or a room. Absent: no chat. */
+  chat?: AgentChat;
+  /** Whether people can send it new requests. */
+  requests?: boolean;
+  /** About text, up to 500 characters. */
+  about?: string;
 }
-/** A runtime subagent: a name the connection asserts for itself, with optional presence. */
+/** `'dm'`: people can DM the agent and add it to groups. `{ room }`: it lives in that room. */
+export type AgentChat = 'dm' | { room: string };
+/** An agent a connection registers: a name it asserts for itself, with optional presence. */
 export interface SubagentProfile extends AgentPresence {
   name: string;
   /**
-   * Another subagent key of the same connection that started this one, so viewers can show a
-   * tree. A missing or circular parent shows the subagent at the top level.
+   * Another agent key of the same connection that started this one, so viewers can show a
+   * tree. A missing or circular parent shows the agent at the top level of its section.
    */
   parent?: string;
 }
-/** A subagent key: 1 to 64 letters, digits, `.`, `_` or `-`. */
+/** A registered agent's sealed profile. */
+export type AgentProfile = SubagentProfile;
+/** An agent key: 1 to 64 letters, digits, `.`, `_` or `-`. */
 export const subagentKey = /^[\w.-]{1,64}$/;
 export const agentLinkLimits = { links: 8, label: 60, url: 2048, task: 200 } as const;
+export const agentEntryLimits = { section: 60, sectionDepth: 4, about: 500 } as const;
+const ROOM = /^[A-Za-z0-9_-]{1,64}$/;
+const entryChecks: Record<string, (v: unknown) => boolean> = {
+  section: (v) =>
+    Array.isArray(v) &&
+    v.length >= 1 &&
+    v.length <= agentEntryLimits.sectionDepth &&
+    v.every((s) => typeof s === 'string' && !!s.trim() && s.length <= agentEntryLimits.section),
+  order: (v) => typeof v === 'number' && Number.isFinite(v),
+  chat: (v) =>
+    v === 'dm' ||
+    (!!v &&
+      typeof v === 'object' &&
+      typeof (v as { room?: unknown }).room === 'string' &&
+      ROOM.test((v as { room: string }).room)),
+  requests: (v) => typeof v === 'boolean',
+  about: (v) => typeof v === 'string' && v.length <= agentEntryLimits.about,
+};
 export interface LayoutGroup {
   id: string;
   name: string;
@@ -119,17 +151,25 @@ const checkPresence = <T extends AgentPresence>(value: T, strict = true): T => {
   const { task, links } = value;
   const badTask =
     task !== undefined && (typeof task !== 'string' || task.length > agentLinkLimits.task);
+  const bad = Object.keys(entryChecks).filter(
+    (k) => value[k] !== undefined && !entryChecks[k](value[k]),
+  );
   if (strict) {
     if (badTask) fail('Invalid presence task.');
     if (links !== undefined && (!Array.isArray(links) || links.length > agentLinkLimits.links))
       fail('Invalid presence links.');
     checkLinks(links ?? []);
+    if (bad.length) fail(`Invalid presence ${bad[0]}.`);
+    if (value.chat && typeof value.chat === 'object')
+      return { ...value, chat: { room: value.chat.room } };
     return value;
   }
   const kept = keepLinks(links);
   const out = { ...value };
   delete out.task;
   delete out.links;
+  for (const k of bad) delete out[k];
+  if (out.chat && typeof out.chat === 'object') out.chat = { room: out.chat.room };
   if (task !== undefined && !badTask) out.task = task;
   if (kept.length) out.links = kept;
   return out;

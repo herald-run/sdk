@@ -150,6 +150,76 @@ it('seals task, links and a parent, and refuses bad ones', async () => {
   await expect(sub2('tests')).rejects.toThrow('parent');
   await expect(sub2('bad key')).rejects.toThrow('parent');
 });
+it('registers agents with entry fields, refuses bad ones and keeps names', async () => {
+  const seen = serve({
+    ...keysRoute,
+    'PUT /api/v1/agents/me/': { expiresAt: 5 },
+    'DELETE /api/v1/agents/me/': {},
+    'GET /api/v1/agents/me/subagents': { subagents: [{ key: 'lead', expiresAt: 5, reach: 'all' }] },
+    'PUT /api/v1/chats/room_1/agents/lead': { id: 'room_1' },
+  });
+  const agents = client();
+  const entry = {
+    section: ['Team', 'Leads'],
+    order: 2,
+    chat: { room: 'room_1' },
+    requests: true,
+    about: 'Leads one task.',
+  };
+  await agents.register('lead', { name: 'Lead', state: 'busy', ...entry }, { reach: 'all' });
+  const put = seen.find((s) => s.route === 'PUT /api/v1/agents/me/subagents/lead')!;
+  expect(put.body).toMatchObject({ ttl: 300, reach: 'all' });
+  const owner = await ownerKeys();
+  const env = put.body!.envelope as e2ee.SealedEnvelope;
+  expect(await e2ee.openSubagent(owner, agent, 'lead', env)).toMatchObject(entry);
+  // Its room is joined once, not on every update.
+  expect(seen.at(-1)!.route).toBe('PUT /api/v1/chats/room_1/agents/lead');
+  await agents.register('lead', { name: 'Lead', state: 'idle', ...entry });
+  expect(seen.filter((s) => s.route.includes('/chats/'))).toHaveLength(1);
+  await agents.renew('lead', { ttl: 60 });
+  expect(seen.at(-1)).toEqual({ route: 'PUT /api/v1/agents/me/subagents/lead', body: { ttl: 60 } });
+  expect(await agents.list()).toEqual([{ key: 'lead', expiresAt: 5, reach: 'all' }]);
+  await agents.unregister('lead');
+  expect(seen.at(-1)!.route).toBe('DELETE /api/v1/agents/me/subagents/lead');
+  expect(agents.agentName('lead')).toBe('Lead');
+  // Registered again, it rejoins its room.
+  await agents.register('lead', { name: 'Lead', state: 'busy', ...entry });
+  expect(seen.filter((s) => s.route.includes('/chats/'))).toHaveLength(2);
+  // The old names still work.
+  await agents.setSubagent('old', { name: 'Old', state: 'idle' });
+  await agents.renewSubagent('old');
+  await agents.removeSubagent('old');
+  expect(await agents.subagents()).toHaveLength(1);
+  expect(agents.subagentName('old')).toBe('Old');
+  await expect(agents.register('bad key', { name: 'X', state: 'idle' })).rejects.toThrow('key');
+  const bad = (presence: Partial<e2ee.AgentPresence>) =>
+    agents.register('lead', { name: 'Lead', state: 'idle', ...presence });
+  await expect(bad({ section: [] })).rejects.toThrow('section');
+  await expect(bad({ section: [' '] })).rejects.toThrow('section');
+  await expect(bad({ section: ['x'.repeat(61)] })).rejects.toThrow('section');
+  await expect(bad({ section: ['a', 'b', 'c', 'd', 'e'] })).rejects.toThrow('section');
+  await expect(bad({ section: 'Team' as never })).rejects.toThrow('section');
+  await expect(bad({ order: Infinity })).rejects.toThrow('order');
+  await expect(bad({ chat: 'room' as never })).rejects.toThrow('chat');
+  await expect(bad({ chat: { room: 'a b' } })).rejects.toThrow('chat');
+  await expect(bad({ requests: 'yes' as never })).rejects.toThrow('requests');
+  await expect(bad({ about: 'x'.repeat(501) })).rejects.toThrow('about');
+});
+it('opens entry fields tolerantly', async () => {
+  const { owner, env } = await raw('presence', {
+    state: 'idle',
+    section: ['ok', ''],
+    order: 'first',
+    chat: { room: 'ok', extra: 1 },
+    requests: 1,
+    about: 'x'.repeat(501),
+  });
+  const opened = await e2ee.openPresence(owner, human, env);
+  expect(opened).toMatchObject({ state: 'idle', chat: { room: 'ok' } });
+  expect(Object.keys(opened)).not.toContain('section');
+  for (const k of ['order', 'requests', 'about']) expect(opened).not.toHaveProperty(k);
+  expect(opened.chat).toEqual({ room: 'ok' });
+});
 /** The owner seals raw content as if it came from the connection `human`, to test opening. */
 async function raw(t: 'presence' | 'subagent', payload: unknown, key = 'tests') {
   const owner = await ownerKeys();

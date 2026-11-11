@@ -13,7 +13,7 @@ import { messageInputSchema } from './schema/index.js';
 import { HeraldError, readError, sleep } from './http.js';
 import type { KeyedSession } from './keyed.js';
 import { backoff, KEEPALIVE, type EventSocket } from './socket.js';
-export type { ChatRoom, RoomSubagent } from './e2ee/index.js';
+export type { AgentReach, ChatRoom, RoomAgent, RoomSubagent } from './e2ee/index.js';
 /** An opened chat message; `locked` when it could not be decrypted or verified. */
 export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   room: string;
@@ -33,6 +33,8 @@ export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   mentionsMismatch?: true;
   /** The subagent keys the sender addressed, as signed. */
   tags?: string[];
+  /** The sender's display names for `sub` and `tags` keys; malformed entries are dropped. */
+  names?: Record<string, string>;
 };
 /** A room in a listing, with its title opened. */
 export type ChatListing = Pick<ChatRoom, 'id' | 'kind' | 'unread' | 'lastSeq' | 'members'> & {
@@ -67,6 +69,24 @@ export type ChatSendOptions = {
   tags?: string[];
   /** A one-line stand-in, max 200 chars, shown while the message is collapsed. */
   summary?: string;
+  /**
+   * Display names (1 to 60 chars) for the `sub` and `tags` keys, sealed with the message so
+   * readers can show them after the agents are gone. Filled from the profiles this client
+   * registered with `agents.register`; entries here win. Other keys are dropped.
+   */
+  names?: Record<string, string>;
+};
+const validName = (name: unknown): name is string =>
+  typeof name === 'string' && !!name.trim() && name.length <= 60;
+/** The `names` entries for `keys` that are well formed. */
+export const chatNames = (names: unknown, keys: Iterable<string>) => {
+  const out: Record<string, string> = {};
+  if (!names || typeof names !== 'object') return out;
+  for (const key of keys) {
+    const name = Object.hasOwn(names, key) ? (names as Record<string, unknown>)[key] : undefined;
+    if (e2ee.subagentKey.test(key) && validName(name)) out[key] = name;
+  }
+  return out;
 };
 export type ChatReadOptions = {
   after?: number;
@@ -122,6 +142,8 @@ export class ChatClient {
   #keyed: () => KeyedSession;
   #connect: () => EventSocket;
   #raw: Raw;
+  #names: (key: string) => string | undefined;
+  #left: (room: string, key: string) => void;
   /** Newest head verified per group, so the server cannot roll one back during this process. */
   #pins = new Map<string, { version: number; hash: string }>();
   #heads = new Map<string, ReadonlyMap<string, string[]> | null>();
@@ -131,11 +153,27 @@ export class ChatClient {
     keyed: () => KeyedSession,
     connect: () => EventSocket,
     raw: Raw,
+    names: (key: string) => string | undefined = () => undefined,
+    left: (room: string, key: string) => void = () => {},
   ) {
     this.#request = request;
     this.#keyed = keyed;
     this.#connect = connect;
     this.#raw = raw;
+    this.#names = names;
+    this.#left = left;
+  }
+  /** Sealed names for `keys`: explicit ones first, then the profiles this client set. */
+  #sealedNames(keys: (string | undefined)[], explicit: Record<string, string> = {}) {
+    const wanted = [...new Set(keys.filter((k): k is string => !!k))];
+    for (const key of wanted)
+      if (Object.hasOwn(explicit, key) && !validName(explicit[key]))
+        throw new HeraldError(`The name for ${key} must be 1 to 60 characters.`, 400);
+    const known = Object.fromEntries(
+      wanted.flatMap((k) => (this.#names(k) ? [[k, this.#names(k)]] : [])),
+    );
+    const names = chatNames({ ...known, ...explicit }, wanted);
+    return Object.keys(names).length ? names : undefined;
   }
   #policy?: { at: number; value: Promise<e2ee.SignedChatPolicy | null> };
   #claim = 0;
@@ -180,12 +218,41 @@ export class ChatClient {
     }
     return out;
   }
-  /** The room for an id, or the DM with `h:…`, `a:…` or `owner`, created if needed. */
-  async open(target: string): Promise<ChatRoom> {
+  /**
+   * The room for an id, or the DM with `h:…`, `a:…` or `owner`, created if needed. `agent` opens
+   * the DM with one agent of that connection (or of this one, with `owner`) instead.
+   */
+  async open(target: string, options: { agent?: string } = {}): Promise<ChatRoom> {
     const room = ROOM_ID.test(target)
       ? await this.#request<ChatRoom>(path(target))
-      : await this.#request<ChatRoom>('/chats', { kind: 'dm', with: target });
+      : await this.#request<ChatRoom>('/chats', {
+          kind: 'dm',
+          with: target,
+          ...(options.agent ? { agent: options.agent } : {}),
+        });
     return this.#verified(room);
+  }
+  /** Adds one of this connection's registered agents to a room it is in, or changes its settings. */
+  async addAgent(
+    room: string,
+    key: string,
+    options: { notify?: e2ee.NotifyRule; context?: e2ee.ContextMode } = {},
+  ): Promise<ChatRoom> {
+    return this.#verified(
+      await this.#request<ChatRoom>(`${path(room)}/agents/${encodeURIComponent(key)}`, options, {
+        method: 'PUT',
+      }),
+    );
+  }
+  /** Removes one of this connection's agents from a room; its pending wakes there go too. */
+  async removeAgent(room: string, key: string): Promise<ChatRoom> {
+    const left = await this.#request<ChatRoom>(
+      `${path(room)}/agents/${encodeURIComponent(key)}`,
+      undefined,
+      { method: 'DELETE' },
+    );
+    this.#left(room, key);
+    return this.#verified(left);
   }
   /** A new session room with a principal. */
   async session(target: string): Promise<ChatRoom> {
@@ -265,6 +332,7 @@ export class ChatClient {
       ? payload.tags.filter((t) => typeof t === 'string')
       : undefined;
     const summary = typeof payload.summary === 'string' ? payload.summary.slice(0, 200) : undefined;
+    const names = chatNames(payload.names, Object.keys(payload.names ?? {}));
     const sealed = await e2ee.openChatSecrets(current, room, record).catch(() => undefined);
     return {
       ...out,
@@ -279,6 +347,7 @@ export class ChatClient {
         mentions,
         mentionsMismatch,
         tags: tags?.length ? tags : undefined,
+        names: Object.keys(names).length ? names : undefined,
         secrets: sealed?.answers as Record<string, unknown> | undefined,
       }),
     };
@@ -396,6 +465,7 @@ export class ChatClient {
       options;
     if (summary !== undefined && summary.length > 200)
       throw new HeraldError('A summary is at most 200 characters.', 400);
+    const names = this.#sealedNames([sub, ...(tags ?? [])], options.names);
     const { kind, event, form, rules } = extra;
     for (let attempt = 0; ; attempt++) {
       const room = await this.open(target);
@@ -405,6 +475,7 @@ export class ChatClient {
         text,
         ...defined({ kind, audience, sub, mentions, attachments, reference, event, form, summary }),
         ...(tags?.length ? { tags } : {}),
+        ...defined({ names }),
       };
       const body = {
         id,
@@ -446,7 +517,8 @@ export class ChatClient {
       if (!asker) throw new e2ee.E2eeError('The asker is not verified.');
       const seal = (input: e2ee.ChatSealInput) =>
         e2ee.sealChat(keys, room, input, this.#trust(room.id));
-      const input = { id, text: '', kind: 'answer' as const, sub: form.sub };
+      const names = this.#sealedNames([form.sub]);
+      const input = { id, text: '', kind: 'answer' as const, sub: form.sub, ...defined({ names }) };
       const body = {
         id,
         envelope: await seal({ ...input, audience: form.audience, answers }),
@@ -793,12 +865,15 @@ export class ChatClient {
           }
           resolve();
         };
+        let opened = false;
         const ping = setInterval(() => {
-          if (!alive) return finish();
+          // A socket not open by the next keepalive is stuck: retry instead of sending.
+          if (!alive || !opened) return finish();
           alive = false;
           socket.send('ping');
         }, KEEPALIVE);
         socket.on('open', () => {
+          opened = true;
           attempt = -1;
           onOpen?.();
         });

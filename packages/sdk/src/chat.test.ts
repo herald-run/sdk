@@ -222,6 +222,29 @@ class FakeSocket implements EventSocket {
   }
 }
 const flush = () => new Promise((r) => setTimeout(r, 20));
+it('retries a socket that has not opened by the next keepalive', async () => {
+  vi.useFakeTimers();
+  const opened: FakeSocket[] = [];
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(
+    unused,
+    unused as never,
+    () => {
+      opened.push(new FakeSocket());
+      return opened.at(-1)!;
+    },
+    unused,
+  );
+  const stop = new AbortController();
+  const done = chat.wakes(() => {}, { signal: stop.signal });
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(opened).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(opened).toHaveLength(2);
+  stop.abort();
+  await done;
+  vi.useRealTimers();
+});
 it('listen delivers each message once, catches up on wake and gaps, and acks', async () => {
   const room = await makeRoom();
   const m1 = await fromOwner(room, 1, 'one');
@@ -691,4 +714,65 @@ it('wait ignores messages that could not be verified', async () => {
   });
   expect(await withSocket(new FakeSocket()).wait(room.id, { after: 0, timeout: 0.05 })).toEqual([]);
   expect(seen.some((s) => s.route.endsWith('/ack'))).toBe(false);
+});
+it('seals names for sub and tags, filled from registered agents', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    'PUT /api/v1/agents/me/subagents/': { expiresAt: 5 },
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  const herald = new Herald({ apiKey: token, url });
+  await herald.agents.register('lead', { name: 'Lead', state: 'idle' });
+  await herald.chat.send(room.id, 'go', {
+    sub: 'lead',
+    tags: ['b', 'c'],
+    names: { b: 'Bee', z: 'Z' },
+  });
+  await expect(herald.chat.send(room.id, 'x', { tags: ['b'], names: { b: '' } })).rejects.toThrow(
+    /60/,
+  );
+  const body = seen.filter((s) => s.route.startsWith('POST')).at(-1)!.body!;
+  expect(JSON.stringify(body)).not.toContain('Lead');
+  const record = {
+    ...{ seq: 1, id: body.id as string, sender: agent, sub: 'lead', at: 1 },
+    ...{ kind: 'message' as const, audience: 'all' as const },
+    envelope: body.envelope as e2ee.SealedEnvelope,
+  };
+  const opened = await e2ee.openChat(await ownerKeys(), room.id, record);
+  expect(opened).toMatchObject({ names: { lead: 'Lead', b: 'Bee' } });
+  expect(JSON.stringify(opened)).not.toContain('"z"');
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [record],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const { messages } = await client().read(room.id);
+  expect(messages[0].names).toEqual({ lead: 'Lead', b: 'Bee' });
+});
+it('opens agent DMs and adds or removes room agents', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    'POST /api/v1/chats': room,
+    [`PUT /api/v1/chats/${room.id}/agents/lead`]: room,
+    [`DELETE /api/v1/chats/${room.id}/agents/lead`]: room,
+  });
+  const chat = client();
+  await chat.open(human, { agent: 'lead' });
+  await chat.open(human);
+  await chat.addAgent(room.id, 'lead', { notify: 'all' });
+  await chat.removeAgent(room.id, 'lead');
+  const posts = seen.filter((s) => s.route === 'POST /api/v1/chats');
+  expect(posts.map((p) => p.body)).toEqual([
+    { kind: 'dm', with: human, agent: 'lead' },
+    { kind: 'dm', with: human },
+  ]);
+  expect(seen.find((s) => s.route.startsWith('PUT'))!.body).toEqual({ notify: 'all' });
+  expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}/agents/lead`)).toBe(true);
 });

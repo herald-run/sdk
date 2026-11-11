@@ -108,11 +108,26 @@ export interface ChatRoom {
   chain?: SignedChatHead[];
   /** Agent turns in a row, between different agents, before wakes pause; 0 means no limit. */
   hopLimit?: number;
-  /** Subagents of member connections seen here (sent or tagged). */
+  /** The agent key of a DM with one agent. */
+  agent?: string;
+  /** Agents of member connections in this room, live or not, with their own settings. */
+  agents?: RoomAgent[];
+  /** @deprecated Read `agents`. */
   subagents?: RoomSubagent[];
 }
 /** `agents`: people's messages never reach it, nor do their tags wake it. */
 export type SubagentReach = 'all' | 'agents';
+export type AgentReach = SubagentReach;
+/** An agent in a room. `live`: registered now; a tag still wakes one that is not, within reach. */
+export interface RoomAgent {
+  connection: string;
+  key: string;
+  notify: NotifyRule;
+  /** Overrides its connection's context when set. */
+  context?: ContextMode;
+  reach: AgentReach;
+  live: boolean;
+}
 export interface RoomSubagent {
   connection: string;
   key: string;
@@ -142,6 +157,8 @@ export interface ChatPayload extends Record<string, unknown> {
   summary?: string;
   /** A sender-quoted copy of an Inbox request; never fetched or re-verified from the Inbox. */
   reference?: Record<string, unknown>;
+  /** Display names (1 to 60 chars) for the `sub` and `tags` keys, as the sender knew them. */
+  names?: Record<string, string>;
 }
 export type OpenedChat = ChatPayload & { mentionsMismatch?: true };
 /** Verified keys of the local party; each client fills this from its own key store. */

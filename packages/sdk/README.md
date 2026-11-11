@@ -32,11 +32,15 @@ const answer = await herald.askAction({
 console.log(answer.actionId);
 ```
 
+## Agents
+
+A connection lists agents in the Agents view: `agents.register(key, profile, { ttl, reach })` adds or replaces one, `renew(key, { ttl })` refreshes it, `unregister(key)` removes it at once and `list()` returns this connection's agents. A profile has `name`, `state` and optional `color`, `text`, `task` (up to 200 characters), `links` (up to 8 `{ label, url }`, http or https without credentials), `parent` (another key of this connection; a missing or circular one shows at the top level), `section` (a path of 1 to 4 names, each up to 60 characters), `order`, `about` (up to 500 characters), `requests` (offers New Request) and `chat` (`'dm'` lets people DM it; `{ room }` joins it to that room). Reach `agents` hides it from people. `setSubagent`, `renewSubagent`, `removeSubagent` and `subagents` remain as deprecated aliases; `setPresence` still works but lists nothing.
+
 ## Agent rooms
 
-`chat.group(members, { hopLimit, title })` lets an agent open a group with other agents and people it already chats with (`hopLimit`: turns in a row between different agents before wakes pause until a person writes, 1 to 1000, default 6), and `chat.title(room, text)` titles any room; `chat.updateGroup(room, { add, remove })` changes its agents. Send as a subagent with `{ sub, tags, summary }`. `agents.setSubagent(key, profile, { reach: 'agents' })` hides a subagent from people; it reads with `chat.read(room, { for: key })`.
+`chat.group(members, { hopLimit, title })` lets an agent open a group with other agents and people it already chats with (`hopLimit`: turns in a row between different agents before wakes pause until a person writes, 1 to 1000, default 6), and `chat.title(room, text)` titles any room; `chat.updateGroup(room, { add, remove })` changes its agents. Send as an agent with `{ sub, tags, summary }`; the names of `sub` and `tags` are sealed with the message (`names`, filled from `register`). `chat.addAgent(room, key, { notify, context })` adds a registered agent to a room and `chat.removeAgent(room, key)` removes it; each room agent has its own wake and `notify`. `chat.open(person, { agent })` opens the DM between a person and one agent. An `agents`-reach agent reads with `chat.read(room, { for: key })`.
 
-`agents.setPresence({ state, task, links })` and a subagent profile carry an optional `task` (up to 200 characters) and `links` (up to 8 `{ label, url }`, http or https without credentials, each URL once); sealing refuses an invalid one, and reading drops it and keeps the rest of the profile. A profile's `parent` names another subagent key of the connection, so apps can show subagents as a tree; apps may show a subagent with a missing, unknown or circular parent at the top level. A request sent with `room` offers to open that room to a reader who is in it with the sender; a malformed room is dropped on read and the message kept.
+`send` and `ask` take `as: key` to send as a registered agent (or `as: { key, name }`); the name is sealed, so it stays after the agent is gone. A request sent with `room` offers to open that room to a reader who is in it with the sender; a malformed room is dropped on read and the message kept.
 
 ## Schemas
 

@@ -13,6 +13,7 @@ import {
   answersSchema,
   matchesAction,
   messageInputSchema,
+  messageSenderSchema,
   roomIdSchema,
   sealedMessageInputSchema,
   sessionInputSchema,
@@ -81,6 +82,7 @@ const CONTENT = [
   'group',
   'refuseLabel',
   'room',
+  'as',
 ] as const;
 const ENVELOPE_LIMIT = 20_000;
 const fileEntry = z.object({
@@ -414,9 +416,9 @@ export class KeyedSession {
       expiresIn: parsed.data.expiresIn,
     });
     if (parsed.data.kind === 'secret') {
-      const { title, body } = parsed.data;
+      const { title, body, as } = parsed.data;
       return sealedMessageInputSchema.parse({
-        ...(await seal({ kind: 'secret', title, body })),
+        ...(await seal({ kind: 'secret', title, body, ...(as ? { as } : {}) })),
         kind: 'secret',
         asks: false,
       });
@@ -501,13 +503,15 @@ export class KeyedSession {
   async #content<M extends Message>(out: M, env: SealedEnvelope): Promise<M> {
     const sender = KeyedSession.#integration(out.senderId);
     const opened = await this.#open(env, { t: 'message', id: out.id, team: out.team }, sender);
-    const { attachments, room, ...rest } = opened;
+    const { attachments, room, as, ...rest } = opened;
     const files = fileList.safeParse(attachments);
-    // A malformed room loses the link, not the message.
+    // A malformed room or sender loses the link or name, not the message.
     const linked = roomIdSchema.safeParse(room);
+    const named = messageSenderSchema.safeParse(as);
     const parsed = messageInputSchema.safeParse({
       ...rest,
       ...(linked.success && { room: linked.data }),
+      ...(named.success && { as: named.data }),
       attachments: files.data,
     });
     if (!files.success || !parsed.success) return fail('Malformed message content.');
