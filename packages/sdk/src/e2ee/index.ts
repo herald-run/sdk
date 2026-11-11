@@ -22,7 +22,6 @@ export {
   type ChatRoom,
   type AgentReach,
   type RoomAgent,
-  type RoomSubagent,
   type SubagentReach,
   type ChatAttachment,
   type ChatEvent,

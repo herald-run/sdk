@@ -11,7 +11,7 @@ import { removeLogin, saveLogin, tokenPath } from './config';
 import { composeDestination, composeMessage, outputs, UsageError } from './compose';
 import * as format from './format';
 import { aliases, commands, completion, usage } from './help';
-import { presence, subagents } from './agents';
+import { agents, presence, subagents } from './agents';
 import { chat } from './chat';
 import { listen } from './listen';
 import { encryptionLine, login, userAgent } from './login';
@@ -109,7 +109,10 @@ const options = {
   workspace: { type: 'string' },
   team: { type: 'string' },
   exec: { type: 'string' },
-  session: { type: 'boolean' },
+  chat: { type: 'boolean' },
+  section: { type: 'string' },
+  agent: { type: 'string', multiple: true },
+  as: { type: 'string' },
   humans: { type: 'boolean' },
   mention: { type: 'string', multiple: true },
   attach: { type: 'string', multiple: true },
@@ -119,7 +122,6 @@ const options = {
   state: { type: 'string' },
   color: { type: 'string' },
   ttl: { type: 'string' },
-  sub: { type: 'string' },
   tag: { type: 'string', multiple: true },
   summary: { type: 'string' },
   for: { type: 'string' },
@@ -552,6 +554,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
         return 0;
       }
       case 'presence':
+      case 'agents':
       case 'subagents': {
         const agent = {
           json: values.json,
@@ -562,8 +565,10 @@ export async function main(argv: string[], io: Io): Promise<number> {
           task: values.task,
           link: values.link,
           parent: values.parent,
+          chat: values.chat,
+          section: values.section,
         };
-        return await (command === 'presence' ? presence : subagents)(
+        return await { presence, agents, subagents }[command](
           client,
           positionals.slice(1),
           agent,
@@ -577,11 +582,11 @@ export async function main(argv: string[], io: Io): Promise<number> {
           {
             json: values.json,
             exec: values.exec,
-            session: values.session,
             humans: values.humans,
             mention: values.mention,
             attach: values.attach,
-            sub: values.sub,
+            as: values.as,
+            agent: values.agent,
             tag: values.tag,
             summary: values.summary,
             title: values.title,

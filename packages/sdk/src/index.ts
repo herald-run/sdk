@@ -86,6 +86,7 @@ export type {
 export { ChatClient } from './chat.js';
 export type {
   ChatFormRules,
+  ChatGroupAgent,
   ChatGroupOptions,
   ChatListing,
   ChatMessage,
@@ -95,7 +96,6 @@ export type {
   ChatSendOptions,
   ChatWake,
   RoomAgent,
-  RoomSubagent,
   WakeReason,
 } from './chat.js';
 export { backoff, LiveSocket } from './socket.js';

@@ -112,8 +112,6 @@ export interface ChatRoom {
   agent?: string;
   /** Agents of member connections in this room, live or not, with their own settings. */
   agents?: RoomAgent[];
-  /** @deprecated Read `agents`. */
-  subagents?: RoomSubagent[];
 }
 /** `agents`: people's messages never reach it, nor do their tags wake it. */
 export type SubagentReach = 'all' | 'agents';
@@ -127,11 +125,6 @@ export interface RoomAgent {
   context?: ContextMode;
   reach: AgentReach;
   live: boolean;
-}
-export interface RoomSubagent {
-  connection: string;
-  key: string;
-  reach: SubagentReach;
 }
 export interface ChatAttachment {
   id: string;

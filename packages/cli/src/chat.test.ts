@@ -49,29 +49,46 @@ it('sends a valid chat form', async () => {
     title: 'Pick',
     fields: [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }],
   });
-  await chat(fake({ ask }), ['ask', 'room', form], base, io());
+  await chat(fake({ ask }), ['ask', 'room'.padEnd(43, 'x'), form], base, io());
   expect(ask).toHaveBeenCalledTimes(1);
 });
-it('sends as a subagent with tags and a summary, and reads for one', async () => {
-  const send = vi.fn(async () => ({ seq: 1, id: 'x', room: 'room' }));
+const room = 'r'.repeat(43);
+it('sends as an agent with tags and a summary, and reads for one', async () => {
+  const send = vi.fn(async () => ({ seq: 1, id: 'x', room }));
   const read = vi.fn(async () => ({ messages: [], through_seq: 0, hasMore: false }));
-  const values = { ...base, sub: 'a', tag: ['b'], summary: 'Plan', for: 'b' };
-  await chat(fake({ send, read }), ['send', 'room', 'go'], values, io());
+  const values = { ...base, as: 'a', tag: ['b'], summary: 'Plan', for: 'b' };
+  await chat(fake({ send, read }), ['send', room, 'go'], values, io());
   expect(send).toHaveBeenCalledWith(
-    'room',
+    room,
     'go',
     expect.objectContaining({ sub: 'a', tags: ['b'], summary: 'Plan' }),
   );
-  await chat(fake({ send, read }), ['read', 'room'], values, io());
-  expect(read).toHaveBeenCalledWith('room', expect.objectContaining({ for: 'b' }));
+  await chat(fake({ send, read }), ['read', room], values, io());
+  expect(read).toHaveBeenCalledWith(room, expect.objectContaining({ for: 'b' }));
+});
+it('needs --as to send to a person, and passes it as sub', async () => {
+  const send = vi.fn(async () => ({ seq: 1, id: 'x', room }));
+  const open = vi.fn(async () => ({ id: room }) as ChatRoom);
+  await expect(chat(fake({ send }), ['send', 'owner', 'go'], base, io())).rejects.toThrow('--as');
+  await expect(chat(fake({ send }), ['send', 'h:u', 'go'], base, io())).rejects.toThrow('--as');
+  expect(send).not.toHaveBeenCalled();
+  await chat(fake({ send }), ['send', 'owner', 'go'], { ...base, as: 'lead' }, io());
+  expect(send).toHaveBeenCalledWith('owner', 'go', expect.objectContaining({ sub: 'lead' }));
+  await chat(fake({ send, open }), ['send', 'h:u', 'go'], { ...base, as: 'lead' }, io());
+  expect(open).not.toHaveBeenCalled();
 });
 it('creates a titled group and titles a room', async () => {
   const group = vi.fn(async () => ({ id: 'g'.repeat(43) }) as ChatRoom);
   const title = vi.fn(async () => ({ seq: 1, id: 'x', room: 'room' }));
-  const values = { ...base, title: 'Launch', hopLimit: 10 };
+  const values = { ...base, title: 'Launch', hopLimit: 10, agent: ['lead', 'qa'] };
   await chat(fake({ group }), ['group', 'a:one', 'h:two'], values, io());
-  expect(group).toHaveBeenCalledWith(['a:one', 'h:two'], { title: 'Launch', hopLimit: 10 });
+  expect(group).toHaveBeenCalledWith(['a:one', 'h:two'], {
+    agents: ['lead', 'qa'],
+    title: 'Launch',
+    hopLimit: 10,
+  });
+  await expect(chat(fake({ group }), ['group', 'h:two'], base, io())).rejects.toThrow('--agent');
   await chat(fake({ title }), ['title', 'room', 'New name'], base, io());
   expect(title).toHaveBeenCalledWith('room', 'New name');
-  await expect(chat(fake({ group }), ['group'], base, io())).rejects.toThrow(/MEMBER/);
+  await expect(chat(fake({ group }), ['group'], values, io())).rejects.toThrow(/MEMBER/);
 });

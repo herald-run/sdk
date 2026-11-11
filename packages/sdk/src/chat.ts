@@ -13,7 +13,7 @@ import { messageInputSchema } from './schema/index.js';
 import { HeraldError, readError, sleep } from './http.js';
 import type { KeyedSession } from './keyed.js';
 import { backoff, KEEPALIVE, type EventSocket } from './socket.js';
-export type { AgentReach, ChatRoom, RoomAgent, RoomSubagent } from './e2ee/index.js';
+export type { AgentReach, ChatRoom, RoomAgent } from './e2ee/index.js';
 /** An opened chat message; `locked` when it could not be decrypted or verified. */
 export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   room: string;
@@ -57,6 +57,7 @@ export type ChatWake = {
 export type ChatPage = { messages: ChatMessage[]; through_seq: number; hasMore: boolean };
 export type ChatSendOptions = {
   audience?: 'all' | 'humans';
+  /** The agent of this connection that speaks. Required to send to a person or `owner`, which opens that agent's DM. */
   sub?: string;
   replyTo?: number;
   id?: string;
@@ -96,7 +97,11 @@ export type ChatReadOptions = {
   /** Read as this subagent of the connection: one people cannot reach sees no human messages. */
   for?: string;
 };
+/** A room agent: a string is one of this connection's own keys, an object another connection's. */
+export type ChatGroupAgent = string | { connection: string; key: string; notify?: e2ee.NotifyRule };
 export type ChatGroupOptions = {
+  /** At least one agent for each connection in the group, this one included. */
+  agents: ChatGroupAgent[];
   /** Default: the creator, plus every person when an agent creates it. */
   owners?: string[];
   team?: string;
@@ -218,17 +223,29 @@ export class ChatClient {
     }
     return out;
   }
+  /** The room for an id. */
+  open(room: string): Promise<ChatRoom>;
   /**
-   * The room for an id, or the DM with `h:…`, `a:…` or `owner`, created if needed. `agent` opens
-   * the DM with one agent of that connection (or of this one, with `owner`) instead.
+   * The DM with `h:…`, `a:…` or `owner`, created if needed. `agent` is required: it names the
+   * agent the DM is with (one of this connection's with `h:…` or `owner`, one of that connection's
+   * with `a:…`).
    */
+  open(target: string, options: { agent: string }): Promise<ChatRoom>;
   async open(target: string, options: { agent?: string } = {}): Promise<ChatRoom> {
+    if (!ROOM_ID.test(target) && !options.agent)
+      throw new HeraldError(
+        'A chat with a person or connection names one of its agents.',
+        400,
+        undefined,
+        undefined,
+        'AGENT_REQUIRED',
+      );
     const room = ROOM_ID.test(target)
       ? await this.#request<ChatRoom>(path(target))
       : await this.#request<ChatRoom>('/chats', {
           kind: 'dm',
           with: target,
-          ...(options.agent ? { agent: options.agent } : {}),
+          agent: options.agent,
         });
     return this.#verified(room);
   }
@@ -253,13 +270,6 @@ export class ChatClient {
     );
     this.#left(room, key);
     return this.#verified(left);
-  }
-  /** A new session room with a principal. */
-  async session(target: string): Promise<ChatRoom> {
-    const nonce = e2ee.b64u.encode(crypto.getRandomValues(new Uint8Array(16)));
-    return this.#verified(
-      await this.#request<ChatRoom>('/chats', { kind: 'session', with: target, nonce }),
-    );
   }
   #trust = (room: string): RoomTrust => ({
     pins: this.#pins,
@@ -404,8 +414,11 @@ export class ChatClient {
     const room = await this.open(target);
     await this.#request(`${path(room.id)}/messages/${seq}`, undefined, { method: 'DELETE' });
   }
-  /** A new group; an agent may add other agents and the people it already chats with. */
-  async group(members: string[], options: ChatGroupOptions = {}): Promise<ChatRoom> {
+  /**
+   * A new group; an agent may add other agents and the people it already chats with. A connection
+   * takes part through the agents in `options.agents`.
+   */
+  async group(members: string[], options: ChatGroupOptions): Promise<ChatRoom> {
     const keys = await this.#keys();
     const me = keys.principal;
     const nonce = e2ee.b64u.encode(crypto.getRandomValues(new Uint8Array(16)));
@@ -422,7 +435,16 @@ export class ChatClient {
       ...(options.team ? { team: options.team } : {}),
     };
     const signed = await e2ee.signChatHead({ ...keys, principal: me }, head);
-    const body = { kind: 'group', nonce, head: signed, ...defined({ hopLimit: options.hopLimit }) };
+    const agents = options.agents.map((a) =>
+      typeof a === 'string' ? { connection: me, key: a } : defined(a),
+    );
+    const body = {
+      kind: 'group',
+      nonce,
+      head: signed,
+      agents,
+      ...defined({ hopLimit: options.hopLimit }),
+    };
     const room = await this.#verified(await this.#request<ChatRoom>('/chats', body));
     if (!options.title) return room;
     await this.title(room.id, options.title);
@@ -459,6 +481,19 @@ export class ChatClient {
     const signed = await e2ee.signChatHead(keys, head);
     return this.#verified(await this.#request<ChatRoom>(`${path(room.id)}/heads`, signed));
   }
+  /** The room for an id, or the DM with a person or `owner` through the sending agent. */
+  #dm(target: string, sub?: string) {
+    if (ROOM_ID.test(target)) return this.open(target);
+    if (!sub)
+      throw new HeraldError(
+        'A connection speaks as one of its agents: pass `sub`.',
+        400,
+        undefined,
+        undefined,
+        'AGENT_REQUIRED',
+      );
+    return this.open(target, { agent: sub });
+  }
   async #post(target: string, text: string, options: ChatSendOptions, extra: Posted = {}) {
     const id = options.id ?? crypto.randomUUID();
     const { audience, sub, replyTo, mentions, attachments, reference, signal, tags, summary } =
@@ -468,7 +503,7 @@ export class ChatClient {
     const names = this.#sealedNames([sub, ...(tags ?? [])], options.names);
     const { kind, event, form, rules } = extra;
     for (let attempt = 0; ; attempt++) {
-      const room = await this.open(target);
+      const room = await this.#dm(target, sub);
       const keys = await this.#keys(attempt ? 'force' : false);
       const input = {
         id,

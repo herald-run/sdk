@@ -87,6 +87,9 @@ it('lists every tool with a description', async () => {
   const { tools } = await client.listTools();
   expect(tools.map((t) => t.name).sort()).toEqual(
     [
+      'agent_register',
+      'agent_unregister',
+      'agents_list',
       'ask',
       'cancel',
       'chat_answer',
@@ -306,4 +309,45 @@ it('passes subagent reach and reads as a subagent', async () => {
   expect(await sealed.openForOwner(child, ctx)).toMatchObject({ name: 'C', parent: 'quiet' });
   await call('chat_read', { room: 'r'.repeat(43), for: 'quiet' });
   expect(seen.some((s) => s.url.includes('/messages?for=quiet'))).toBe(true);
+});
+it('registers, lists and unregisters agents', async () => {
+  await call('agent_register', {
+    key: 'lead',
+    name: 'Lead',
+    state: 'idle',
+    chat: true,
+    section: ['Team'],
+  });
+  const put = last((s) => s.method === 'PUT')!;
+  expect(put.url).toBe('/api/v1/agents/me/subagents/lead');
+  const ctx = { t: 'subagent', principal: 'a:' + sealed.runnerId, key: 'lead' };
+  const body = JSON.parse(put.body);
+  expect(await sealed.openForOwner(body.envelope, ctx)).toMatchObject({
+    name: 'Lead',
+    chat: 'dm',
+    section: ['Team'],
+  });
+  await call('agents_list', {});
+  expect(last((s) => s.method === 'GET')!.url).toBe('/api/v1/agents/me/subagents');
+  expect((await call('agent_unregister', { key: 'lead' })).data).toEqual({
+    key: 'lead',
+    unregistered: true,
+  });
+  expect(last((s) => s.method === 'DELETE')!.url).toBe('/api/v1/agents/me/subagents/lead');
+});
+it('chats as an agent: as replaces sub, a person needs it, there are no session rooms', async () => {
+  const { tools } = await client.listTools();
+  const props = (name: string) =>
+    Object.keys(tools.find((t) => t.name === name)!.inputSchema.properties!);
+  expect(props('chat_send')).toContain('as');
+  expect(props('chat_send')).not.toContain('sub');
+  expect(props('chat_send')).not.toContain('session');
+  expect(props('chat_group')).toContain('agents');
+  const missing = await call('chat_send', { to: 'owner', text: 'hi' });
+  expect(missing.error).toBe(true);
+  expect(missing.text).toContain('`as`');
+  await call('chat_send', { to: 'owner', text: 'hi', as: 'lead' });
+  const dm = last((s) => s.url === '/api/v1/chats')!;
+  expect(JSON.parse(dm.body)).toEqual({ kind: 'dm', with: 'owner', agent: 'lead' });
+  expect((await call('chat_group', { members: ['h:u'] })).error).toBe(true);
 });

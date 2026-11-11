@@ -10,6 +10,8 @@ export type AgentValues = {
   task?: string;
   link?: string[];
   parent?: string;
+  chat?: boolean;
+  section?: string;
 };
 type Io = { out: (line: string) => void };
 const STATES: PresenceState[] = ['idle', 'busy', 'blocked', 'offline'];
@@ -48,6 +50,50 @@ export async function presence(
   return 0;
 }
 
+const reachOf = (value: string | undefined) => {
+  if (value && value !== 'all' && value !== 'agents')
+    throw new UsageError('Reach is all or agents.');
+  return value as 'all' | 'agents' | undefined;
+};
+
+/** `herald agents list|register|unregister`: the agents of this connection that chat and show up. */
+export async function agents(
+  client: Pick<Herald, 'agents'>,
+  [action = 'list', key, name]: string[],
+  values: AgentValues,
+  io: Io,
+): Promise<number> {
+  const print = (human: string, data: unknown) =>
+    io.out(values.json ? JSON.stringify(data) : human);
+  if (action === 'list') {
+    const list = await client.agents.list();
+    print(list.map((a) => a.key).join('\n') || 'No agents.', { agents: list });
+  } else if (action === 'register') {
+    if (!key || !name)
+      throw new UsageError(
+        'Usage: herald agents register KEY NAME [--chat] [--parent KEY] [--section A/B] [--ttl S]',
+      );
+    const section = values.section?.split('/').map((s) => s.trim());
+    const profile = {
+      ...shape(values.state ? state(values.state) : 'idle', undefined, values),
+      name,
+      ...(values.parent && { parent: values.parent }),
+      ...(values.chat && { chat: 'dm' as const }),
+      ...(section && { section }),
+    };
+    const stored = await client.agents.register(key, profile, {
+      ttl: values.ttl,
+      reach: reachOf(values.reach),
+    });
+    print(`${key}  ${name}`, stored);
+  } else if (action === 'unregister') {
+    if (!key) throw new UsageError('Usage: herald agents unregister KEY');
+    await client.agents.unregister(key);
+    print(`Unregistered ${key}.`, { key, unregistered: true });
+  } else throw new UsageError('Usage: herald agents list|register|unregister [KEY] [NAME]');
+  return 0;
+}
+
 /** `herald subagents list|set|remove`: named children of this connection. */
 export async function subagents(
   client: Pick<Herald, 'agents'>,
@@ -67,9 +113,7 @@ export async function subagents(
       name,
       ...(values.parent && { parent: values.parent }),
     };
-    if (values.reach && values.reach !== 'all' && values.reach !== 'agents')
-      throw new UsageError('Reach is all or agents.');
-    const reach = values.reach as 'all' | 'agents' | undefined;
+    const reach = reachOf(values.reach);
     const stored = await client.agents.setSubagent(key, profile, { ttl: values.ttl, reach });
     print(`${key}  ${name}`, stored);
   } else if (action === 'remove') {

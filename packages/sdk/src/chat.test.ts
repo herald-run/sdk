@@ -507,7 +507,7 @@ it('titles a room, and a new group when asked', async () => {
     },
   });
   let created: Record<string, unknown> = {};
-  await client().group([human], { title: 'Launch Checklist' });
+  await client().group([human], { agents: ['lead'], title: 'Launch Checklist' });
   const titled = calls.find((s) => s.route.endsWith('/messages') && s.route.startsWith('POST'));
   expect(titled?.body).toMatchObject({ kind: 'title' });
 });
@@ -533,11 +533,15 @@ it('lets an agent create a group owned by it and its people', async () => {
     },
   });
   await client()
-    .group([human], { hopLimit: 0 })
+    .group([human], { agents: ['lead'], hopLimit: 0 })
     .catch((e: Error) => e);
   const body = seen.find((s) => s.route === 'POST /api/v1/chats')!.body!;
   const signed = body.head as e2ee.SignedChatHead;
-  expect(body).toMatchObject({ kind: 'group', hopLimit: 0 });
+  expect(body).toMatchObject({
+    kind: 'group',
+    hopLimit: 0,
+    agents: [{ connection: agent, key: 'lead' }],
+  });
   expect(signed).toMatchObject({ by: agent, head: { owners: [agent, human] } });
   expect(signed.head.members).toEqual([agent, human]);
   expect(signed.head.room).toBe(await e2ee.groupRoomId(agent, body.nonce as string));
@@ -765,14 +769,65 @@ it('opens agent DMs and adds or removes room agents', async () => {
   });
   const chat = client();
   await chat.open(human, { agent: 'lead' });
-  await chat.open(human);
   await chat.addAgent(room.id, 'lead', { notify: 'all' });
   await chat.removeAgent(room.id, 'lead');
   const posts = seen.filter((s) => s.route === 'POST /api/v1/chats');
-  expect(posts.map((p) => p.body)).toEqual([
-    { kind: 'dm', with: human, agent: 'lead' },
-    { kind: 'dm', with: human },
-  ]);
+  expect(posts.map((p) => p.body)).toEqual([{ kind: 'dm', with: human, agent: 'lead' }]);
   expect(seen.find((s) => s.route.startsWith('PUT'))!.body).toEqual({ notify: 'all' });
   expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}/agents/lead`)).toBe(true);
+});
+it('requires an agent to open a person, and has no session rooms', async () => {
+  const seen = serve({ ...keysRoute });
+  const chat = client();
+  for (const target of [human, 'owner', 'a:other'])
+    await expect(chat.open(target as string, undefined as never)).rejects.toMatchObject({
+      status: 400,
+      code: 'AGENT_REQUIRED',
+    });
+  expect(seen.some((s) => s.route === 'POST /api/v1/chats')).toBe(false);
+  expect('session' in chat).toBe(false);
+});
+it('opens the agent DM with sub when sending to a person or owner', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  await chat.send(human, 'hi', { sub: 'lead' });
+  await chat.send('owner', 'hi', { sub: 'lead' });
+  const dms = seen.filter((s) => s.route === 'POST /api/v1/chats');
+  expect(dms.map((d) => d.body)).toEqual([
+    { kind: 'dm', with: human, agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+  ]);
+  expect(
+    seen.filter((s) => s.route.endsWith('/messages')).every((s) => s.body?.sub === 'lead'),
+  ).toBe(true);
+  await expect(chat.send(human, 'hi')).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
+  const form = {
+    title: 'Pick',
+    fields: [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }],
+  };
+  await expect(chat.ask('owner', form)).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
+  expect(dms).toHaveLength(2);
+});
+it('sends the agents of a new group with their connections', async () => {
+  const seen = serve({
+    ...keysRoute,
+    'POST /api/v1/chats': () => {
+      throw new Error('stop');
+    },
+  });
+  await client()
+    .group([human, 'a:other'], {
+      agents: ['lead', { connection: 'a:other', key: 'r', notify: 'all' }],
+    })
+    .catch((e: Error) => e);
+  const body = seen.find((s) => s.route === 'POST /api/v1/chats')!.body!;
+  expect(body.agents).toEqual([
+    { connection: agent, key: 'lead' },
+    { connection: 'a:other', key: 'r', notify: 'all' },
+  ]);
 });

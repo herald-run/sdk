@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import type { Herald } from '@herald-run/sdk';
-import { presence, subagents } from './agents';
+import { agents, presence, subagents } from './agents';
 const io = () => ({ out: vi.fn() });
 const fake = (over: Partial<Herald['agents']>) =>
   ({ agents: over }) as unknown as Pick<Herald, 'agents'>;
@@ -80,4 +80,30 @@ it('manages subagents', async () => {
   await subagents(client, ['remove', 'review'], { json: true }, out);
   expect(removeSubagent).toHaveBeenCalledWith('review');
   await expect(subagents(client, ['set', 'x'], {}, out)).rejects.toThrow('Usage');
+});
+it('registers, lists and unregisters agents', async () => {
+  const register = vi.fn(async () => ({ expiresAt: 1 }));
+  const unregister = vi.fn(async () => {});
+  const list = vi.fn(async () => [{ key: 'lead', expiresAt: 9, reach: 'all' as const }]);
+  const client = fake({ register, unregister, list });
+  const out = io();
+  await agents(
+    client,
+    ['register', 'lead', 'Lead'],
+    { chat: true, parent: 'boss', section: 'Team/Dev', ttl: 60 },
+    out,
+  );
+  expect(register).toHaveBeenCalledWith(
+    'lead',
+    { state: 'idle', name: 'Lead', parent: 'boss', chat: 'dm', section: ['Team', 'Dev'] },
+    { ttl: 60, reach: undefined },
+  );
+  expect(out.out).toHaveBeenLastCalledWith('lead  Lead');
+  await agents(client, ['register', 'q', 'Q'], {}, out);
+  expect(register).toHaveBeenLastCalledWith('q', { state: 'idle', name: 'Q' }, expect.anything());
+  await agents(client, ['list'], {}, out);
+  expect(out.out).toHaveBeenLastCalledWith('lead');
+  await agents(client, ['unregister', 'lead'], {}, out);
+  expect(unregister).toHaveBeenCalledWith('lead');
+  await expect(agents(client, ['register', 'x'], {}, out)).rejects.toThrow('Usage');
 });
