@@ -66,7 +66,7 @@ function serve(routes: Record<string, Reply>) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const u = new URL(String(input));
     const route = `${init?.method || 'GET'} ${u.pathname}`;
-    seen.push({ route, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    seen.push({ route, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
     const key = Object.keys(routes).find((r) => route.startsWith(r));
     if (!key) return Response.json({ error: 'Not found.' }, { status: 404 });
     const value = routes[key];
@@ -849,6 +849,95 @@ it('opens the agent DM with sub when sending to a person or owner', async () => 
   };
   await expect(chat.ask('owner', form)).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
   expect(dms).toHaveLength(2);
+});
+it('resolves owner through the DM for reading and waiting, and requires the agent', async () => {
+  const room = await makeRoom();
+  const m1 = await fromOwner(room, 1, 'hi');
+  const wake = { room: room.id, first: 1, seq: 1, reason: 'message', context: 'message' };
+  const seen = serve({
+    ...keysRoute,
+    [`POST /api/v1/chats/${room.id}/lease`]: { wake: { ...wake, contextFrom: 1 } },
+    [`POST /api/v1/chats/${room.id}/ack`]: { readSeq: 1 },
+    [`GET /api/v1/chats/${room.id}/messages`]: { messages: [m1], through_seq: 1, hasMore: false },
+    [`GET /api/v1/chats/${room.id}`]: room,
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  expect((await chat.next('owner', { timeout: 1, for: 'lead' }))?.messages).toHaveLength(1);
+  expect(await chat.wait(human, { timeout: 1, for: 'lead' })).toHaveLength(1);
+  expect(await chat.wait('owner', { after: 0, timeout: 1, for: 'lead' })).toHaveLength(1);
+  expect((await chat.read('owner', { for: 'lead' })).messages).toHaveLength(1);
+  const dms = seen.filter((s) => s.route === 'POST /api/v1/chats').map((s) => s.body);
+  expect(dms).toEqual([
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+    { kind: 'dm', with: human, agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+  ]);
+  for (const call of [
+    () => chat.next('owner', { timeout: 1 }),
+    () => chat.wait('owner', { timeout: 1 }),
+    () => chat.wait('a:other', { after: 0, timeout: 1 }),
+    () => chat.read('owner'),
+  ])
+    await expect(call()).rejects.toMatchObject({ status: 400, code: 'AGENT_REQUIRED' });
+  expect(seen.filter((s) => s.route === 'POST /api/v1/chats')).toHaveLength(4);
+});
+it('resolves owner through the DM for answer, delete and attach, and requires sub', async () => {
+  const room = await makeRoom();
+  const owner = await ownerKeys();
+  const id = crypto.randomUUID();
+  const fields = [{ id: 'a', type: 'select', label: 'A', options: [{ value: 'y', label: 'Yes' }] }];
+  const envelope = await e2ee.sealChat(owner, room, {
+    id,
+    text: '',
+    kind: 'form',
+    form: { title: 'Pick', fields },
+  });
+  const record = { seq: 1, id, sender: human, sub: '', at: 1, kind: 'form', audience: 'all' };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [{ ...record, envelope }],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`POST /api/v1/chats/${room.id}/messages/1/response`]: { seq: 2, id: 'x' },
+    [`DELETE /api/v1/chats/${room.id}/messages/1`]: null,
+    [`POST /api/v1/chats/${room.id}/files`]: { id: 'f1' },
+    [`PUT /api/v1/chats/${room.id}/files/f1`]: new Response(null),
+    [`GET /api/v1/chats/${room.id}`]: room,
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  await chat.answer('owner', 1, { a: 'y' }, { sub: 'qa' });
+  await chat.delete(human, 1, { sub: 'lead' });
+  const file = await chat.attach('owner', 'a.txt', new Uint8Array([1]), 'text/plain', {
+    sub: 'lead',
+  });
+  expect(file.id).toBe('f1');
+  const dms = seen.filter((s) => s.route === 'POST /api/v1/chats').map((s) => s.body);
+  expect(dms).toEqual([
+    { kind: 'dm', with: 'owner', agent: 'qa' },
+    { kind: 'dm', with: human, agent: 'lead' },
+    { kind: 'dm', with: 'owner', agent: 'lead' },
+  ]);
+  for (const call of [
+    () => chat.answer('owner', 1, { a: 'y' }),
+    () => chat.delete('a:other', 1),
+    () => chat.attach('owner', 'a.txt', new Uint8Array([1])),
+  ])
+    await expect(call()).rejects.toMatchObject({ status: 400, code: 'AGENT_REQUIRED' });
+  expect(seen.filter((s) => s.route === 'POST /api/v1/chats')).toHaveLength(3);
+});
+it('download and updateGroup take a room id only', async () => {
+  const seen = serve({ ...keysRoute });
+  const file = { id: 'f1', name: 'a', type: 't', size: 1, key: 'k' };
+  await expect(client().download('owner', file)).rejects.toMatchObject({ status: 400 });
+  await expect(client().updateGroup('owner', { add: [human] })).rejects.toMatchObject({
+    status: 400,
+  });
+  expect(seen.filter((s) => s.route !== 'GET /api/v1/keys')).toEqual([]);
 });
 it('sends the agents of a new group with their connections', async () => {
   const seen = serve({

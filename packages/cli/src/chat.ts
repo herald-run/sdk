@@ -184,7 +184,7 @@ export async function chat(
         }),
       );
     case 'delete': {
-      await client.chat.delete(need(room, 'ROOM'), seqAt(0));
+      await client.chat.delete(need(room, 'ROOM'), seqAt(0), { sub: values.as });
       print('Deleted.', { deleted: true });
       return 0;
     }
@@ -207,7 +207,7 @@ export async function chat(
       );
     case 'wait': {
       const target = need(room, 'ROOM');
-      const options = { timeout: values.timeout, signal: io.signal };
+      const options = { timeout: values.timeout, signal: io.signal, for: values.for };
       if (values.after !== undefined) {
         const messages = await client.chat.wait(target, { ...options, after: values.after });
         if (!messages.length) {

@@ -353,3 +353,24 @@ it('chats as an agent: as replaces sub, a person needs it, there are no session 
   expect(JSON.parse(dm.body)).toEqual({ kind: 'dm', with: 'owner', agent: 'lead' });
   expect((await call('chat_group', { members: ['h:u'] })).error).toBe(true);
 });
+it('chat_delete takes as, chat_wait and chat_read take for, and an owner target needs one', async () => {
+  const { tools } = await client.listTools();
+  const props = (name: string) =>
+    Object.keys(tools.find((t) => t.name === name)!.inputSchema.properties!);
+  expect(props('chat_delete')).toContain('as');
+  expect(props('chat_wait')).toContain('for');
+  expect(props('chat_read')).toContain('for');
+  for (const [name, args] of [
+    ['chat_wait', { room: 'owner', wait: '1s' }],
+    ['chat_wait', { room: 'owner', after: 0, wait: '1s' }],
+    ['chat_delete', { room: 'owner', seq: 1 }],
+    ['chat_answer', { room: 'owner', seq: 1, answers: {} }],
+  ] as const) {
+    const refused = await call(name, args);
+    expect(refused.error).toBe(true);
+    expect(refused.text).toMatch(/pass `(sub|for)`/);
+  }
+  await call('chat_wait', { room: 'owner', wait: '1s', for: 'lead' });
+  const dm = last((s) => s.url === '/api/v1/chats')!;
+  expect(JSON.parse(dm.body)).toEqual({ kind: 'dm', with: 'owner', agent: 'lead' });
+});

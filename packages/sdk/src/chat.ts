@@ -94,7 +94,10 @@ export type ChatReadOptions = {
   before?: number;
   limit?: number;
   signal?: AbortSignal;
-  /** Read as this subagent of the connection: one people cannot reach sees no human messages. */
+  /**
+   * Read as this subagent of the connection: one people cannot reach sees no human messages. It
+   * also names the agent whose DM a person or `owner` target opens.
+   */
   for?: string;
 };
 /** A room agent: a string is one of this connection's own keys, an object another connection's. */
@@ -362,8 +365,12 @@ export class ChatClient {
       }),
     };
   }
-  /** One page, oldest first; pass `after` to read forward and `before` to read back. */
-  async read(room: string, options: ChatReadOptions = {}): Promise<ChatPage> {
+  /**
+   * One page, oldest first; pass `after` to read forward and `before` to read back. A person or
+   * `owner` target reads the DM of `for`, which it then needs.
+   */
+  async read(target: string, options: ChatReadOptions = {}): Promise<ChatPage> {
+    const room = ROOM_ID.test(target) ? target : (await this.#dm(target, options.for, 'for')).id;
     const query = new URLSearchParams();
     if (options.for) query.set('for', options.for);
     if (options.after !== undefined) query.set('after', String(options.after));
@@ -418,9 +425,9 @@ export class ChatClient {
       event: { type: 'edit', target: seq },
     });
   }
-  /** Removes a message's content, leaving a tombstone. */
-  async delete(target: string, seq: number): Promise<void> {
-    const room = await this.open(target);
+  /** Removes a message's content, leaving a tombstone. A person or `owner` target needs `sub`. */
+  async delete(target: string, seq: number, options: { sub?: string } = {}): Promise<void> {
+    const room = await this.#dm(target, options.sub);
     await this.#request(`${path(room.id)}/messages/${seq}`, undefined, { method: 'DELETE' });
   }
   /**
@@ -467,14 +474,15 @@ export class ChatClient {
   title(target: string, text: string, options: { sub?: string } = {}) {
     return this.#post(target, text, options, { kind: 'title' });
   }
-  /** Signs the next head; an agent owner may add or remove agents only. */
+  /** Signs the next head of a group, named by its room id; an agent owner may add or remove agents only. */
   async updateGroup(
-    target: string,
+    room: string,
     change: { add?: string[]; remove?: string[]; owners?: string[] },
   ): Promise<ChatRoom> {
-    const room = await this.open(target);
+    if (!ROOM_ID.test(room)) throw new HeraldError('A group is named by its room id.', 400);
+    const view = await this.open(room);
     const tip =
-      room.chain?.at(-1)?.head ??
+      view.chain?.at(-1)?.head ??
       (() => {
         throw new HeraldError('Only groups have members to change.', 400);
       })();
@@ -492,20 +500,20 @@ export class ChatClient {
     };
     const keys = await this.#keys();
     const signed = await e2ee.signChatHead(keys, head);
-    return this.#verified(await this.#request<ChatRoom>(`${path(room.id)}/heads`, signed));
+    return this.#verified(await this.#request<ChatRoom>(`${path(view.id)}/heads`, signed));
   }
-  /** The room for an id, or the DM with a person or `owner` through the sending agent. */
-  #dm(target: string, sub?: string) {
+  /** The room for an id, or the DM with a person or `owner` through the acting agent (`sub` or `for`). */
+  #dm(target: string, agent?: string, option = 'sub') {
     if (ROOM_ID.test(target)) return this.open(target);
-    if (!sub)
+    if (!agent)
       throw new HeraldError(
-        'A connection speaks as one of its agents: pass `sub`.',
+        `A connection speaks as one of its agents: pass \`${option}\`.`,
         400,
         undefined,
         undefined,
         'AGENT_REQUIRED',
       );
-    return this.open(target, { agent: sub });
+    return this.open(target, { agent });
   }
   async #post(target: string, text: string, options: ChatSendOptions, extra: Posted = {}) {
     const id = options.id ?? crypto.randomUUID();
@@ -562,7 +570,7 @@ export class ChatClient {
   ) {
     const id = options.id ?? crypto.randomUUID();
     for (let attempt = 0; ; attempt++) {
-      const room = await this.open(target);
+      const room = await this.#dm(target, options.sub);
       const keys = await this.#keys(attempt ? 'force' : false);
       const form = (await this.read(room.id, { after: seq - 1, limit: 1 })).messages[0];
       if (form?.seq !== seq || form.kind !== 'form') throw new HeraldError('No such form.', 404);
@@ -606,15 +614,15 @@ export class ChatClient {
       }
     }
   }
-  /** Encrypts and uploads a file for one later message in this room. */
+  /** Encrypts and uploads a file for one later message in this room. A person or `owner` target needs `sub`. */
   async attach(
     target: string,
     name: string,
     data: Uint8Array,
     type = 'application/octet-stream',
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; sub?: string } = {},
   ): Promise<ChatAttachment> {
-    const room = await this.open(target);
+    const room = await this.#dm(target, options.sub);
     const key = e2ee.fileKey();
     const { id } = await this.#request<{ id: string }>(`${path(room.id)}/files`, {
       size: e2ee.sealedSize(data.byteLength),
@@ -628,14 +636,15 @@ export class ChatClient {
     await response.body?.cancel();
     return { id, name, type, size: data.byteLength, key };
   }
-  /** Downloads and decrypts a message's attachment. */
+  /** Downloads and decrypts a message's attachment, from the room that holds it (a room id). */
   async download(
-    target: string,
+    room: string,
     file: ChatAttachment,
     options: { signal?: AbortSignal } = {},
   ): Promise<Uint8Array> {
-    const room = await this.open(target);
-    const response = await this.#raw(`${path(room.id)}/files/${file.id}`, options);
+    if (!ROOM_ID.test(room))
+      throw new HeraldError('A download names the room id of its file.', 400);
+    const response = await this.#raw(`${path(room)}/files/${file.id}`, options);
     if (!response.ok) await readError(response, 'File download failed.');
     if (!response.body) throw new HeraldError('Herald returned no file body.', response.status);
     return new Uint8Array(await new Response(e2ee.openFile(file.key, response.body)).arrayBuffer());
@@ -681,13 +690,14 @@ export class ChatClient {
   /**
    * Waits for one wake in a room, the oldest of the connection or any of its subagents, leases and
    * acknowledges it. Undefined when the timeout passes.
-   * `lease` is how long, in seconds, a crashed caller holds the wake before it fires again.
+   * `lease` is how long, in seconds, a crashed caller holds the wake before it fires again. A
+   * person or `owner` target needs `for`, the agent whose DM it is.
    */
   async next(
     target: string,
-    options: { timeout?: number; lease?: number; signal?: AbortSignal } = {},
+    options: { timeout?: number; lease?: number; signal?: AbortSignal; for?: string } = {},
   ): Promise<ChatWake | undefined> {
-    const room = await this.open(target);
+    const room = await this.#dm(target, options.for, 'for');
     const stop = new AbortController();
     const onAbort = () => stop.abort();
     options.signal?.addEventListener('abort', onAbort, { once: true });
@@ -784,14 +794,15 @@ export class ChatClient {
   }
   /**
    * Waits for the next wake and returns its messages, or with `after` for anything from others
-   * past that seq, acknowledged. Returns an empty list when the timeout passes.
+   * past that seq, acknowledged. Returns an empty list when the timeout passes. A person or
+   * `owner` target needs `for`, the agent whose DM it is.
    */
   async wait(
     target: string,
-    options: { after?: number; timeout?: number; signal?: AbortSignal } = {},
+    options: { after?: number; timeout?: number; signal?: AbortSignal; for?: string } = {},
   ): Promise<ChatMessage[]> {
     if (options.after === undefined) return (await this.next(target, options))?.messages ?? [];
-    const room = await this.open(target);
+    const room = await this.#dm(target, options.for, 'for');
     const after = options.after;
     const stop = new AbortController();
     const onAbort = () => stop.abort();

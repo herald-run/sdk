@@ -330,6 +330,7 @@ export function createServer(client: () => Promise<Herald>) {
     .string()
     .min(1)
     .describe('Room id, or "owner", "h:<user>" or "a:<integration>" for a direct chat');
+  const roomId = z.string().min(1).describe('Room id');
   tool(
     'chat_list',
     'List the end-to-end encrypted chat rooms this connection belongs to, newest first.',
@@ -345,7 +346,13 @@ export function createServer(client: () => Promise<Herald>) {
       after: z.number().int().nonnegative().optional(),
       before: z.number().int().positive().optional(),
       limit: z.number().int().min(1).max(100).optional(),
-      for: z.string().min(1).optional().describe('Read as this agent key of the connection'),
+      for: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'Read as this agent key of the connection; names the DM for "owner", "h:…" or "a:…"',
+        ),
     },
     async ({ room, ...options }, herald) => json(await herald.chat.read(room, options)),
     true,
@@ -413,7 +420,7 @@ export function createServer(client: () => Promise<Herald>) {
     'chat_group',
     'Create an encrypted group from members (with an optional title), or with room add or remove members and set the title. An agent may add agents it can reach and people it already chats with, who own the group; as an owner it changes agents only.',
     {
-      room: chatTarget.optional().describe('A group to change; omit to create one'),
+      room: roomId.optional().describe('A group to change; omit to create one'),
       members: principals.optional(),
       agents: groupAgents.optional(),
       add: principals.optional(),
@@ -475,9 +482,9 @@ export function createServer(client: () => Promise<Herald>) {
   tool(
     'chat_delete',
     'Delete a chat message this connection sent, leaving a tombstone.',
-    { room: chatTarget, seq },
+    { room: chatTarget, seq, as: acting },
     async (input, herald) => {
-      await herald.chat.delete(input.room, input.seq);
+      await herald.chat.delete(input.room, input.seq, { sub: input.as });
       return json({ deleted: true });
     },
   );
@@ -523,7 +530,7 @@ export function createServer(client: () => Promise<Herald>) {
     'chat_download',
     'Decrypt a chat attachment to a new local file (the path must not exist yet).',
     {
-      room: chatTarget,
+      room: roomId,
       seq,
       attachment: z.string().describe('Attachment id from the message'),
       path: z.string().min(1),
@@ -544,14 +551,25 @@ export function createServer(client: () => Promise<Herald>) {
       room: chatTarget,
       after: z.number().int().nonnegative().optional(),
       wait: time.optional().describe('How long this call blocks (default 10m)'),
+      for: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Agent key of the connection whose DM "owner", "h:…" or "a:…" opens'),
     },
     async (input, herald) => {
       const timeout = duration(input.wait || '10m');
       if (input.after !== undefined)
         return json({
-          messages: await herald.chat.wait(input.room, { after: input.after, timeout }),
+          messages: await herald.chat.wait(input.room, {
+            after: input.after,
+            timeout,
+            for: input.for,
+          }),
         });
-      return json((await herald.chat.next(input.room, { timeout })) ?? { messages: [] });
+      return json(
+        (await herald.chat.next(input.room, { timeout, for: input.for })) ?? { messages: [] },
+      );
     },
   );
 

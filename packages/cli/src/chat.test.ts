@@ -105,3 +105,15 @@ it('passes --as to react, edit and answer', async () => {
   await chat(c, ['answer', 'room', '1', '{"a":"y"}'], values, io());
   expect(post).toHaveBeenLastCalledWith('room', 1, { a: 'y' }, { sub: 'lead' });
 });
+it('passes --as to delete and --for to wait', async () => {
+  const del = vi.fn(async () => {});
+  const next = vi.fn(async () => undefined);
+  const wait = vi.fn(async () => []);
+  const c = fake({ delete: del, next, wait });
+  await chat(c, ['delete', 'owner', '2'], { ...base, as: 'lead' }, io());
+  expect(del).toHaveBeenCalledWith('owner', 2, { sub: 'lead' });
+  await chat(c, ['wait', 'owner'], { ...base, for: 'lead' }, io());
+  expect(next).toHaveBeenCalledWith('owner', expect.objectContaining({ for: 'lead' }));
+  await chat(c, ['wait', 'owner'], { ...base, for: 'lead', after: 3 }, io());
+  expect(wait).toHaveBeenCalledWith('owner', expect.objectContaining({ for: 'lead', after: 3 }));
+});
