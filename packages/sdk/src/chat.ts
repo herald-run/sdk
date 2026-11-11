@@ -799,7 +799,11 @@ export class ChatClient {
           typeof subagent === 'string' &&
           typeof by === 'string'
         )
-          options.onStop?.({ room, subagent, by });
+          try {
+            options.onStop?.({ room, subagent, by });
+          } catch (error) {
+            options.onError?.(error, room);
+          }
       },
       replay,
       signal,

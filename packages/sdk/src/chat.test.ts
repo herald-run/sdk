@@ -267,6 +267,26 @@ it('wakes passes stop requests to onStop', async () => {
   socket.close();
   await done;
 });
+it('wakes survives a throwing onStop', async () => {
+  const socket = new FakeSocket();
+  const a = 'a'.repeat(43);
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(unused, unused as never, () => socket, unused);
+  const stop = new AbortController();
+  const errors: unknown[] = [];
+  const done = chat.wakes(() => {}, {
+    signal: stop.signal,
+    onStop: () => {
+      throw new Error('boom');
+    },
+    onError: (e) => void errors.push(e),
+  });
+  socket.emit({ type: 'stop', room: a, subagent: 'lead', by: 'h:ann' });
+  expect(errors).toHaveLength(1);
+  stop.abort();
+  socket.close();
+  await done;
+});
 it('listen delivers each message once, catches up on wake and gaps, and acks', async () => {
   const room = await makeRoom();
   const m1 = await fromOwner(room, 1, 'one');
