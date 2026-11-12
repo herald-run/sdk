@@ -301,12 +301,20 @@ export class ChatClient {
       await this.#request<ChatRoom>(`${path(room)}/archived`, { archived }, { method: 'PUT' }),
     );
   }
-  /** Deletes a room and its messages for good. A connection may delete only rooms it created. */
-  async deleteRoom(room: string): Promise<void> {
-    await this.#request(path(room), undefined, { method: 'DELETE' });
+  #forget(room: string) {
     this.#pins.delete(room);
     this.#heads.delete(room);
     this.#recent.delete(room);
+  }
+  /** Deletes a room and its messages for good. A connection may delete only groups it created. */
+  async deleteRoom(room: string): Promise<void> {
+    try {
+      await this.#request(path(room), undefined, { method: 'DELETE' });
+    } catch (error) {
+      if (error instanceof HeraldError && error.status === 404) this.#forget(room);
+      throw error;
+    }
+    this.#forget(room);
   }
   #trust = (room: string): RoomTrust => ({
     pins: this.#pins,
@@ -837,8 +845,10 @@ export class ChatClient {
         };
         if (frame.type === 'stop' && typeof subagent === 'string' && typeof by === 'string')
           report(() => options.onStop?.({ room, subagent, by }));
-        else if (frame.type === 'deleted') report(() => options.onRoom?.({ room, deleted: true }));
-        else if (frame.type === 'room') {
+        else if (frame.type === 'deleted') {
+          this.#forget(room);
+          report(() => options.onRoom?.({ room, deleted: true }));
+        } else if (frame.type === 'room') {
           const { archivedAt } = frame;
           if (archivedAt === null || typeof archivedAt === 'number')
             report(() => options.onRoom?.({ room, archivedAt }));

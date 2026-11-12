@@ -949,6 +949,48 @@ it('archives, unarchives and deletes a room', async () => {
   ]);
   expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}`)).toBe(true);
 });
+it('forgets a room after a delete, a missing room or a deleted frame', async () => {
+  const { room: v1, signed, owner } = await groupOf();
+  const next = await e2ee.signChatHead(owner, { ...signed.head, version: 2, prev: v1.head });
+  const v2 = { ...v1, head: await e2ee.headHash(next.head), headVersion: 2, chain: [signed, next] };
+  let live: e2ee.ChatRoom = v2;
+  let reply: Response | object = {};
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${v1.id}/messages`]: { messages: [], through_seq: 0, hasMore: false },
+    [`GET /api/v1/chats/${v1.id}`]: () => live,
+    [`DELETE /api/v1/chats/${v1.id}`]: () => reply,
+  });
+  const socket = new FakeSocket();
+  const chat = withSocket(socket);
+  // A pinned newer head makes the older one read as a rollback until the room is forgotten.
+  const rolledBack = async () => {
+    live = v1;
+    const out = await chat.open(v1.id).then(
+      () => false,
+      () => true,
+    );
+    live = v2;
+    return out;
+  };
+  const stop = new AbortController();
+  const done = chat.wakes(() => {}, { signal: stop.signal });
+  for (const how of ['ok', '404', 'frame']) {
+    await chat.open(v1.id);
+    expect(await rolledBack()).toBe(true);
+    if (how === 'frame') socket.emit({ type: 'deleted', room: v1.id });
+    else {
+      reply = how === '404' ? Response.json({ code: 'CHAT_NOT_FOUND' }, { status: 404 }) : {};
+      await chat.deleteRoom(v1.id).catch(() => undefined);
+    }
+    expect(await rolledBack()).toBe(false);
+    await chat.open(v1.id).catch(() => undefined);
+    live = v2;
+  }
+  stop.abort();
+  socket.close();
+  await done;
+});
 it('surfaces CHAT_ARCHIVED on a refused send', async () => {
   const room = await makeRoom({ archivedAt: 5 });
   serve({
