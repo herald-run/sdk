@@ -877,6 +877,39 @@ it('opens agent DMs and adds or removes room agents', async () => {
   expect(seen.find((s) => s.route.startsWith('PUT'))!.body).toEqual({ notify: 'all' });
   expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}/agents/lead`)).toBe(true);
 });
+it('archives, unarchives and deletes a room', async () => {
+  const room = await makeRoom();
+  const archived = { ...room, archivedAt: 5 };
+  const seen = serve({
+    ...keysRoute,
+    [`PUT /api/v1/chats/${room.id}/archived`]: archived,
+    [`DELETE /api/v1/chats/${room.id}`]: {},
+  });
+  const chat = client();
+  expect((await chat.archive(room.id)).archivedAt).toBe(5);
+  await chat.unarchive(room.id);
+  await chat.deleteRoom(room.id);
+  expect(seen.filter((s) => s.route.startsWith('PUT')).map((s) => s.body)).toEqual([
+    { archived: true },
+    { archived: false },
+  ]);
+  expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}`)).toBe(true);
+});
+it('surfaces CHAT_ARCHIVED on a refused send', async () => {
+  const room = await makeRoom({ archivedAt: 5 });
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: Response.json(
+      { error: 'This chat is archived.', code: 'CHAT_ARCHIVED' },
+      { status: 409 },
+    ),
+  });
+  await expect(client().send(room.id, 'hi')).rejects.toMatchObject({
+    status: 409,
+    code: 'CHAT_ARCHIVED',
+  });
+});
 it('requires an agent to open a person, and has no session rooms', async () => {
   const seen = serve({ ...keysRoute });
   const chat = client();

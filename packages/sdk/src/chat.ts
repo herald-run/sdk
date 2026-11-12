@@ -276,6 +276,29 @@ export class ChatClient {
     this.#left(room, key);
     return this.#verified(left);
   }
+  /**
+   * Archives a room: it turns read-only (writes fail with code `CHAT_ARCHIVED`), its pending
+   * wakes end and its open forms close. A member connection may; so may a person who manages it.
+   */
+  async archive(room: string): Promise<ChatRoom> {
+    return this.#archived(room, true);
+  }
+  /** Makes an archived room writable again; forms closed by archiving stay closed. */
+  async unarchive(room: string): Promise<ChatRoom> {
+    return this.#archived(room, false);
+  }
+  async #archived(room: string, archived: boolean): Promise<ChatRoom> {
+    return this.#verified(
+      await this.#request<ChatRoom>(`${path(room)}/archived`, { archived }, { method: 'PUT' }),
+    );
+  }
+  /** Deletes a room and its messages for good. A connection may delete only rooms it created. */
+  async deleteRoom(room: string): Promise<void> {
+    await this.#request(path(room), undefined, { method: 'DELETE' });
+    this.#pins.delete(room);
+    this.#heads.delete(room);
+    this.#recent.delete(room);
+  }
   #trust = (room: string): RoomTrust => ({
     pins: this.#pins,
     vouched: (hash) => !!this.#recent.get(room)?.has(hash),
