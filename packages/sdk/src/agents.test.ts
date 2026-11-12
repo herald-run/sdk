@@ -209,6 +209,61 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
   await expect(bad({ stoppable: 1 as never })).rejects.toThrow('stoppable');
   await expect(bad({ about: 'x'.repeat(501) })).rejects.toThrow('about');
 });
+it('seals details trimmed and refuses bad lists', async () => {
+  const seen = serve({ ...keysRoute, 'PUT /api/v1/agents/me/': { expiresAt: 5 } });
+  const agents = client();
+  await agents.setPresence({
+    state: 'idle',
+    details: [
+      { label: ' Model ', value: ' Big one ' },
+      { label: 'Mode', value: 'x'.repeat(200) },
+    ],
+  });
+  const body = seen.find((s) => s.route.startsWith('PUT'))!.body!;
+  const opened = await e2ee.openPresence(
+    await ownerKeys(),
+    agent,
+    body.envelope as e2ee.SealedEnvelope,
+  );
+  expect(opened.details).toEqual([
+    { label: 'Model', value: 'Big one' },
+    { label: 'Mode', value: 'x'.repeat(200) },
+  ]);
+  const bad = (details: unknown) =>
+    agents.setPresence({ state: 'idle', details: details as e2ee.AgentDetail[] });
+  const d = (n: number) => ({ label: `L${n}`, value: 'v' });
+  await expect(bad(Array.from({ length: 13 }, (_, n) => d(n)))).rejects.toThrow('details');
+  await expect(bad('nope')).rejects.toThrow('details');
+  await expect(bad([{ label: ' ', value: 'v' }])).rejects.toThrow('detail 1');
+  await expect(bad([{ label: 'a', value: '  ' }])).rejects.toThrow('detail 1');
+  await expect(bad([{ label: 'x'.repeat(41), value: 'v' }])).rejects.toThrow('detail 1');
+  await expect(bad([d(1), { label: 'a', value: 'x'.repeat(201) }])).rejects.toThrow('detail 2');
+  await expect(bad([{ label: 'a', value: 5 }])).rejects.toThrow('detail 1');
+  await expect(bad([d(1), d(1)])).rejects.toThrow('duplicate label');
+  expect(e2ee.agentDetailLimits).toEqual({ entries: 12, label: 40, value: 200 });
+});
+it('opens details tolerantly', async () => {
+  const d = (n: number) => ({ label: `L${n}`, value: `v${n}` });
+  const open = async (details: unknown) => {
+    const { owner, env } = await raw('presence', { state: 'busy', text: 'Hi', details });
+    return e2ee.openPresence(owner, human, env);
+  };
+  const dropped = await open('nope');
+  expect(dropped).toMatchObject({ state: 'busy', text: 'Hi' });
+  expect(dropped).not.toHaveProperty('details');
+  const bad = [
+    null,
+    { label: ' ', value: 'v' },
+    { label: 'a', value: '' },
+    { label: 'b', value: 7 },
+  ];
+  const many = Array.from({ length: 15 }, (_, n) => d(n));
+  const kept = (await open([...bad, d(1), { label: ' L1 ', value: 'again' }, ...many])).details;
+  expect(kept?.map((x) => x.label)).toEqual(
+    ['L1', ...many.map((x) => x.label).filter((l) => l !== 'L1')].slice(0, 12),
+  );
+  expect((await open(bad)).details).toBeUndefined();
+});
 it('opens entry fields tolerantly', async () => {
   const { owner, env } = await raw('presence', {
     state: 'idle',

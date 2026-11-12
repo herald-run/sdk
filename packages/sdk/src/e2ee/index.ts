@@ -34,6 +34,7 @@ export {
   type RoomTrust,
 } from './chat';
 export {
+  agentDetailLimits,
   agentEntryLimits,
   agentLayoutLimits,
   agentLinkError,
@@ -50,6 +51,7 @@ export {
   subagentContext,
   subagentKey,
   type AgentChat,
+  type AgentDetail,
   type AgentLayout,
   type AgentLink,
   type AgentPresence,
