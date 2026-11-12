@@ -12,6 +12,13 @@ export interface AgentLink {
   /** An http or https URL, up to 2048 characters. */
   url: string;
 }
+/** A labelled fact an agent lists about itself, shown in its About section. */
+export interface AgentDetail {
+  /** 1 to 40 characters once trimmed; unique within the list. */
+  label: string;
+  /** 1 to 200 characters once trimmed. */
+  value: string;
+}
 /** What an agent shows its owner: a state, and optionally its own colour, text, task and links. */
 export interface AgentPresence extends Record<string, unknown> {
   state: PresenceState;
@@ -27,10 +34,16 @@ export interface AgentPresence extends Record<string, unknown> {
   order?: number;
   /** Where a chat with it opens: the connection's direct chat, or a room. Absent: no chat. */
   chat?: AgentChat;
+  /** The room it is working in now; viewers show its state and text there. */
+  room?: string;
   /** Whether people can send it new requests. */
   requests?: boolean;
+  /** Whether people who may send it requests can stop its current work (see `ChatClient.wakes`). */
+  stoppable?: boolean;
   /** About text, up to 500 characters. */
   about?: string;
+  /** Up to 12 labelled facts the agent defines, shown after its About text. */
+  details?: AgentDetail[];
 }
 /** `'dm'`: people can DM the agent and add it to groups. `{ room }`: it lives in that room. */
 export type AgentChat = 'dm' | { room: string };
@@ -49,6 +62,9 @@ export type AgentProfile = SubagentProfile;
 export const subagentKey = /^[\w.-]{1,64}$/;
 export const agentLinkLimits = { links: 8, label: 60, url: 2048, task: 200 } as const;
 export const agentEntryLimits = { section: 60, sectionDepth: 4, about: 500 } as const;
+export const agentDetailLimits = { entries: 12, label: 40, value: 200 } as const;
+/** At most `colors` stored hues, keyed by ids of up to `id` characters. */
+export const agentLayoutLimits = { colors: 512, id: 200 } as const;
 const ROOM = /^[A-Za-z0-9_-]{1,64}$/;
 const entryChecks: Record<string, (v: unknown) => boolean> = {
   section: (v) =>
@@ -63,7 +79,9 @@ const entryChecks: Record<string, (v: unknown) => boolean> = {
       typeof v === 'object' &&
       typeof (v as { room?: unknown }).room === 'string' &&
       ROOM.test((v as { room: string }).room)),
+  room: (v) => typeof v === 'string' && ROOM.test(v),
   requests: (v) => typeof v === 'boolean',
+  stoppable: (v) => typeof v === 'boolean',
   about: (v) => typeof v === 'string' && v.length <= agentEntryLimits.about,
 };
 export interface LayoutGroup {
@@ -81,6 +99,8 @@ export interface LayoutPlace {
 export interface AgentLayout extends Record<string, unknown> {
   groups: LayoutGroup[];
   places: Record<string, LayoutPlace>;
+  /** Hues (0 to 360) given once to automatically coloured connections and agents, by id. */
+  colors?: Record<string, number>;
 }
 export const presenceContext = (account: string, principal: string): Ctx => ({
   t: 'presence',
@@ -120,7 +140,42 @@ export const agentLinkError = (link: unknown): string | undefined => {
   }
   return message;
 };
-/** Sealing refuses what opening drops: a bad `task`, `links` or `parent` never costs the profile. */
+/** Sealing refuses what opening drops: a bad `task`, `links`, `details` or `parent` never costs the profile. */
+const detailText = (v: unknown, max: number) =>
+  typeof v === 'string' && v.trim().length >= 1 && v.trim().length <= max ? v.trim() : undefined;
+const cleanDetail = (detail: unknown): AgentDetail | undefined => {
+  const { label, value } = (detail ?? {}) as Partial<AgentDetail>;
+  const l = detailText(label, agentDetailLimits.label);
+  const v = detailText(value, agentDetailLimits.value);
+  return l !== undefined && v !== undefined ? { label: l, value: v } : undefined;
+};
+const checkDetails = (details: unknown): AgentDetail[] => {
+  if (!Array.isArray(details) || details.length > agentDetailLimits.entries)
+    return fail(`Invalid presence details: an array of up to ${agentDetailLimits.entries}.`);
+  const labels = new Set<string>();
+  return details.map((detail, i) => {
+    const clean = cleanDetail(detail);
+    if (!clean)
+      return fail(
+        `Invalid presence detail ${i + 1}: a label of 1 to ${agentDetailLimits.label} and a value of 1 to ${agentDetailLimits.value} characters are required.`,
+      );
+    if (labels.has(clean.label)) fail(`Invalid presence detail ${i + 1}: duplicate label.`);
+    labels.add(clean.label);
+    return clean;
+  });
+};
+const keepDetails = (details: unknown): AgentDetail[] => {
+  const labels = new Set<string>();
+  const kept: AgentDetail[] = [];
+  for (const detail of Array.isArray(details) ? details : []) {
+    const clean = cleanDetail(detail);
+    if (!clean || labels.has(clean.label)) continue;
+    labels.add(clean.label);
+    kept.push(clean);
+    if (kept.length === agentDetailLimits.entries) break;
+  }
+  return kept;
+};
 const checkLinks = (links: unknown[]) => {
   const urls = new Set<string>();
   links.forEach((link, i) => {
@@ -148,7 +203,7 @@ const checkPresence = <T extends AgentPresence>(value: T, strict = true): T => {
     fail('Invalid presence colour.');
   if (value.text !== undefined && (typeof value.text !== 'string' || value.text.length > 120))
     fail('Invalid presence text.');
-  const { task, links } = value;
+  const { task, links, details } = value;
   const badTask =
     task !== undefined && (typeof task !== 'string' || task.length > agentLinkLimits.task);
   const bad = Object.keys(entryChecks).filter(
@@ -160,18 +215,22 @@ const checkPresence = <T extends AgentPresence>(value: T, strict = true): T => {
       fail('Invalid presence links.');
     checkLinks(links ?? []);
     if (bad.length) fail(`Invalid presence ${bad[0]}.`);
+    const out = details === undefined ? value : { ...value, details: checkDetails(details) };
     if (value.chat && typeof value.chat === 'object')
-      return { ...value, chat: { room: value.chat.room } };
-    return value;
+      return { ...out, chat: { room: value.chat.room } };
+    return out;
   }
   const kept = keepLinks(links);
   const out = { ...value };
   delete out.task;
   delete out.links;
+  delete out.details;
   for (const k of bad) delete out[k];
   if (out.chat && typeof out.chat === 'object') out.chat = { room: out.chat.room };
   if (task !== undefined && !badTask) out.task = task;
   if (kept.length) out.links = kept;
+  const keptDetails = keepDetails(details);
+  if (keptDetails.length) out.details = keptDetails;
   return out;
 };
 const validParent = (key: string, parent: unknown) =>
@@ -183,10 +242,28 @@ const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
   if (strict) fail('Invalid subagent parent.');
   return rest as SubagentProfile;
 };
-const checkLayout = (value: AgentLayout): AgentLayout => {
+const goodHue = ([id, hue]: [string, unknown]) =>
+  !!id &&
+  id.length <= agentLayoutLimits.id &&
+  typeof hue === 'number' &&
+  Number.isFinite(hue) &&
+  hue >= 0 &&
+  hue < 360;
+/** Sealing refuses bad `colors`; opening keeps the valid entries, up to the limit. */
+const checkLayout = (value: AgentLayout, strict = true): AgentLayout => {
   if (!value || !Array.isArray(value.groups) || !value.places || typeof value.places !== 'object')
     fail('Invalid layout.');
-  return value;
+  const { colors } = value;
+  if (colors === undefined) return value;
+  const all = colors && typeof colors === 'object' && !Array.isArray(colors);
+  const entries = all ? Object.entries(colors) : [];
+  if (strict) {
+    if (!all || entries.length > agentLayoutLimits.colors || !entries.every(goodHue))
+      fail('Invalid layout colors.');
+    return value;
+  }
+  const kept = entries.filter(goodHue).slice(0, agentLayoutLimits.colors);
+  return { ...value, colors: Object.fromEntries(kept) };
 };
 const owners = (keys: ChatKeys, owner: string): RecipientKey[] => [
   keys.recipient(owner) ?? fail(`Unverified owner ${owner}.`),
@@ -266,5 +343,5 @@ export async function openLayout(keys: ChatKeys, envelope: SealedEnvelope) {
     account: keys.account,
     principal: keys.principal,
   });
-  return checkLayout(value);
+  return checkLayout(value, false);
 }

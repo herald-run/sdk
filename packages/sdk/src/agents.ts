@@ -4,6 +4,7 @@ import type { KeyedSession } from './keyed.js';
 
 export type {
   AgentChat,
+  AgentDetail,
   AgentLink,
   AgentPresence,
   AgentProfile,

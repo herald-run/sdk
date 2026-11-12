@@ -54,6 +54,8 @@ export type ChatWake = {
   messages: ChatMessage[];
   history: ChatMessage[];
 };
+/** A person asked the agent `subagent` of this connection to stop its current work in `room`. */
+export type ChatStop = { room: string; subagent: string; by: string };
 export type ChatPage = { messages: ChatMessage[]; through_seq: number; hasMore: boolean };
 export type ChatSendOptions = {
   audience?: 'all' | 'humans';
@@ -136,7 +138,7 @@ type Frame =
       seq: number;
       subagent?: string;
     };
-type Socketed = { type?: string; room?: string; subagent?: string };
+type Socketed = { type?: string; room?: string; subagent?: string; by?: string };
 const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
@@ -742,7 +744,7 @@ export class ChatClient {
   /**
    * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect; each
    * room keeps one wake per subagent. A handler that throws is not acknowledged, so its wake fires
-   * again when the lease lapses.
+   * again when the lease lapses. `onStop` gets stop requests as they arrive; they are not replayed.
    */
   wakes(
     handler: (wake: ChatWake) => void | Promise<void>,
@@ -751,6 +753,7 @@ export class ChatClient {
       rooms?: string[];
       lease?: number;
       onError?: (error: unknown, room?: string) => void;
+      onStop?: (stop: ChatStop) => void | Promise<void>;
     } = {},
   ): Promise<void> {
     const { signal } = options;
@@ -787,6 +790,21 @@ export class ChatClient {
     return this.#sockets(
       (frame) => {
         if (frame.type === 'wake') enqueue(frame.room, frame.subagent);
+        const { room, subagent, by } = frame;
+        if (
+          frame.type === 'stop' &&
+          typeof room === 'string' &&
+          ROOM_ID.test(room) &&
+          (!allowed || allowed.has(room)) &&
+          typeof subagent === 'string' &&
+          typeof by === 'string'
+        )
+          try {
+            const done: unknown = options.onStop?.({ room, subagent, by });
+            if (done instanceof Promise) done.catch((error) => options.onError?.(error, room));
+          } catch (error) {
+            options.onError?.(error, room);
+          }
       },
       replay,
       signal,

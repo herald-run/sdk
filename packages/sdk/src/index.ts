@@ -64,12 +64,13 @@ export type {
 } from './schema/index.js';
 export { createKeys, seal, unseal } from './schema/crypto.js';
 export { HeraldError, parseRetryAfter } from './http.js';
-export { agentLinkError, E2eeError } from './e2ee/index.js';
+export { agentDetailLimits, agentLinkError, E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
 export type { WorkspacePin } from './e2ee/index.js';
 export { AgentsClient } from './agents.js';
 export type {
   AgentChat,
+  AgentDetail,
   AgentLink,
   AgentOptions,
   AgentPresence,
@@ -95,6 +96,7 @@ export type {
   ChatRoom,
   ChatSendOptions,
   ChatWake,
+  ChatStop,
   RoomAgent,
   WakeReason,
 } from './chat.js';
