@@ -4,6 +4,7 @@ Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the
 
 ## Unreleased
 
+- Chat: `chat.wakes(handler, { onRoom })` receives a room's archive, restore and delete as `ChatRoomEvent` (`{ room, archivedAt }`, `null` once restored, or `{ room, deleted: true }`), live only, never replayed.
 - Chat: `chat.archive(room)`, `chat.unarchive(room)` and `chat.deleteRoom(room)`; `ChatRoom.archivedAt` (ms, `null` while active). An archived room is read-only: sends, answers, edits, reactions, deletes and head changes fail with 409 `CHAT_ARCHIVED`, pending wakes end and open forms close as expired. A connection may delete only rooms it created (403 `NOT_CREATOR` otherwise).
 - Agents: a profile's optional `details` (up to 12 `{ label, value }` entries, label 1 to 40 and value 1 to 200 characters, unique labels; exported `AgentDetail`, `agentDetailLimits`) lists facts an agent defines for its About section. Sealing refuses an invalid list; reading keeps the valid entries and the rest of the profile.
 - Agents: a profile's optional `stoppable` lets people who may tag the agent (reach `all`) stop its current work; `chat.wakes(handler, { onStop })` receives each request as `ChatStop` (`room`, `subagent`, `by`), live only, never replayed.

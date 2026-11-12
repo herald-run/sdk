@@ -309,6 +309,60 @@ it('wakes reports a rejected async onStop', async () => {
   socket.close();
   await done;
 });
+it('wakes passes archive, restore and delete frames to onRoom', async () => {
+  const socket = new FakeSocket();
+  const [a, b] = ['a'.repeat(43), 'b'.repeat(43)];
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(unused, unused as never, () => socket, unused);
+  const stop = new AbortController();
+  const got: unknown[] = [];
+  const done = chat.wakes(() => {}, {
+    signal: stop.signal,
+    rooms: [a],
+    onRoom: (e) => void got.push(e),
+  });
+  socket.emit({ type: 'room', room: a, headVersion: 2, archivedAt: 1700 });
+  socket.emit({ type: 'room', room: a, headVersion: 2, archivedAt: null });
+  socket.emit({ type: 'room', room: a, headVersion: 3 });
+  socket.emit({ type: 'room', room: b, archivedAt: 5 });
+  socket.emit({ type: 'deleted', room: a });
+  socket.emit({ type: 'deleted', room: b });
+  expect(got).toEqual([
+    { room: a, archivedAt: 1700 },
+    { room: a, archivedAt: null },
+    { room: a, deleted: true },
+  ]);
+  stop.abort();
+  socket.close();
+  await done;
+});
+it('wakes reports a throwing or rejecting onRoom to onError', async () => {
+  const socket = new FakeSocket();
+  const a = 'a'.repeat(43);
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(unused, unused as never, () => socket, unused);
+  const stop = new AbortController();
+  const errors: unknown[] = [];
+  let n = 0;
+  const done = chat.wakes(() => {}, {
+    signal: stop.signal,
+    onRoom: async () => {
+      if (n++) throw new Error('late');
+      throw new Error('boom');
+    },
+    onError: (e, room) => void errors.push([e, room]),
+  });
+  socket.emit({ type: 'deleted', room: a });
+  socket.emit({ type: 'room', room: a, archivedAt: null });
+  await new Promise((r) => setTimeout(r, 0));
+  expect(errors).toEqual([
+    [new Error('boom'), a],
+    [new Error('late'), a],
+  ]);
+  stop.abort();
+  socket.close();
+  await done;
+});
 it('listen delivers each message once, catches up on wake and gaps, and acks', async () => {
   const room = await makeRoom();
   const m1 = await fromOwner(room, 1, 'one');

@@ -96,6 +96,7 @@ export type {
   ChatRoom,
   ChatSendOptions,
   ChatWake,
+  ChatRoomEvent,
   ChatStop,
   RoomAgent,
   WakeReason,

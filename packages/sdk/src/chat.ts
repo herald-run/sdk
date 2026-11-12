@@ -56,6 +56,9 @@ export type ChatWake = {
 };
 /** A person asked the agent `subagent` of this connection to stop its current work in `room`. */
 export type ChatStop = { room: string; subagent: string; by: string };
+/** A room this connection is in was archived or restored (`archivedAt`, ms; `null` once restored), or deleted. */
+export type ChatRoomEvent =
+  { room: string; archivedAt: number | null } | { room: string; deleted: true };
 export type ChatPage = { messages: ChatMessage[]; through_seq: number; hasMore: boolean };
 export type ChatSendOptions = {
   audience?: 'all' | 'humans';
@@ -138,7 +141,13 @@ type Frame =
       seq: number;
       subagent?: string;
     };
-type Socketed = { type?: string; room?: string; subagent?: string; by?: string };
+type Socketed = {
+  type?: string;
+  room?: string;
+  subagent?: string;
+  by?: string;
+  archivedAt?: number | null;
+};
 const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
@@ -767,7 +776,8 @@ export class ChatClient {
   /**
    * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect; each
    * room keeps one wake per subagent. A handler that throws is not acknowledged, so its wake fires
-   * again when the lease lapses. `onStop` gets stop requests as they arrive; they are not replayed.
+   * again when the lease lapses. `onStop` gets stop requests and `onRoom` archive, restore and delete
+   * changes as they arrive; neither is replayed.
    */
   wakes(
     handler: (wake: ChatWake) => void | Promise<void>,
@@ -777,6 +787,7 @@ export class ChatClient {
       lease?: number;
       onError?: (error: unknown, room?: string) => void;
       onStop?: (stop: ChatStop) => void | Promise<void>;
+      onRoom?: (event: ChatRoomEvent) => void | Promise<void>;
     } = {},
   ): Promise<void> {
     const { signal } = options;
@@ -814,20 +825,24 @@ export class ChatClient {
       (frame) => {
         if (frame.type === 'wake') enqueue(frame.room, frame.subagent);
         const { room, subagent, by } = frame;
-        if (
-          frame.type === 'stop' &&
-          typeof room === 'string' &&
-          ROOM_ID.test(room) &&
-          (!allowed || allowed.has(room)) &&
-          typeof subagent === 'string' &&
-          typeof by === 'string'
-        )
+        if (typeof room !== 'string' || !ROOM_ID.test(room) || (allowed && !allowed.has(room)))
+          return;
+        const report = (fn: (() => unknown) | undefined) => {
           try {
-            const done: unknown = options.onStop?.({ room, subagent, by });
+            const done = fn?.();
             if (done instanceof Promise) done.catch((error) => options.onError?.(error, room));
           } catch (error) {
             options.onError?.(error, room);
           }
+        };
+        if (frame.type === 'stop' && typeof subagent === 'string' && typeof by === 'string')
+          report(() => options.onStop?.({ room, subagent, by }));
+        else if (frame.type === 'deleted') report(() => options.onRoom?.({ room, deleted: true }));
+        else if (frame.type === 'room') {
+          const { archivedAt } = frame;
+          if (archivedAt === null || typeof archivedAt === 'number')
+            report(() => options.onRoom?.({ room, archivedAt }));
+        }
       },
       replay,
       signal,
