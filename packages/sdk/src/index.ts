@@ -87,6 +87,7 @@ export type {
 export { ChatClient } from './chat.js';
 export type {
   ChatFormRules,
+  ChatForward,
   ChatGroupAgent,
   ChatGroupOptions,
   ChatListing,

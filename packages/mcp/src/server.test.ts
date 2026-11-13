@@ -348,6 +348,7 @@ it('chats as an agent: as replaces sub, a person needs it, there are no session 
   const missing = await call('chat_send', { to: 'owner', text: 'hi' });
   expect(missing.error).toBe(true);
   expect(missing.text).toContain('`as`');
+  expect((await call('chat_send', { to: 'owner', as: 'lead' })).error).toBe(true);
   await call('chat_send', { to: 'owner', text: 'hi', as: 'lead' });
   const dm = last((s) => s.url === '/api/v1/chats')!;
   expect(JSON.parse(dm.body)).toEqual({ kind: 'dm', with: 'owner', agent: 'lead' });

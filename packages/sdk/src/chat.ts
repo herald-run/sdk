@@ -1,6 +1,7 @@
 import type {
   ChatAttachment,
   ChatEvent,
+  ChatForward,
   ChatKeys,
   ChatRecord,
   ChatRoom,
@@ -13,7 +14,7 @@ import { messageInputSchema } from './schema/index.js';
 import { HeraldError, readError, sleep } from './http.js';
 import type { KeyedSession } from './keyed.js';
 import { backoff, KEEPALIVE, type EventSocket } from './socket.js';
-export type { AgentReach, ChatRoom, RoomAgent } from './e2ee/index.js';
+export type { AgentReach, ChatForward, ChatRoom, RoomAgent } from './e2ee/index.js';
 /** An opened chat message; `locked` when it could not be decrypted or verified. */
 export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   room: string;
@@ -27,6 +28,8 @@ export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
   secrets?: Record<string, unknown>;
   attachments?: ChatAttachment[];
   reference?: Record<string, unknown>;
+  /** A message in another room, shown here; dropped when malformed. Read it there with your own access. */
+  forward?: ChatForward;
   /** The sender's one-line stand-in while the message is collapsed. */
   summary?: string;
   /** The declared mentions differ from the signed ones, which `mentions` holds. */
@@ -87,6 +90,8 @@ export type ChatSendOptions = {
   attachments?: ChatAttachment[];
   /** A quoted snapshot of an Inbox request, sealed with the message. */
   reference?: Record<string, unknown>;
+  /** Shows a message of another room (`room` id, `seq`); only its address is sealed. */
+  forward?: ChatForward;
   /** Subagent keys this message addresses; their connection's wake names one. */
   tags?: string[];
   /** A one-line stand-in, max 200 chars, shown while the message is collapsed. */
@@ -416,6 +421,7 @@ export class ChatClient {
       : undefined;
     const summary = typeof payload.summary === 'string' ? payload.summary.slice(0, 200) : undefined;
     const names = chatNames(payload.names, Object.keys(payload.names ?? {}));
+    const forward = e2ee.chatForward(payload.forward);
     const sealed = await e2ee.openChatSecrets(current, room, record).catch(() => undefined);
     return {
       ...out,
@@ -426,6 +432,7 @@ export class ChatClient {
         answers,
         attachments,
         reference,
+        forward,
         summary,
         mentions,
         mentionsMismatch,
@@ -670,6 +677,12 @@ export class ChatClient {
       options;
     if (summary !== undefined && summary.length > 200)
       throw new HeraldError('A summary is at most 200 characters.', 400);
+    const forward = options.forward && e2ee.chatForward(options.forward);
+    if (options.forward && !forward)
+      throw new HeraldError(
+        'A forward names a room id, a seq of at least 1 and that message id.',
+        400,
+      );
     const names = this.#sealedNames([sub, ...(tags ?? [])], options.names);
     const { kind, event, form, rules } = extra;
     for (let attempt = 0; ; attempt++) {
@@ -678,7 +691,8 @@ export class ChatClient {
       const input = {
         id,
         text,
-        ...defined({ kind, audience, sub, mentions, attachments, reference, event, form, summary }),
+        ...defined({ kind, audience, sub, mentions, attachments, reference, forward, event, form }),
+        ...defined({ summary }),
         ...(tags?.length ? { tags } : {}),
         ...defined({ names }),
       };
