@@ -204,7 +204,8 @@ const describe: Record<string, string> = {
   as: '--as KEY          Post as this agent (required for chat posts and answers)',
   tag: '--tag KEY          Address an agent; repeatable',
   summary: '--summary TEXT     One line shown while collapsed (200)',
-  forward: '--forward ROOM:SEQ  Show that message of another room; TEXT is optional',
+  forward:
+    '--forward ROOM:SEQ  Show that message of another room (read for its id); TEXT is optional',
   for: '--for KEY          Read, wait or listen as this agent',
   reach: '--reach all|agents  agents: people cannot reach it',
   task: '--task TEXT        What it is working on (200)',

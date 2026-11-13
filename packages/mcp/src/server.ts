@@ -373,7 +373,7 @@ export function createServer(client: () => Promise<Herald>) {
     'Send an end-to-end encrypted chat message; creates the direct chat if needed.',
     {
       to: chatTarget,
-      text: z.string().min(1),
+      text: z.string().optional().describe('Required unless forward is given'),
       humansOnly: z.boolean().optional().describe('Seal to humans only'),
       replyTo: z.number().int().positive().optional(),
       mentions: z.array(z.string().min(1)).optional().describe('Principals to tag'),
@@ -381,11 +381,14 @@ export function createServer(client: () => Promise<Herald>) {
       ...posting,
       tags: z.array(z.string().min(1)).optional().describe('Subagent keys to address'),
       forward: z
-        .object({ room: z.string(), seq: z.number().int().positive() })
+        .object({ room: z.string(), seq: z.number().int().positive(), id: z.string() })
         .optional()
-        .describe('A message of another room to show; each reader opens it with their own access'),
+        .describe(
+          'A message of another room (room, seq and id from chat_read); each reader opens it with their own access',
+        ),
     },
     async ({ as, ...input }, herald) => {
+      if (!input.text && !input.forward) throw new Error('Pass text, forward or both.');
       const target = await dm(input.to, as, input.paths?.length, herald);
       const attachments = [];
       for (const file of input.paths ?? [])
@@ -393,7 +396,7 @@ export function createServer(client: () => Promise<Herald>) {
           await herald.chat.attach(target, basename(file), new Uint8Array(await readFile(file))),
         );
       return json(
-        await herald.chat.send(target, input.text, {
+        await herald.chat.send(target, input.text ?? '', {
           audience: input.humansOnly ? 'humans' : undefined,
           replyTo: input.replyTo,
           mentions: input.mentions,

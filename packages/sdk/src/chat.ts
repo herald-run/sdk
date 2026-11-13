@@ -572,7 +572,10 @@ export class ChatClient {
       throw new HeraldError('A summary is at most 200 characters.', 400);
     const forward = options.forward && e2ee.chatForward(options.forward);
     if (options.forward && !forward)
-      throw new HeraldError('A forward names a room id and a seq of at least 1.', 400);
+      throw new HeraldError(
+        'A forward names a room id, a seq of at least 1 and that message id.',
+        400,
+      );
     const names = this.#sealedNames([sub, ...(tags ?? [])], options.names);
     const { kind, event, form, rules } = extra;
     for (let attempt = 0; ; attempt++) {

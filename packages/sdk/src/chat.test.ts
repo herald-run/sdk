@@ -567,7 +567,7 @@ it('seals a summary, sends tags and refuses a long summary', async () => {
 });
 it('seals a forward, reads it back and refuses a malformed one', async () => {
   const room = await makeRoom();
-  const forward = { room: 'r'.repeat(43), seq: 7 };
+  const forward = { room: 'r'.repeat(43), seq: 7, id: crypto.randomUUID() };
   const seen = serve({
     ...keysRoute,
     [`GET /api/v1/chats/${room.id}`]: room,
@@ -593,12 +593,17 @@ it('seals a forward, reads it back and refuses a malformed one', async () => {
   const { messages } = await client().read(room.id);
   expect(messages[0].forward).toEqual(forward);
   for (const bad of [
-    { room: 'x', seq: 1 },
+    { room: 'x', seq: 1, id: forward.id },
+    { room: forward.room, seq: 7 },
+    { ...forward, id: 'x' },
     { ...forward, seq: 0 },
     { ...forward, seq: 1.5 },
   ])
-    await expect(client().send(room.id, '', { forward: bad })).rejects.toThrow(/forward/);
-  expect(e2ee.chatForward({ room: forward.room, seq: '7' })).toBeUndefined();
+    await expect(client().send(room.id, '', { forward: bad as e2ee.ChatForward })).rejects.toThrow(
+      /forward/,
+    );
+  expect(e2ee.chatForward({ ...forward, seq: '7' })).toBeUndefined();
+  expect(e2ee.chatForward({ room: forward.room, seq: 7 })).toBeUndefined();
   expect(e2ee.chatForward(null)).toBeUndefined();
 });
 it('seals tags with the message and leaves them out when empty', async () => {

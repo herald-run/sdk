@@ -158,19 +158,23 @@ export interface ChatPayload extends Record<string, unknown> {
   names?: Record<string, string>;
 }
 export type OpenedChat = ChatPayload & { mentionsMismatch?: true };
-/** A message by room id and seq. */
+/** One message: its room id, seq and signed message id. */
 export interface ChatForward {
   room: string;
   seq: number;
+  id: string;
 }
-/** `value` as a forward: a room id and a seq of at least 1; undefined otherwise. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** `value` as a forward: a room id, a seq of at least 1 and a message id; undefined otherwise. */
 export function chatForward(value: unknown): ChatForward | undefined {
-  const { room, seq } = (value ?? {}) as Partial<ChatForward>;
+  const { room, seq, id } = (value ?? {}) as Partial<ChatForward>;
   return typeof room === 'string' &&
     /^[\w-]{43}$/.test(room) &&
     Number.isSafeInteger(seq) &&
-    seq! >= 1
-    ? { room, seq: seq! }
+    seq! >= 1 &&
+    typeof id === 'string' &&
+    UUID.test(id)
+    ? { room, seq: seq!, id }
     : undefined;
 }
 /** Verified keys of the local party; each client fills this from its own key store. */
