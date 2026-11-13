@@ -380,6 +380,10 @@ export function createServer(client: () => Promise<Herald>) {
       paths: z.array(z.string().min(1)).optional().describe('Local files to attach'),
       ...posting,
       tags: z.array(z.string().min(1)).optional().describe('Subagent keys to address'),
+      forward: z
+        .object({ room: z.string(), seq: z.number().int().positive() })
+        .optional()
+        .describe('A message of another room to show; each reader opens it with their own access'),
     },
     async ({ as, ...input }, herald) => {
       const target = await dm(input.to, as, input.paths?.length, herald);
@@ -397,6 +401,7 @@ export function createServer(client: () => Promise<Herald>) {
           sub: as,
           tags: input.tags,
           summary: input.summary,
+          forward: input.forward,
         }),
       );
     },

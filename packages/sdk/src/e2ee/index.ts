@@ -3,6 +3,7 @@ export { b64u, E2eeError, type Bytes } from './bytes';
 export { canon } from './canon';
 export {
   chatContext,
+  chatForward,
   groupHead,
   openChat,
   openChatSecrets,
@@ -25,6 +26,7 @@ export {
   type SubagentReach,
   type ChatAttachment,
   type ChatEvent,
+  type ChatForward,
   type ChatSealInput,
   type ContextMode,
   type FormState,

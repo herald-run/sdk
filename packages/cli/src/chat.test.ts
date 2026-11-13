@@ -66,6 +66,20 @@ it('sends as an agent with tags and a summary, and reads for one', async () => {
   await chat(fake({ send, read }), ['read', room], values, io());
   expect(read).toHaveBeenCalledWith(room, expect.objectContaining({ for: 'b' }));
 });
+it('sends a forward with optional text and refuses a malformed one', async () => {
+  const send = vi.fn(async () => ({ seq: 1, id: 'x', room }));
+  const values = { ...base, as: 'a', forward: `${room}:12` };
+  await chat(fake({ send }), ['send', room], values, io());
+  expect(send).toHaveBeenCalledWith(
+    room,
+    '',
+    expect.objectContaining({ forward: { room, seq: 12 } }),
+  );
+  for (const forward of [`${room}:0`, 'x:1', room])
+    await expect(
+      chat(fake({ send }), ['send', room], { ...values, forward }, io()),
+    ).rejects.toThrow('ROOM:SEQ');
+});
 it('needs --as to send to a person, and passes it as sub', async () => {
   const send = vi.fn(async () => ({ seq: 1, id: 'x', room }));
   const open = vi.fn(async () => ({ id: room }) as ChatRoom);

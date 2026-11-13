@@ -13,6 +13,8 @@ export type ChatValues = {
   agent?: string[];
   tag?: string[];
   summary?: string;
+  /** `ROOM:SEQ`, a message of another room to show. */
+  forward?: string;
   title?: string;
   hopLimit?: number;
   for?: string;
@@ -32,6 +34,12 @@ type Io = {
 const ROOM_ID = /^[\w-]{43}$/;
 const USAGE =
   'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|group|title [ROOM] [SEQ] [TEXT]';
+const forwardOf = (value?: string) => {
+  if (value === undefined) return undefined;
+  const [, room, seq] = /^([\w-]{43}):(\d+)$/.exec(value) ?? [];
+  if (!room || !(Number(seq) >= 1)) throw new UsageError('--forward takes ROOM:SEQ.');
+  return { room, seq: Number(seq) };
+};
 /** Chat text is written by another party: terminal control sequences are dropped. */
 // eslint-disable-next-line no-control-regex -- removing control characters is the point.
 const clean = (text: string) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
@@ -136,7 +144,9 @@ export async function chat(
     }
     case 'send': {
       const to = need(room, 'ROOM, owner, h:ID or a:ID');
-      const text = await body(rest[0], 'TEXT');
+      const forward = forwardOf(values.forward);
+      const text =
+        forward && rest[0] === undefined && !values.bodyFile ? '' : await body(rest[0], 'TEXT');
       const target = await dm(to);
       const attachments = [];
       for (const file of values.attach ?? [])
@@ -151,6 +161,7 @@ export async function chat(
           sub: values.as,
           tags: values.tag,
           summary: values.summary,
+          forward,
         }),
       );
     }

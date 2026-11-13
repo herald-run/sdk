@@ -565,6 +565,42 @@ it('seals a summary, sends tags and refuses a long summary', async () => {
   expect(urls.some((u) => u.includes('/messages?for=b'))).toBe(true);
   await expect(client().send(room.id, 'x', { summary: 's'.repeat(201) })).rejects.toThrow(/200/);
 });
+it('seals a forward, reads it back and refuses a malformed one', async () => {
+  const room = await makeRoom();
+  const forward = { room: 'r'.repeat(43), seq: 7 };
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  await client().send(room.id, '', { sub: 'a', forward });
+  const post = seen.find((s) => s.route.startsWith('POST'))!;
+  expect(JSON.stringify(post.body)).not.toContain('r'.repeat(43));
+  const record = {
+    ...{ seq: 1, id: post.body!.id as string, sender: agent, sub: 'a', at: 1 },
+    ...{ kind: 'message' as const, audience: 'all' as const },
+    envelope: post.body!.envelope as e2ee.SealedEnvelope,
+  };
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: {
+      messages: [record],
+      through_seq: 1,
+      hasMore: false,
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const { messages } = await client().read(room.id);
+  expect(messages[0].forward).toEqual(forward);
+  for (const bad of [
+    { room: 'x', seq: 1 },
+    { ...forward, seq: 0 },
+    { ...forward, seq: 1.5 },
+  ])
+    await expect(client().send(room.id, '', { forward: bad })).rejects.toThrow(/forward/);
+  expect(e2ee.chatForward({ room: forward.room, seq: '7' })).toBeUndefined();
+  expect(e2ee.chatForward(null)).toBeUndefined();
+});
 it('seals tags with the message and leaves them out when empty', async () => {
   const room = await makeRoom();
   const seen = serve({
