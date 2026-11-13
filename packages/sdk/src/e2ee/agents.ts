@@ -3,7 +3,8 @@ import { E2eeError } from './bytes';
 import { open, seal, type Ctx, type Expect, type RecipientKey } from './envelope';
 import type { ChatKeys } from './chat';
 
-export const presenceStates = ['idle', 'busy', 'blocked', 'offline'] as const;
+/** `busy` is the old name of `working`; the viewer shows it as Working. */
+export const presenceStates = ['idle', 'working', 'busy', 'blocked', 'error', 'offline'] as const;
 export type PresenceState = (typeof presenceStates)[number];
 /** A link an agent shows next to its presence, such as a pull request or a dashboard. */
 export interface AgentLink {
@@ -233,6 +234,21 @@ const checkPresence = <T extends AgentPresence>(value: T, strict = true): T => {
   if (keptDetails.length) out.details = keptDetails;
   return out;
 };
+/**
+ * Older viewers refuse states they do not know, so the wire carries `working` as `busy` and
+ * `error` as `blocked` with `condition: 'error'`, which they pass through unread.
+ */
+const toWire = <T extends AgentPresence>(value: T): T => {
+  if (value.state === 'working') return { ...value, state: 'busy' };
+  if (value.state === 'error') return { ...value, state: 'blocked', condition: 'error' };
+  return value;
+};
+const fromWire = <T extends AgentPresence>(value: T): T => {
+  const { condition, ...rest } = value;
+  return (
+    condition === 'error' && value.state === 'blocked' ? { ...rest, state: 'error' } : rest
+  ) as T;
+};
 const validParent = (key: string, parent: unknown) =>
   typeof parent === 'string' && subagentKey.test(parent) && parent !== key;
 const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
@@ -285,7 +301,7 @@ async function openAs<T extends Record<string, unknown>>(
 /** An agent seals its presence to its owner; `keys.principal` is the agent. */
 export const sealPresence = (keys: ChatKeys, owner: string, presence: AgentPresence) =>
   seal({
-    payload: checkPresence(presence),
+    payload: toWire(checkPresence(presence)),
     ctx: presenceContext(keys.account, keys.principal),
     signer: keys.signer,
     to: owners(keys, owner),
@@ -297,7 +313,7 @@ export async function openPresence(keys: ChatKeys, connection: string, envelope:
     account: keys.account,
     principal: connection,
   });
-  return checkPresence(value, false);
+  return fromWire(checkPresence(value, false));
 }
 export const sealSubagent = (
   keys: ChatKeys,
@@ -308,7 +324,7 @@ export const sealSubagent = (
   if (typeof profile.name !== 'string' || !profile.name.trim() || profile.name.length > 60)
     fail('Invalid subagent name.');
   return seal({
-    payload: checkSubagent(key, profile),
+    payload: toWire(checkSubagent(key, profile)),
     ctx: subagentContext(keys.account, keys.principal, key),
     signer: keys.signer,
     to: owners(keys, owner),
@@ -327,7 +343,7 @@ export async function openSubagent(
     key,
   });
   if (typeof value.name !== 'string' || !value.name) fail('Invalid subagent name.');
-  return checkSubagent(key, value, false);
+  return fromWire(checkSubagent(key, value, false));
 }
 /** A member seals their own layout to themselves. */
 export const sealLayout = (keys: ChatKeys, layout: AgentLayout) =>

@@ -92,6 +92,8 @@ export interface ChatRecord {
   /** What a `server` line says; set by the server, never by a member. */
   notice?: string;
 }
+/** A room's sealed status: a record that never sits in the message stream (`seq` is 0). */
+export type ChatStatusRecord = Omit<ChatRecord, 'kind'> & { kind: 'status' };
 export interface ChatRoom {
   id: string;
   kind: RoomKind;
@@ -106,6 +108,8 @@ export interface ChatRoom {
   unread: number;
   members: ChatMember[];
   title?: ChatRecord;
+  /** The room's one sealed status, when set; older clients ignore it. */
+  status?: ChatStatusRecord;
   /** Group rooms: every signed head, oldest first. */
   chain?: SignedChatHead[];
   /** Agent turns in a row, between different agents, before wakes pause; 0 means no limit. */
@@ -138,7 +142,7 @@ export interface ChatAttachment {
 }
 /** What a chat envelope seals. `seen` is the sender's last-seen seq, so readers can spot gaps. */
 export interface ChatPayload extends Record<string, unknown> {
-  kind: ChatRecord['kind'];
+  kind: ChatRecord['kind'] | 'status';
   text: string;
   seen: number;
   mentions?: string[];
@@ -150,6 +154,8 @@ export interface ChatPayload extends Record<string, unknown> {
   attachments?: ChatAttachment[];
   /** A one-line stand-in (max 200 chars) clients show while the message is collapsed. */
   summary?: string;
+  /** A room status: its `state` is one of `presenceStates`; `text` is a short note. */
+  status?: { state: string; text?: string };
   /** A sender-quoted copy of an Inbox request; never fetched or re-verified from the Inbox. */
   reference?: Record<string, unknown>;
   /** A message in another room that readers open with their own access; nothing of it is copied. */
@@ -314,7 +320,7 @@ export async function shareHistory(
 export type ChatSealInput = Partial<Omit<ChatPayload, 'kind' | 'text' | 'seen'>> & {
   id: string;
   text: string;
-  kind?: ChatRecord['kind'];
+  kind?: ChatRecord['kind'] | 'status';
   audience?: ChatRecord['audience'];
   sub?: string;
   seen?: number;
@@ -355,7 +361,7 @@ const fieldsMatch = (a: ChatRecord['event'], b: ChatEvent | undefined) =>
 export async function openChat(
   keys: ChatKeys,
   roomOf: string,
-  record: ChatRecord,
+  record: ChatRecord | ChatStatusRecord,
   options: { heads?: ReadonlyMap<string, string[]> } = {},
 ): Promise<OpenedChat> {
   const envelope = record.envelope ?? fail('The message has no content.');

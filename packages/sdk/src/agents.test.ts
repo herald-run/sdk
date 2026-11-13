@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { sealedContracts } from '../fixtures/contracts';
 import * as e2ee from './e2ee/index';
+import { open as openRaw } from './e2ee/envelope';
 import { Herald, type KeyDirectory } from './index';
 afterEach(() => vi.restoreAllMocks());
 const { token, keyring, steps } = sealedContracts;
@@ -73,6 +74,31 @@ it('seals presence to the owner alone and sends only changes', async () => {
   vi.spyOn(Date, 'now').mockReturnValue(now + 200_000);
   await agents.setPresence({ state: 'idle' });
   expect(puts()[2].body).toEqual({ ttl: 300 });
+});
+it('seals working as busy and error as blocked so older viewers still list the agent', async () => {
+  const seen = serve({ ...keysRoute, 'PUT /api/v1/agents/me/presence': { expiresAt: 5 } });
+  const agents = client();
+  const owner = await ownerKeys();
+  const sent = async (state: e2ee.PresenceState) => {
+    await agents.setPresence({ state, text: 'x' });
+    const env = seen.filter((s) => s.route.startsWith('PUT')).at(-1)!.body!
+      .envelope as e2ee.SealedEnvelope;
+    const wire = await openRaw<Record<string, unknown>>(env, {
+      recipients: owner.openers,
+      signers: (kid) => (kid === runner.certificate.kid ? runner.certificate.sign : undefined),
+      expect: { t: 'presence', account: keyring.account, principal: agent },
+    });
+    return { wire, read: await e2ee.openPresence(owner, agent, env) };
+  };
+  const working = await sent('working');
+  expect(working.wire).toMatchObject({ state: 'busy' });
+  expect(working.wire).not.toHaveProperty('condition');
+  expect(working.read.state).toBe('busy');
+  const error = await sent('error');
+  expect(error.wire).toMatchObject({ state: 'blocked', condition: 'error' });
+  expect(error.read).toMatchObject({ state: 'error', text: 'x' });
+  expect(error.read).not.toHaveProperty('condition');
+  expect((await sent('blocked')).read.state).toBe('blocked');
 });
 it('refuses presence a server swapped to another connection or state', async () => {
   const seen = serve({ ...keysRoute, 'PUT /api/v1/agents/me/presence': { expiresAt: 5 } });

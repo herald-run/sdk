@@ -21,6 +21,7 @@ export {
   type ChatPayload,
   type ChatRecord,
   type ChatRoom,
+  type ChatStatusRecord,
   type AgentReach,
   type RoomAgent,
   type SubagentReach,

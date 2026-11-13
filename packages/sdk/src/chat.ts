@@ -42,7 +42,18 @@ export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
 /** A room in a listing, with its title opened. */
 export type ChatListing = Pick<ChatRoom, 'id' | 'kind' | 'unread' | 'lastSeq' | 'members'> & {
   title?: string;
+  status?: ChatRoomStatus;
 };
+/** A group's status: `idle`, `working`, `blocked` or `error`. No status at all is `null`. */
+export type ChatStatus = { state: Exclude<e2ee.PresenceState, 'offline' | 'busy'>; text?: string };
+/** What `setStatus` takes: `busy` is the old name of `working`; `offline` is not a room state. */
+export type ChatStatusInput = {
+  state: Exclude<e2ee.PresenceState, 'offline'>;
+  /** A short note, up to 120 characters. */
+  text?: string;
+};
+/** A room's opened status, with who set it and when (ms). */
+export type ChatRoomStatus = ChatStatus & { by: string; at: number };
 export type WakeReason = 'form_answer' | 'mention' | 'reply' | 'message';
 /** One handled batch: new `messages` from others, and earlier `history` per the context mode. */
 export type ChatWake = {
@@ -59,9 +70,14 @@ export type ChatWake = {
 };
 /** A person asked the agent `subagent` of this connection to stop its current work in `room`. */
 export type ChatStop = { room: string; subagent: string; by: string };
-/** A room this connection is in was archived or restored (`archivedAt`, ms; `null` once restored), or deleted. */
+/**
+ * A room this connection is in was archived or restored (`archivedAt`, ms; `null` once
+ * restored), deleted, or its status changed (`null` once cleared).
+ */
 export type ChatRoomEvent =
-  { room: string; archivedAt: number | null } | { room: string; deleted: true };
+  | { room: string; archivedAt: number | null }
+  | { room: string; deleted: true }
+  | { room: string; status: ChatRoomStatus | null };
 export type ChatPage = { messages: ChatMessage[]; through_seq: number; hasMore: boolean };
 export type ChatSendOptions = {
   audience?: 'all' | 'humans';
@@ -152,10 +168,12 @@ type Socketed = {
   subagent?: string;
   by?: string;
   archivedAt?: number | null;
+  status?: unknown;
 };
 const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+const STATUS_STATES = new Set(['idle', 'working', 'busy', 'blocked', 'error']);
 const RECENT = 20;
 const PAGE = 100;
 const path = (room: string) => '/chats/' + encodeURIComponent(room);
@@ -238,7 +256,17 @@ export class ChatClient {
       const heads = room.kind === 'group' ? { heads: await e2ee.roomHeads(room) } : {};
       const title =
         room.title && (await e2ee.openChat(keys, id, room.title, heads).catch(() => undefined));
-      out.push({ id, kind, title: title?.text || undefined, unread, lastSeq, members });
+      const status =
+        room.status && (await this.#status(id, room.status, heads.heads).catch(() => undefined));
+      out.push({
+        id,
+        kind,
+        title: title?.text || undefined,
+        unread,
+        lastSeq,
+        members,
+        ...(status ? { status } : {}),
+      });
     }
     return out;
   }
@@ -523,6 +551,85 @@ export class ChatClient {
   title(target: string, text: string, options: { sub?: string } = {}) {
     return this.#post(target, text, options, { kind: 'title' });
   }
+  /**
+   * Sets the room's status, or clears it with `null`; any member may. One per room: it replaces
+   * the last, sends no message and counts as nothing unread. Members see it in `list()`,
+   * `status()` and `onRoom`.
+   */
+  async setStatus(
+    room: string,
+    status: ChatStatusInput | null,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<void> {
+    const { signal } = options;
+    if (status === null) {
+      await this.#request(`${path(room)}/status`, undefined, { method: 'DELETE', signal });
+      return;
+    }
+    const { text } = status;
+    const state = status.state === 'busy' ? 'working' : status.state;
+    if (!e2ee.presenceStates.includes(state) || (state as string) === 'offline')
+      throw new HeraldError('A room status is idle, working, blocked or error.', 400);
+    if (text !== undefined && (typeof text !== 'string' || text.length > 120))
+      throw new HeraldError('A status text is at most 120 characters.', 400);
+    const id = crypto.randomUUID();
+    for (let attempt = 0; ; attempt++) {
+      const view = await this.open(room);
+      const keys = await this.#keys(attempt ? 'force' : false);
+      const envelope = await e2ee.sealChat(
+        keys,
+        view,
+        { id, text: '', kind: 'status', status: { state, ...defined({ text }) } },
+        this.#trust(view.id),
+      );
+      try {
+        await this.#request(
+          `${path(view.id)}/status`,
+          { id, envelope, headVersion: view.headVersion },
+          { method: 'PUT', signal },
+        );
+        return;
+      } catch (error) {
+        if (attempt || !(error instanceof HeraldError) || error.code !== 'ROOM_STALE') throw error;
+      }
+    }
+  }
+  /** The room's status, or `undefined` when none is set or this client cannot open it. */
+  async status(room: string): Promise<ChatRoomStatus | undefined> {
+    const view = await this.open(room);
+    return view.status ? this.#status(view.id, view.status).catch(() => undefined) : undefined;
+  }
+  /**
+   * Opens a status record, refreshing keys and heads once like a message. A record that names an
+   * unknown state gives `undefined`; one that still fails to open throws.
+   */
+  async #status(
+    room: string,
+    record: e2ee.ChatStatusRecord,
+    heads?: ReadonlyMap<string, string[]>,
+  ): Promise<ChatRoomStatus | undefined> {
+    let opened: OpenedChat | undefined;
+    for (const refresh of [false, true]) {
+      try {
+        const keys = await this.#keys(refresh);
+        const known = heads ?? (await this.#headsOf(room, refresh));
+        opened = await e2ee.openChat(keys, room, record, known ? { heads: known } : {});
+        break;
+      } catch {
+        // A membership or group head change may be newer than the cached view.
+      }
+    }
+    if (!opened) throw new HeraldError('This status could not be opened.', 0);
+    const state = opened.kind === 'status' ? opened.status?.state : undefined;
+    if (!state || !STATUS_STATES.has(state)) return undefined;
+    const text = opened.status!.text;
+    return {
+      state: (state === 'busy' ? 'working' : state) as ChatStatus['state'],
+      ...(typeof text === 'string' && text.length <= 120 ? { text } : {}),
+      by: record.sender,
+      at: record.at,
+    };
+  }
   /** Signs the next head of a group, named by its room id; an agent owner may add or remove agents only. */
   async updateGroup(
     room: string,
@@ -798,7 +905,7 @@ export class ChatClient {
   /**
    * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect; each
    * room keeps one wake per subagent. A handler that throws is not acknowledged, so its wake fires
-   * again when the lease lapses. `onStop` gets stop requests and `onRoom` archive, restore and delete
+   * again when the lease lapses. `onStop` gets stop requests and `onRoom` archive, restore, delete and status
    * changes as they arrive; neither is replayed.
    */
   wakes(
@@ -815,6 +922,7 @@ export class ChatClient {
     const { signal } = options;
     const allowed = options.rooms && new Set(options.rooms);
     const queues = new Map<string, Promise<void>>();
+    const statuses = new Map<string, Promise<void>>();
     const drain = async (room: string, subagent: string) => {
       while (!signal?.aborted) {
         const wake = await this.#take(room, options.lease, subagent);
@@ -866,6 +974,22 @@ export class ChatClient {
           const { archivedAt } = frame;
           if (archivedAt === null || typeof archivedAt === 'number')
             report(() => options.onRoom?.({ room, archivedAt }));
+        } else if (frame.type === 'status') {
+          // One chain per room keeps a clear from overtaking the status it follows.
+          const { status: record } = frame;
+          const next = (statuses.get(room) ?? Promise.resolve()).then(async () => {
+            try {
+              if (record === null) return await options.onRoom?.({ room, status: null });
+              if (!record || typeof record !== 'object') return;
+              const status = await this.#status(room, record as e2ee.ChatStatusRecord);
+              if (status) await options.onRoom?.({ room, status });
+            } catch (error) {
+              // The old status no longer holds and this one cannot be read: show none.
+              report(() => options.onRoom?.({ room, status: null }));
+              options.onError?.(error, room);
+            }
+          });
+          statuses.set(room, next);
         }
       },
       replay,

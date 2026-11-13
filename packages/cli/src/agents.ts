@@ -14,7 +14,7 @@ export type AgentValues = {
   section?: string;
 };
 type Io = { out: (line: string) => void };
-const STATES: PresenceState[] = ['idle', 'busy', 'blocked', 'offline'];
+const STATES: PresenceState[] = ['idle', 'working', 'busy', 'blocked', 'error', 'offline'];
 const state = (value: string | undefined): PresenceState => {
   if (!STATES.includes(value as PresenceState))
     throw new UsageError(`State is one of ${STATES.join(', ')}.`);

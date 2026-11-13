@@ -126,7 +126,7 @@ export const commands: Record<string, Spec> = {
   },
   presence: {
     args: 'set STATE [TEXT]',
-    summary: 'Show the owner idle, busy, blocked or offline',
+    summary: 'Show idle, working, blocked, error or offline',
     options: ['color', 'task', 'link', 'ttl'],
   },
   agents: {
@@ -197,7 +197,7 @@ const describe: Record<string, string> = {
   remove: '--remove           Remove the reaction',
   limit: '--limit N          Page size',
   'hop-limit': '--hop-limit N      Agent turns in a row before wakes pause (1 to 1000, default 6)',
-  state: '--state STATE     idle, busy, blocked or offline',
+  state: '--state STATE     idle, working, blocked, error or offline',
   color: '--color #RRGGBB',
   ttl: '--ttl SECONDS     Seconds until it expires (300)',
   exec: '--exec CMD         Shell command to run per wake',
