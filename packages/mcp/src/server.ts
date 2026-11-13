@@ -580,7 +580,7 @@ export function createServer(client: () => Promise<Herald>) {
       if (message) ctx.addIssue({ code: 'custom', message });
     });
   const look = {
-    state: z.enum(['idle', 'busy', 'blocked', 'offline']),
+    state: z.enum(['idle', 'working', 'busy', 'blocked', 'error', 'offline']),
     color: z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
@@ -605,7 +605,7 @@ export function createServer(client: () => Promise<Herald>) {
   const subagentKey = z.string().regex(/^[\w.-]{1,64}$/);
   tool(
     'presence_set',
-    'Show the account owner whether this connection is idle, busy, blocked or offline, end-to-end encrypted. Expires after ttl seconds unless refreshed.',
+    'Show the account owner whether this connection is idle, working, blocked, in error or offline (`busy` still means working), end-to-end encrypted. Expires after ttl seconds unless refreshed.',
     { ...look, text: z.string().max(120).optional() },
     async ({ ttl, ...presence }, herald) =>
       json(await herald.agents.setPresence(presence, { ttl })),

@@ -3,7 +3,8 @@ import { E2eeError } from './bytes';
 import { open, seal, type Ctx, type Expect, type RecipientKey } from './envelope';
 import type { ChatKeys } from './chat';
 
-export const presenceStates = ['idle', 'busy', 'blocked', 'offline'] as const;
+/** `busy` is the old name of `working`; the viewer shows it as Working. */
+export const presenceStates = ['idle', 'working', 'busy', 'blocked', 'error', 'offline'] as const;
 export type PresenceState = (typeof presenceStates)[number];
 /** A link an agent shows next to its presence, such as a pull request or a dashboard. */
 export interface AgentLink {

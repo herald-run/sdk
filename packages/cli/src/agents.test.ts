@@ -19,6 +19,14 @@ it('sets presence with text, colour and expiry', async () => {
   );
   expect(out.out).toHaveBeenCalledWith('busy  Reviewing');
 });
+it('takes working and error, and still takes busy', async () => {
+  const setPresence = vi.fn(async () => ({ expiresAt: 1 }));
+  for (const state of ['working', 'error', 'busy'])
+    await presence(fake({ setPresence }), ['set', state], {}, io());
+  ['working', 'error', 'busy'].forEach((state, n) =>
+    expect(setPresence).toHaveBeenNthCalledWith(n + 1, { state }, expect.anything()),
+  );
+});
 it('sets a task and links, and nests a subagent under a parent', async () => {
   const setPresence = vi.fn(async () => ({ expiresAt: 1 }));
   const setSubagent = vi.fn(async () => ({ expiresAt: 1 }));
