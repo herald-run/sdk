@@ -56,6 +56,9 @@ export type ChatWake = {
 };
 /** A person asked the agent `subagent` of this connection to stop its current work in `room`. */
 export type ChatStop = { room: string; subagent: string; by: string };
+/** A room this connection is in was archived or restored (`archivedAt`, ms; `null` once restored), or deleted. */
+export type ChatRoomEvent =
+  { room: string; archivedAt: number | null } | { room: string; deleted: true };
 export type ChatPage = { messages: ChatMessage[]; through_seq: number; hasMore: boolean };
 export type ChatSendOptions = {
   audience?: 'all' | 'humans';
@@ -138,7 +141,13 @@ type Frame =
       seq: number;
       subagent?: string;
     };
-type Socketed = { type?: string; room?: string; subagent?: string; by?: string };
+type Socketed = {
+  type?: string;
+  room?: string;
+  subagent?: string;
+  by?: string;
+  archivedAt?: number | null;
+};
 const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
@@ -275,6 +284,37 @@ export class ChatClient {
     );
     this.#left(room, key);
     return this.#verified(left);
+  }
+  /**
+   * Archives a room: it turns read-only (writes fail with code `CHAT_ARCHIVED`), its pending
+   * wakes end and its open forms close. A member connection may; so may a person who manages it.
+   */
+  async archive(room: string): Promise<ChatRoom> {
+    return this.#archived(room, true);
+  }
+  /** Makes an archived room writable again; forms closed by archiving stay closed. */
+  async unarchive(room: string): Promise<ChatRoom> {
+    return this.#archived(room, false);
+  }
+  async #archived(room: string, archived: boolean): Promise<ChatRoom> {
+    return this.#verified(
+      await this.#request<ChatRoom>(`${path(room)}/archived`, { archived }, { method: 'PUT' }),
+    );
+  }
+  #forget(room: string) {
+    this.#pins.delete(room);
+    this.#heads.delete(room);
+    this.#recent.delete(room);
+  }
+  /** Deletes a room and its messages for good. A connection may delete only groups it created. */
+  async deleteRoom(room: string): Promise<void> {
+    try {
+      await this.#request(path(room), undefined, { method: 'DELETE' });
+    } catch (error) {
+      if (error instanceof HeraldError && error.status === 404) this.#forget(room);
+      throw error;
+    }
+    this.#forget(room);
   }
   #trust = (room: string): RoomTrust => ({
     pins: this.#pins,
@@ -744,7 +784,8 @@ export class ChatClient {
   /**
    * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect; each
    * room keeps one wake per subagent. A handler that throws is not acknowledged, so its wake fires
-   * again when the lease lapses. `onStop` gets stop requests as they arrive; they are not replayed.
+   * again when the lease lapses. `onStop` gets stop requests and `onRoom` archive, restore and delete
+   * changes as they arrive; neither is replayed.
    */
   wakes(
     handler: (wake: ChatWake) => void | Promise<void>,
@@ -754,6 +795,7 @@ export class ChatClient {
       lease?: number;
       onError?: (error: unknown, room?: string) => void;
       onStop?: (stop: ChatStop) => void | Promise<void>;
+      onRoom?: (event: ChatRoomEvent) => void | Promise<void>;
     } = {},
   ): Promise<void> {
     const { signal } = options;
@@ -791,20 +833,26 @@ export class ChatClient {
       (frame) => {
         if (frame.type === 'wake') enqueue(frame.room, frame.subagent);
         const { room, subagent, by } = frame;
-        if (
-          frame.type === 'stop' &&
-          typeof room === 'string' &&
-          ROOM_ID.test(room) &&
-          (!allowed || allowed.has(room)) &&
-          typeof subagent === 'string' &&
-          typeof by === 'string'
-        )
+        if (typeof room !== 'string' || !ROOM_ID.test(room) || (allowed && !allowed.has(room)))
+          return;
+        const report = (fn: (() => unknown) | undefined) => {
           try {
-            const done: unknown = options.onStop?.({ room, subagent, by });
+            const done = fn?.();
             if (done instanceof Promise) done.catch((error) => options.onError?.(error, room));
           } catch (error) {
             options.onError?.(error, room);
           }
+        };
+        if (frame.type === 'stop' && typeof subagent === 'string' && typeof by === 'string')
+          report(() => options.onStop?.({ room, subagent, by }));
+        else if (frame.type === 'deleted') {
+          this.#forget(room);
+          report(() => options.onRoom?.({ room, deleted: true }));
+        } else if (frame.type === 'room') {
+          const { archivedAt } = frame;
+          if (archivedAt === null || typeof archivedAt === 'number')
+            report(() => options.onRoom?.({ room, archivedAt }));
+        }
       },
       replay,
       signal,

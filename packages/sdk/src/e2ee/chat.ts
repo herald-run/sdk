@@ -100,6 +100,8 @@ export interface ChatRoom {
   headVersion: number;
   lastSeq: number;
   lastAt: number;
+  /** When the room was archived (ms), `null` while active. An archived room is read-only. */
+  archivedAt?: number | null;
   readSeq: number;
   unread: number;
   members: ChatMember[];

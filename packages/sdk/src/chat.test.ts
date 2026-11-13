@@ -309,6 +309,60 @@ it('wakes reports a rejected async onStop', async () => {
   socket.close();
   await done;
 });
+it('wakes passes archive, restore and delete frames to onRoom', async () => {
+  const socket = new FakeSocket();
+  const [a, b] = ['a'.repeat(43), 'b'.repeat(43)];
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(unused, unused as never, () => socket, unused);
+  const stop = new AbortController();
+  const got: unknown[] = [];
+  const done = chat.wakes(() => {}, {
+    signal: stop.signal,
+    rooms: [a],
+    onRoom: (e) => void got.push(e),
+  });
+  socket.emit({ type: 'room', room: a, headVersion: 2, archivedAt: 1700 });
+  socket.emit({ type: 'room', room: a, headVersion: 2, archivedAt: null });
+  socket.emit({ type: 'room', room: a, headVersion: 3 });
+  socket.emit({ type: 'room', room: b, archivedAt: 5 });
+  socket.emit({ type: 'deleted', room: a });
+  socket.emit({ type: 'deleted', room: b });
+  expect(got).toEqual([
+    { room: a, archivedAt: 1700 },
+    { room: a, archivedAt: null },
+    { room: a, deleted: true },
+  ]);
+  stop.abort();
+  socket.close();
+  await done;
+});
+it('wakes reports a throwing or rejecting onRoom to onError', async () => {
+  const socket = new FakeSocket();
+  const a = 'a'.repeat(43);
+  const unused = () => Promise.reject(new Error('unused'));
+  const chat = new ChatClient(unused, unused as never, () => socket, unused);
+  const stop = new AbortController();
+  const errors: unknown[] = [];
+  let n = 0;
+  const done = chat.wakes(() => {}, {
+    signal: stop.signal,
+    onRoom: async () => {
+      if (n++) throw new Error('late');
+      throw new Error('boom');
+    },
+    onError: (e, room) => void errors.push([e, room]),
+  });
+  socket.emit({ type: 'deleted', room: a });
+  socket.emit({ type: 'room', room: a, archivedAt: null });
+  await new Promise((r) => setTimeout(r, 0));
+  expect(errors).toEqual([
+    [new Error('boom'), a],
+    [new Error('late'), a],
+  ]);
+  stop.abort();
+  socket.close();
+  await done;
+});
 it('listen delivers each message once, catches up on wake and gaps, and acks', async () => {
   const room = await makeRoom();
   const m1 = await fromOwner(room, 1, 'one');
@@ -876,6 +930,81 @@ it('opens agent DMs and adds or removes room agents', async () => {
   expect(posts.map((p) => p.body)).toEqual([{ kind: 'dm', with: human, agent: 'lead' }]);
   expect(seen.find((s) => s.route.startsWith('PUT'))!.body).toEqual({ notify: 'all' });
   expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}/agents/lead`)).toBe(true);
+});
+it('archives, unarchives and deletes a room', async () => {
+  const room = await makeRoom();
+  const archived = { ...room, archivedAt: 5 };
+  const seen = serve({
+    ...keysRoute,
+    [`PUT /api/v1/chats/${room.id}/archived`]: archived,
+    [`DELETE /api/v1/chats/${room.id}`]: {},
+  });
+  const chat = client();
+  expect((await chat.archive(room.id)).archivedAt).toBe(5);
+  await chat.unarchive(room.id);
+  await chat.deleteRoom(room.id);
+  expect(seen.filter((s) => s.route.startsWith('PUT')).map((s) => s.body)).toEqual([
+    { archived: true },
+    { archived: false },
+  ]);
+  expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}`)).toBe(true);
+});
+it('forgets a room after a delete, a missing room or a deleted frame', async () => {
+  const { room: v1, signed, owner } = await groupOf();
+  const next = await e2ee.signChatHead(owner, { ...signed.head, version: 2, prev: v1.head });
+  const v2 = { ...v1, head: await e2ee.headHash(next.head), headVersion: 2, chain: [signed, next] };
+  let live: e2ee.ChatRoom = v2;
+  let reply: Response | object = {};
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${v1.id}/messages`]: { messages: [], through_seq: 0, hasMore: false },
+    [`GET /api/v1/chats/${v1.id}`]: () => live,
+    [`DELETE /api/v1/chats/${v1.id}`]: () => reply,
+  });
+  const socket = new FakeSocket();
+  const chat = withSocket(socket);
+  // A pinned newer head makes the older one read as a rollback until the room is forgotten.
+  const rolledBack = async () => {
+    live = v1;
+    const out = await chat.open(v1.id).then(
+      () => false,
+      () => true,
+    );
+    live = v2;
+    return out;
+  };
+  const stop = new AbortController();
+  const done = chat.wakes(() => {}, { signal: stop.signal });
+  for (const how of ['ok', '404', 'frame']) {
+    await chat.open(v1.id);
+    expect(await rolledBack()).toBe(true);
+    if (how === 'frame') socket.emit({ type: 'deleted', room: v1.id });
+    else {
+      reply = how === '404' ? Response.json({ code: 'CHAT_NOT_FOUND' }, { status: 404 }) : {};
+      await chat.deleteRoom(v1.id).catch(() => undefined);
+    }
+    expect(await rolledBack()).toBe(false);
+    await chat.open(v1.id).catch(() => undefined);
+    live = v2;
+  }
+  stop.abort();
+  socket.close();
+  await done;
+});
+it('surfaces CHAT_ARCHIVED on a refused send', async () => {
+  const room = await makeRoom({ archivedAt: 5 });
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages`]: Response.json(
+      { error: 'This chat is archived.', code: 'CHAT_ARCHIVED' },
+      { status: 409 },
+    ),
+  });
+  await expect(client().send(room.id, 'hi')).rejects.toMatchObject({
+    status: 409,
+    code: 'CHAT_ARCHIVED',
+  });
 });
 it('requires an agent to open a person, and has no session rooms', async () => {
   const seen = serve({ ...keysRoute });
