@@ -1150,3 +1150,110 @@ it('sends the agents of a new group with their connections', async () => {
     { connection: 'a:other', key: 'r', notify: 'all' },
   ]);
 });
+
+const statusFromOwner = async (room: e2ee.ChatRoom, status: object, kind = 'status') => {
+  const owner = await ownerKeys();
+  const id = crypto.randomUUID();
+  const envelope = await e2ee.sealChat(owner, room, {
+    id,
+    text: '',
+    kind: kind as 'status',
+    status,
+  });
+  return { seq: 0, id, sender: human, sub: '', at: 7, kind, audience: 'all', envelope };
+};
+it('sets a status sealed to the room, takes busy as working, and clears it', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`PUT /api/v1/chats/${room.id}/status`]: room,
+    [`DELETE /api/v1/chats/${room.id}/status`]: room,
+  });
+  const chat = client();
+  await chat.setStatus(room.id, { state: 'busy', text: 'Migrating' });
+  await chat.setStatus(room.id, null);
+  await expect(chat.setStatus(room.id, { state: 'offline' as 'idle' })).rejects.toThrow(/idle/);
+  await expect(chat.setStatus(room.id, { state: 'idle', text: 'x'.repeat(121) })).rejects.toThrow(
+    /120/,
+  );
+  const put = seen.find((s) => s.route.startsWith('PUT'))!;
+  expect(JSON.stringify(put)).not.toContain('Migrating');
+  expect(Object.keys(put.body!).sort()).toEqual(['envelope', 'headVersion', 'id']);
+  const env = put.body!.envelope as e2ee.SealedEnvelope;
+  expect(env.to.map((r) => r.kid).sort()).toEqual(room.members.map((m) => m.kid).sort());
+  const record = {
+    seq: 0,
+    id: put.body!.id as string,
+    sender: agent,
+    sub: '',
+    at: 1,
+    kind: 'status' as const,
+    audience: 'all' as const,
+    envelope: env,
+  };
+  expect(await e2ee.openChat(await ownerKeys(), room.id, record)).toMatchObject({
+    kind: 'status',
+    status: { state: 'working', text: 'Migrating' },
+  });
+  expect(seen.some((s) => s.route === `DELETE /api/v1/chats/${room.id}/status`)).toBe(true);
+});
+it('reads a status from the room and the listing, dropping unknown or forged ones', async () => {
+  const base = await makeRoom();
+  const good = await statusFromOwner(base, { state: 'blocked', text: 'Needs input' });
+  const room = { ...base, status: good } as e2ee.ChatRoom;
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    'GET /api/v1/chats?': { rooms: [room] },
+    'GET /api/v1/chats': { rooms: [room] },
+  });
+  const chat = client();
+  expect(await chat.status(room.id)).toEqual({
+    state: 'blocked',
+    text: 'Needs input',
+    by: human,
+    at: 7,
+  });
+  expect((await chat.list())[0].status).toMatchObject({ state: 'blocked' });
+  vi.restoreAllMocks();
+  const later = await statusFromOwner(base, { state: 'asleep' });
+  const odd = { ...base, status: later } as e2ee.ChatRoom;
+  serve({ ...keysRoute, [`GET /api/v1/chats/${odd.id}`]: odd });
+  expect(await client().status(odd.id)).toBeUndefined();
+  vi.restoreAllMocks();
+  const forged = { ...good, sender: agent };
+  serve({ ...keysRoute, [`GET /api/v1/chats/${room.id}`]: { ...room, status: forged } });
+  expect(await client().status(room.id)).toBeUndefined();
+});
+it('wakes passes status frames to onRoom, opened, and drops ones that do not verify', async () => {
+  const room = await makeRoom();
+  const good = await statusFromOwner(room, { state: 'error', text: 'Failed' });
+  const keys = await ownerKeys();
+  const keyed = { state: async () => ({ ws: false }), chatKeys: async () => keys } as never;
+  const socket = new FakeSocket();
+  const request = (async (path: string) => {
+    if (path === `/chats/${room.id}`) return room;
+    throw new Error('unused ' + path);
+  }) as never;
+  const chat = new ChatClient(
+    request,
+    () => keyed,
+    () => socket,
+    () => Promise.reject(new Error('unused')),
+  );
+  const stop = new AbortController();
+  const got: unknown[] = [];
+  const done = chat.wakes(() => {}, { signal: stop.signal, onRoom: (e) => void got.push(e) });
+  socket.emit({ type: 'status', room: room.id, status: good });
+  socket.emit({ type: 'status', room: room.id, status: { ...good, sender: agent } });
+  socket.emit({ type: 'status', room: room.id, status: null });
+  await flush();
+  expect(got).toEqual([
+    { room: room.id, status: { state: 'error', text: 'Failed', by: human, at: 7 } },
+    { room: room.id, status: null },
+  ]);
+  stop.abort();
+  socket.close();
+  await done;
+});
