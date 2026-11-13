@@ -1252,7 +1252,54 @@ it('wakes passes status frames to onRoom, opened, and drops ones that do not ver
   expect(got).toEqual([
     { room: room.id, status: { state: 'error', text: 'Failed', by: human, at: 7 } },
     { room: room.id, status: null },
+    { room: room.id, status: null },
   ]);
+  stop.abort();
+  socket.close();
+  await done;
+});
+it('wakes refreshes keys once to open a status, then reports one it cannot open', async () => {
+  const room = await makeRoom();
+  const good = await statusFromOwner(room, { state: 'blocked', text: 'Input' });
+  const keys = await ownerKeys();
+  let fresh = false;
+  const keyed = {
+    state: async (refresh: boolean) => {
+      if (refresh) fresh = true;
+      return { ws: false };
+    },
+    // Before a refresh the cached directory does not know the signer.
+    chatKeys: async () => (fresh ? keys : { ...keys, verifier: () => undefined }),
+  } as never;
+  const socket = new FakeSocket();
+  const request = (async (path: string) => {
+    if (path === `/chats/${room.id}`) return room;
+    throw new Error('unused ' + path);
+  }) as never;
+  const chat = new ChatClient(
+    request,
+    () => keyed,
+    () => socket,
+    () => Promise.reject(new Error('unused')),
+  );
+  const stop = new AbortController();
+  const got: unknown[] = [];
+  const errors: unknown[] = [];
+  const done = chat.wakes(() => {}, {
+    signal: stop.signal,
+    onRoom: (e) => void got.push(e),
+    onError: (e) => void errors.push(e),
+  });
+  socket.emit({ type: 'status', room: room.id, status: good });
+  await flush();
+  expect(got).toEqual([
+    { room: room.id, status: { state: 'blocked', text: 'Input', by: human, at: 7 } },
+  ]);
+  expect(errors).toEqual([]);
+  socket.emit({ type: 'status', room: room.id, status: { ...good, sender: agent } });
+  await flush();
+  expect(got.at(-1)).toEqual({ room: room.id, status: null });
+  expect(errors).toHaveLength(1);
   stop.abort();
   socket.close();
   await done;

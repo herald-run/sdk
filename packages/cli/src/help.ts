@@ -125,7 +125,7 @@ export const commands: Record<string, Spec> = {
   },
   presence: {
     args: 'set STATE [TEXT]',
-    summary: 'Show the owner idle, working, blocked, error or offline',
+    summary: 'Show idle, working, blocked, error or offline',
     options: ['color', 'task', 'link', 'ttl'],
   },
   agents: {

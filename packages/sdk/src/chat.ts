@@ -251,7 +251,8 @@ export class ChatClient {
       const heads = room.kind === 'group' ? { heads: await e2ee.roomHeads(room) } : {};
       const title =
         room.title && (await e2ee.openChat(keys, id, room.title, heads).catch(() => undefined));
-      const status = room.status && (await this.#status(id, room.status, heads.heads));
+      const status =
+        room.status && (await this.#status(id, room.status, heads.heads).catch(() => undefined));
       out.push({
         id,
         kind,
@@ -589,22 +590,32 @@ export class ChatClient {
   /** The room's status, or `undefined` when none is set or this client cannot open it. */
   async status(room: string): Promise<ChatRoomStatus | undefined> {
     const view = await this.open(room);
-    return view.status ? this.#status(view.id, view.status) : undefined;
+    return view.status ? this.#status(view.id, view.status).catch(() => undefined) : undefined;
   }
-  /** Opens a status record; one that does not verify, or names an unknown state, is left out. */
+  /**
+   * Opens a status record, refreshing keys and heads once like a message. A record that names an
+   * unknown state gives `undefined`; one that still fails to open throws.
+   */
   async #status(
     room: string,
     record: e2ee.ChatStatusRecord,
     heads?: ReadonlyMap<string, string[]>,
   ): Promise<ChatRoomStatus | undefined> {
-    const keys = await this.#keys();
-    const known = heads ?? (await this.#headsOf(room, false));
-    const opened = await e2ee
-      .openChat(keys, room, record, known ? { heads: known } : {})
-      .catch(() => undefined);
-    const state = opened?.kind === 'status' ? opened.status?.state : undefined;
+    let opened: OpenedChat | undefined;
+    for (const refresh of [false, true]) {
+      try {
+        const keys = await this.#keys(refresh);
+        const known = heads ?? (await this.#headsOf(room, refresh));
+        opened = await e2ee.openChat(keys, room, record, known ? { heads: known } : {});
+        break;
+      } catch {
+        // A membership or group head change may be newer than the cached view.
+      }
+    }
+    if (!opened) throw new HeraldError('This status could not be opened.', 0);
+    const state = opened.kind === 'status' ? opened.status?.state : undefined;
     if (!state || !STATUS_STATES.has(state)) return undefined;
-    const text = opened!.status!.text;
+    const text = opened.status!.text;
     return {
       state: (state === 'busy' ? 'working' : state) as ChatStatus['state'],
       ...(typeof text === 'string' && text.length <= 120 ? { text } : {}),
@@ -959,6 +970,8 @@ export class ChatClient {
               const status = await this.#status(room, record as e2ee.ChatStatusRecord);
               if (status) await options.onRoom?.({ room, status });
             } catch (error) {
+              // The old status no longer holds and this one cannot be read: show none.
+              report(() => options.onRoom?.({ room, status: null }));
               options.onError?.(error, room);
             }
           });
