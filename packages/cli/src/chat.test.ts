@@ -147,7 +147,7 @@ it('passes --as to delete and --for to wait', async () => {
   expect(wait).toHaveBeenCalledWith('owner', expect.objectContaining({ for: 'lead', after: 3 }));
 });
 it('closes a form with a reason as an agent', async () => {
-  const close = vi.fn(async () => ({ status: 'closed', by: 'a:one', reason: 'moved on' }));
+  const close = vi.fn(async () => ({ status: 'closed' as const, by: 'a:one', reason: 'moved on' }));
   const lines: string[] = [];
   const c = fake({ close });
   const out = { ...io(), out: (l: string) => void lines.push(l) };

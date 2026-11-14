@@ -70,7 +70,18 @@ function serve(routes: Record<string, Reply>) {
     const key = Object.keys(routes).find((r) => route.startsWith(r));
     if (!key) return Response.json({ error: 'Not found.' }, { status: 404 });
     const value = routes[key];
-    const out = typeof value === 'function' ? await (value as () => unknown)() : value;
+    const signal = init?.signal;
+    signal?.throwIfAborted();
+    // Like fetch, an aborted request rejects, even while the route is still answering.
+    const aborted = new Promise<never>((_, reject) => {
+      if (signal?.aborted) reject(signal.reason);
+      signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+    aborted.catch(() => {});
+    const out =
+      typeof value === 'function'
+        ? await Promise.race([Promise.resolve((value as () => unknown)()), aborted])
+        : value;
     return out instanceof Response ? out : Response.json(out);
   });
   return seen;
@@ -1694,9 +1705,11 @@ it('opens a closed form state in read, and wakes passes form frames to onForm', 
   const stop = new AbortController();
   const got: unknown[] = [];
   const done = chat.wakes(() => {}, { signal: stop.signal, onForm: (e) => void got.push(e) });
-  const frame = (seq: number, state: object) =>
-    socket.emit({ type: 'form', room: room.id, seq, state });
+  const frame = (seq: number, state: object, sender = human) =>
+    socket.emit({ type: 'form', room: room.id, seq, sender, state });
   frame(3, { status: 'closed', by: human, close: good });
+  // A reason is trusted only from the form's own sender.
+  frame(3, { status: 'closed', by: human, close: good }, agent);
   frame(3, { status: 'closed', by: human });
   frame(4, { status: 'closed', by: human, close: good });
   frame(3, { status: 'answered', by: agent, answer: 8 });
@@ -1705,6 +1718,7 @@ it('opens a closed form state in read, and wakes passes form frames to onForm', 
   await flush();
   expect(got).toEqual([
     { room: room.id, seq: 3, status: 'closed', by: human, reason: 'Moved on' },
+    { room: room.id, seq: 3, status: 'closed', by: human },
     { room: room.id, seq: 3, status: 'closed', by: human },
     { room: room.id, seq: 4, status: 'closed', by: human },
     { room: room.id, seq: 3, status: 'answered', by: agent, answer: 8 },
@@ -1725,4 +1739,86 @@ it('opens a closed form state in read, and wakes passes form frames to onForm', 
   });
   const page = await client().read(room.id);
   expect(page.messages[0].formState).toEqual({ status: 'closed', by: human, reason: 'Moved on' });
+});
+
+it('does not let a pin join a queued write whose callers all aborted', async () => {
+  const room = await makeRoom();
+  let release = () => {};
+  const held = new Promise<void>((done) => (release = done));
+  let puts = 0;
+  const seen = serve({
+    ...keysRoute,
+    [`PUT /api/v1/chats/${room.id}/pins/todo`]: async () => {
+      if (!puts++) await held;
+      return {};
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const chat = client();
+  const first = chat.pin(room.id, 'todo', 'one', { sub: 'plan' });
+  await new Promise((done) => setTimeout(done, 20));
+  const quit = new AbortController();
+  const aborted = chat.pin(room.id, 'todo', 'two', { sub: 'plan', signal: quit.signal });
+  await new Promise((done) => setTimeout(done, 20));
+  quit.abort();
+  await expect(aborted).rejects.toThrow();
+  const later = chat.pin(room.id, 'todo', 'three', { sub: 'plan' });
+  release();
+  await Promise.all([first, later]);
+  const texts = await Promise.all(
+    seen
+      .filter((s) => s.route.startsWith('PUT'))
+      .map(async (s) => (await sealedPut(room, s.body!)).text),
+  );
+  expect(texts).toEqual(['one', 'three']);
+});
+it('drops its abort listener once a pin call settles', async () => {
+  const room = await makeRoom();
+  serve({
+    ...keysRoute,
+    [`PUT /api/v1/chats/${room.id}/pins/todo`]: {},
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const quit = new AbortController();
+  const add = vi.spyOn(quit.signal, 'addEventListener');
+  const remove = vi.spyOn(quit.signal, 'removeEventListener');
+  const chat = client();
+  for (const text of ['a', 'b', 'c'])
+    await chat.pin(room.id, 'todo', text, { sub: 'plan', signal: quit.signal });
+  const added = add.mock.calls.filter(([type]) => type === 'abort').length;
+  const removed = remove.mock.calls.filter(([type]) => type === 'abort').length;
+  expect(added).toBeGreaterThan(0);
+  expect(removed).toBeGreaterThanOrEqual(added);
+});
+it('lets a slow direct-chat lookup stall only its own agent, and an abort leave the line', async () => {
+  const room = await makeRoom();
+  let release = () => {};
+  const held = new Promise<void>((done) => (release = done));
+  const seen = serve({
+    ...keysRoute,
+    [`PUT /api/v1/chats/${room.id}/pins/todo`]: {},
+    [`GET /api/v1/chats/${room.id}`]: room,
+    'POST /api/v1/chats': async () => {
+      await held;
+      return room;
+    },
+  });
+  const chat = client();
+  const slow = chat.pin('owner', 'todo', 'slow', { sub: 'plan' });
+  await new Promise((done) => setTimeout(done, 20));
+  // Another agent is not held up behind it.
+  await chat.pin(room.id, 'todo', 'other', { sub: 'lead' });
+  expect(seen.filter((s) => s.route.startsWith('PUT'))).toHaveLength(1);
+  // Same agent: waits its turn, but an abort frees the caller at once.
+  const quit = new AbortController();
+  const waiting = chat.pin(room.id, 'todo', 'behind', { sub: 'plan', signal: quit.signal });
+  quit.abort();
+  await expect(waiting).rejects.toThrow();
+  const stuck = new AbortController();
+  const lookup = chat.pin('owner', 'todo', 'x', { sub: 'plan', signal: stuck.signal });
+  stuck.abort();
+  await expect(lookup).rejects.toThrow();
+  release();
+  await slow;
+  expect(seen.filter((s) => s.route.startsWith('PUT'))).toHaveLength(2);
 });

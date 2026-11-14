@@ -220,6 +220,16 @@ type Socketed = {
   seq?: unknown;
   state?: unknown;
 };
+/** `work`, or the signal's reason as soon as it aborts. */
+const abortable = <T>(work: Promise<T>, signal?: AbortSignal): Promise<T> =>
+  !signal
+    ? work
+    : new Promise<T>((resolve, reject) => {
+        if (signal.aborted) return reject(signal.reason);
+        const onAbort = () => reject(signal.reason);
+        signal.addEventListener('abort', onAbort, { once: true });
+        work.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+      });
 const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
@@ -239,7 +249,7 @@ export class ChatClient {
   /** Newest head verified per group, so the server cannot roll one back during this process. */
   #pins = new Map<string, { version: number; hash: string }>();
   #pinning = new Map<string, PinSlot>();
-  #pinTurn: Promise<void> = Promise.resolve();
+  #pinTurns = new Map<string, Promise<void>>();
   #heads = new Map<string, ReadonlyMap<string, string[]> | null>();
   #recent = new Map<string, Set<string>>();
   constructor(
@@ -331,6 +341,10 @@ export class ChatClient {
    */
   open(target: string, options: { agent: string }): Promise<ChatRoom>;
   async open(target: string, options: { agent?: string } = {}): Promise<ChatRoom> {
+    return this.#openRoom(target, options.agent);
+  }
+  async #openRoom(target: string, agent?: string, signal?: AbortSignal): Promise<ChatRoom> {
+    const options = { agent };
     if (!ROOM_ID.test(target) && !options.agent)
       throw new HeraldError(
         'A chat with a person or connection names one of its agents.',
@@ -340,12 +354,12 @@ export class ChatClient {
         'AGENT_REQUIRED',
       );
     const room = ROOM_ID.test(target)
-      ? await this.#request<ChatRoom>(path(target))
-      : await this.#request<ChatRoom>('/chats', {
-          kind: 'dm',
-          with: target,
-          agent: options.agent,
-        });
+      ? await this.#request<ChatRoom>(path(target), undefined, { signal })
+      : await this.#request<ChatRoom>(
+          '/chats',
+          { kind: 'dm', with: target, agent: options.agent },
+          { signal },
+        );
     return this.#verified(room);
   }
   /** Adds one of this connection's registered agents to a room it is in, or changes its settings. */
@@ -454,7 +468,13 @@ export class ChatClient {
     const mine = record.sender === keys.principal;
     const out = { ...base, room, mine, text: '' } as ChatMessage;
     if (record.formState)
-      out.formState = await this.#formState(room, record.seq, record.formState, record.sender);
+      out.formState = await this.#formState(
+        room,
+        record.seq,
+        record.formState,
+        record.sender,
+        record.audience,
+      );
     if (!record.envelope) return out;
     let payload: OpenedChat | undefined;
     let current = keys;
@@ -559,13 +579,15 @@ export class ChatClient {
   }
   /**
    * A form's state with its sealed close reason opened; the reason is dropped when it cannot be
-   * opened, is not signed by the asker, or names another form.
+   * opened, is not signed by the asker, or names another form. The reason is sealed to the form's
+   * `audience`.
    */
   async #formState(
     room: string,
     seq: number,
     state: e2ee.FormState,
     asker: string,
+    audience: 'all' | 'humans' = 'all',
   ): Promise<ChatFormState> {
     const { status, by, answer, close } = state;
     const out: ChatFormState = { status, ...defined({ by, answer }) };
@@ -577,7 +599,7 @@ export class ChatClient {
       sub: close.sub,
       at: close.at,
       kind: 'close',
-      audience: 'all',
+      audience,
       envelope: close.envelope,
     };
     for (const refresh of [false, true]) {
@@ -595,9 +617,10 @@ export class ChatClient {
   }
   /**
    * Closes your open form at `seq`: its asker withdraws it, so nobody can answer. `reason` (up to
-   * 120 characters) is sealed to the room. Closing a closed form changes nothing; an answered or
-   * expired one cannot be closed (`FORM_CLOSED`) and only its asker may close it (`NOT_ASKER`).
-   * A person or `owner` target needs `sub`.
+   * 120 characters) is sealed to the room. Closing a closed form changes nothing; an answered,
+   * expired or past-deadline one cannot be closed (`FORM_CLOSED`). Only the asker's connection may
+   * close it (`NOT_ASKER`): any of its agents can, not just the one that asked. A person or `owner`
+   * target needs `sub`.
    */
   async close(target: string, seq: number, options: ChatCloseOptions = {}): Promise<ChatFormState> {
     const { reason, sub, signal } = options;
@@ -786,19 +809,28 @@ export class ChatClient {
       throw new HeraldError('A pin key is 1 to 64 of A-Z, a-z, 0-9, _, . and -.', 400);
     const { signal } = options;
     const sub = options.sub ?? '';
-    // Calls enter one at a time, so resolving a person or `owner` cannot reorder them.
-    const before = this.#pinTurn;
+    // One agent's calls enter one at a time, so resolving a person or `owner` cannot reorder
+    // them; other agents' calls do not wait, and an abort leaves the line.
+    signal?.throwIfAborted();
+    const pending = this.#pinTurns.get(sub);
+    if (ROOM_ID.test(room) && !pending) return this.#enqueuePin(room, key, sub, text, signal);
+    const before = pending ?? Promise.resolve();
     let leave = () => {};
-    this.#pinTurn = new Promise<void>((done) => (leave = done));
+    const turn = new Promise<void>((done) => (leave = done));
+    this.#pinTurns.set(sub, turn);
+    void turn.then(() => this.#pinTurns.get(sub) === turn && this.#pinTurns.delete(sub));
     let queued: Promise<boolean>;
     try {
-      await before;
+      await abortable(before, signal);
       signal?.throwIfAborted();
-      const id = ROOM_ID.test(room) ? room : (await this.#dm(room, options.sub)).id;
+      const id = ROOM_ID.test(room)
+        ? room
+        : (await abortable(this.#dm(room, options.sub, 'sub', signal), signal)).id;
       signal?.throwIfAborted();
       queued = this.#enqueuePin(id, key, sub, text, signal);
     } finally {
-      leave();
+      // After the call ahead, so an abort cannot let later calls overtake it.
+      void before.then(leave);
     }
     return queued;
   }
@@ -813,7 +845,7 @@ export class ChatClient {
     const slot = this.#pinning.get(name) ?? { tail: Promise.resolve(), jobs: 0 };
     return new Promise<boolean>((resolve, reject) => {
       let job = slot.queued;
-      if (!job || job.clear || text === null) {
+      if (!job || job.clear || text === null || job.abort.signal.aborted) {
         const made: PinJob = { clear: text === null, waiters: [], abort: new AbortController() };
         job = made;
         slot.queued = made;
@@ -835,19 +867,25 @@ export class ChatClient {
         this.#pinning.set(name, slot);
       }
       const mine = job;
-      const waiter = { text, resolve: resolve as (v: unknown) => void, reject };
+      const onAbort = () => {
+        const at = mine.waiters.indexOf(waiter);
+        if (at < 0) return;
+        mine.waiters.splice(at, 1);
+        if (!mine.waiters.length) {
+          mine.abort.abort(signal!.reason);
+          // Not started yet: nothing is left to write, so later pins must not join it.
+          if (slot.queued === mine) slot.queued = undefined;
+        }
+        reject(signal!.reason);
+      };
+      const off = () => signal?.removeEventListener('abort', onAbort);
+      const waiter: PinWaiter = {
+        text,
+        resolve: (done) => (off(), resolve(done as boolean)),
+        reject: (error) => (off(), reject(error)),
+      };
       mine.waiters.push(waiter);
-      signal?.addEventListener(
-        'abort',
-        () => {
-          const at = mine.waiters.indexOf(waiter);
-          if (at < 0) return;
-          mine.waiters.splice(at, 1);
-          if (!mine.waiters.length) mine.abort.abort(signal.reason);
-          reject(signal.reason);
-        },
-        { once: true },
-      );
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
   async #writePin(
@@ -954,8 +992,8 @@ export class ChatClient {
     return this.#verified(await this.#request<ChatRoom>(`${path(view.id)}/heads`, signed));
   }
   /** The room for an id, or the DM with a person or `owner` through the acting agent (`sub` or `for`). */
-  #dm(target: string, agent?: string, option = 'sub') {
-    if (ROOM_ID.test(target)) return this.open(target);
+  #dm(target: string, agent?: string, option = 'sub', signal?: AbortSignal) {
+    if (ROOM_ID.test(target)) return this.#openRoom(target, undefined, signal);
     if (!agent)
       throw new HeraldError(
         `A connection speaks as one of its agents: pass \`${option}\`.`,
@@ -964,7 +1002,7 @@ export class ChatClient {
         undefined,
         'AGENT_REQUIRED',
       );
-    return this.open(target, { agent });
+    return this.#openRoom(target, agent, signal);
   }
   async #post(target: string, text: string, options: ChatSendOptions, extra: Posted = {}) {
     const id = options.id ?? crypto.randomUUID();
@@ -1290,7 +1328,7 @@ export class ChatClient {
           });
           statuses.set(room, next);
         } else if (frame.type === 'form' && options.onForm) {
-          const { seq, state } = frame;
+          const { seq, state, sender } = frame;
           if (
             typeof seq !== 'number' ||
             !Number.isSafeInteger(seq) ||
@@ -1303,7 +1341,8 @@ export class ChatClient {
             try {
               const wire = state as e2ee.FormState;
               if (typeof wire.status !== 'string') return;
-              const event = await this.#formState(room, seq, wire, wire.by ?? '');
+              const asker = typeof sender === 'string' ? sender : '';
+              const event = await this.#formState(room, seq, wire, asker);
               await options.onForm?.({ ...event, room, seq });
             } catch (error) {
               options.onError?.(error, room);

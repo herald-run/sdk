@@ -522,7 +522,7 @@ export function createServer(client: () => Promise<Herald>) {
   );
   tool(
     'chat_close_form',
-    'Close a form this connection posted and nobody has answered: it can no longer be answered or expire, and the room sees it closed with the reason. Closing a closed form changes nothing.',
+    'Close a form this connection posted (by any of its agents) and nobody has answered: it can no longer be answered or expire, and the room sees it closed with the reason. Closing a closed form changes nothing.',
     {
       room: chatTarget,
       seq,
