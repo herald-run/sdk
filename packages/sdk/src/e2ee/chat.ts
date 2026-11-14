@@ -105,7 +105,7 @@ export type ChatPinRecord = Omit<ChatRecord, 'kind'> & {
   key: string;
   pinnedAt: number;
 };
-/** The sealed reason of a closed form: signed by its asker, `seq` 0, audience `all`. */
+/** The sealed reason of a closed form: signed by its asker, `seq` 0, audience that of the form. */
 export type ChatCloseRecord = Omit<ChatRecord, 'kind'> & { kind: 'close' };
 export interface ChatRoom {
   id: string;
@@ -119,6 +119,10 @@ export interface ChatRoom {
   archivedAt?: number | null;
   readSeq: number;
   unread: number;
+  /** A person's own pin of the room (ms), `null` when unpinned. Always unset for agents. */
+  pinnedAt?: number | null;
+  /** A person's own mute: no push, unread still counts but stays out of the badge. */
+  muted?: boolean;
   members: ChatMember[];
   title?: ChatRecord;
   /** The room's one sealed status, when set; older clients ignore it. */
