@@ -54,6 +54,30 @@ export type ChatStatusInput = {
 };
 /** A room's opened status, with who set it and when (ms). */
 export type ChatRoomStatus = ChatStatus & { by: string; at: number };
+/** An opened pinned message: `sub` is the agent that pinned it ('' for a person or connection). */
+export type ChatPin = {
+  key: string;
+  sender: string;
+  sub: string;
+  text: string;
+  at: number;
+  pinnedAt: number;
+};
+/** A pin set, replaced or (`pin: null`) cleared or no longer readable. */
+export type ChatPinEvent = {
+  room: string;
+  sender: string;
+  sub: string;
+  key: string;
+  pin: ChatPin | null;
+};
+export type ChatPinOptions = { sub?: string; signal?: AbortSignal };
+type PinSlot = {
+  running: Promise<unknown>;
+  queued?: { text: string | null; done: Promise<boolean> };
+};
+const PIN_KEY = /^[\w.-]{1,64}$/;
+const PIN_TEXT = 16_000;
 export type WakeReason = 'form_answer' | 'mention' | 'reply' | 'message';
 /** One handled batch: new `messages` from others, and earlier `history` per the context mode. */
 export type ChatWake = {
@@ -169,6 +193,10 @@ type Socketed = {
   by?: string;
   archivedAt?: number | null;
   status?: unknown;
+  sender?: unknown;
+  sub?: unknown;
+  key?: unknown;
+  pin?: unknown;
 };
 const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
@@ -188,6 +216,7 @@ export class ChatClient {
   #left: (room: string, key: string) => void;
   /** Newest head verified per group, so the server cannot roll one back during this process. */
   #pins = new Map<string, { version: number; hash: string }>();
+  #pinning = new Map<string, PinSlot>();
   #heads = new Map<string, ReadonlyMap<string, string[]> | null>();
   #recent = new Map<string, Set<string>>();
   constructor(
@@ -630,6 +659,116 @@ export class ChatClient {
       at: record.at,
     };
   }
+  /**
+   * Pins `text` (markdown) under `key`, or replaces the pin there in place: no message, no unread,
+   * no wake. Each sender (a person, or `sub`, an agent of this connection) holds up to 4 pins, a room
+   * 12. Calls for the same pin while one is in flight coalesce: only the latest is sent.
+   */
+  async pin(room: string, key: string, text: string, options: ChatPinOptions = {}): Promise<void> {
+    if (typeof text !== 'string' || text.length > PIN_TEXT)
+      throw new HeraldError(`A pinned message is at most ${PIN_TEXT} characters.`, 400);
+    await this.#queuePin(room, key, text, options);
+  }
+  /** Clears the pin under `key`; false when there was none. */
+  unpin(room: string, key: string, options: ChatPinOptions = {}): Promise<boolean> {
+    return this.#queuePin(room, key, null, options);
+  }
+  #queuePin(room: string, key: string, text: string | null, options: ChatPinOptions) {
+    if (typeof key !== 'string' || !PIN_KEY.test(key))
+      throw new HeraldError('A pin key is 1 to 64 of A-Z, a-z, 0-9, _, . and -.', 400);
+    const id = `${room}\n${options.sub ?? ''}\n${key}`;
+    const slot: PinSlot = this.#pinning.get(id) ?? { running: Promise.resolve() };
+    if (slot.queued) {
+      slot.queued.text = text;
+      return slot.queued.done;
+    }
+    const queued = { text } as NonNullable<PinSlot['queued']>;
+    queued.done = slot.running
+      .catch(() => {})
+      .then(() => {
+        slot.queued = undefined;
+        return this.#writePin(room, key, queued.text, options);
+      });
+    slot.queued = queued;
+    slot.running = queued.done;
+    this.#pinning.set(id, slot);
+    void queued.done
+      .catch(() => {})
+      .then(() => {
+        if (slot.running === queued.done) this.#pinning.delete(id);
+      });
+    return queued.done;
+  }
+  async #writePin(room: string, key: string, text: string | null, options: ChatPinOptions) {
+    const { signal } = options;
+    const pinPath = (id: string) => `${path(id)}/pins/${encodeURIComponent(key)}`;
+    const view = await this.#dm(room, options.sub);
+    const sub = options.sub ?? '';
+    if (text === null) {
+      const query = sub ? `?sub=${encodeURIComponent(sub)}` : '';
+      const done = await this.#request<{ cleared: boolean }>(pinPath(view.id) + query, undefined, {
+        method: 'DELETE',
+        signal,
+      });
+      return done.cleared;
+    }
+    const id = crypto.randomUUID();
+    for (let attempt = 0; ; attempt++) {
+      const fresh = attempt ? await this.open(view.id) : view;
+      const keys = await this.#keys(attempt ? 'force' : false);
+      const envelope = await e2ee.sealChat(
+        keys,
+        fresh,
+        { id, text, kind: 'pin', sub, pin: { key } },
+        this.#trust(fresh.id),
+      );
+      try {
+        await this.#request(
+          pinPath(fresh.id),
+          { id, envelope, headVersion: fresh.headVersion, ...(sub ? { sub } : {}) },
+          { method: 'PUT', signal },
+        );
+        return true;
+      } catch (error) {
+        if (attempt || !(error instanceof HeraldError) || error.code !== 'ROOM_STALE') throw error;
+      }
+    }
+  }
+  /** The room's pins this client can open, oldest first. */
+  async pins(room: string): Promise<ChatPin[]> {
+    const view = await this.open(room);
+    const { pins } = await this.#request<{ pins: e2ee.ChatPinRecord[] }>(`${path(view.id)}/pins`);
+    const opened = await Promise.all(
+      pins.map((record) => this.#pin(view.id, record).catch(() => undefined)),
+    );
+    return opened.filter((p): p is ChatPin => !!p);
+  }
+  /** Opens a pin record, refreshing keys and heads once like a status. */
+  async #pin(room: string, record: e2ee.ChatPinRecord): Promise<ChatPin> {
+    for (const refresh of [false, true]) {
+      try {
+        const keys = await this.#keys(refresh);
+        const known = await this.#headsOf(room, refresh);
+        const opened = await e2ee.openChat(keys, room, record, known ? { heads: known } : {});
+        const { key, sender, sub, at, pinnedAt } = record;
+        return { key, sender, sub, text: opened.text, at, pinnedAt };
+      } catch {
+        // A membership or group head change may be newer than the cached view.
+      }
+    }
+    throw new HeraldError('This pin could not be opened.', 0);
+  }
+  /**
+   * Marks the room read up to `seq`; `sub`, an agent of this connection people can reach, also
+   * moves that agent's own mark, which members see as its read receipt.
+   */
+  markRead(
+    room: string,
+    seq: number,
+    options: { sub?: string } = {},
+  ): Promise<{ readSeq: number; agentReadSeq?: number }> {
+    return this.#request(`${path(room)}/read`, { seq, ...defined({ sub: options.sub }) });
+  }
   /** Signs the next head of a group, named by its room id; an agent owner may add or remove agents only. */
   async updateGroup(
     room: string,
@@ -814,7 +953,8 @@ export class ChatClient {
   }
   /**
    * Releases the wake up to `seq` and marks it read. A room keeps one wake per subagent: `subagent`
-   * ('' for the connection) releases only that one, and a subagent's ack leaves the read mark alone.
+   * ('' for the connection) releases only that one and also marks that agent's read, when people
+   * can reach it.
    */
   ack(room: string, seq: number, subagent?: string): Promise<{ readSeq?: number }> {
     return this.#request(`${path(room)}/ack`, subagent === undefined ? { seq } : { seq, subagent });
@@ -905,8 +1045,8 @@ export class ChatClient {
   /**
    * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect; each
    * room keeps one wake per subagent. A handler that throws is not acknowledged, so its wake fires
-   * again when the lease lapses. `onStop` gets stop requests and `onRoom` archive, restore, delete and status
-   * changes as they arrive; neither is replayed.
+   * again when the lease lapses. `onStop` gets stop requests, `onRoom` archive, restore, delete and status
+   * changes, and `onPin` pins set or cleared, as they arrive; none is replayed.
    */
   wakes(
     handler: (wake: ChatWake) => void | Promise<void>,
@@ -917,6 +1057,7 @@ export class ChatClient {
       onError?: (error: unknown, room?: string) => void;
       onStop?: (stop: ChatStop) => void | Promise<void>;
       onRoom?: (event: ChatRoomEvent) => void | Promise<void>;
+      onPin?: (event: ChatPinEvent) => void | Promise<void>;
     } = {},
   ): Promise<void> {
     const { signal } = options;
@@ -990,6 +1131,23 @@ export class ChatClient {
             }
           });
           statuses.set(room, next);
+        } else if (frame.type === 'pin' && options.onPin) {
+          const { sender, sub, key, pin: record } = frame;
+          if (typeof sender !== 'string' || typeof sub !== 'string' || typeof key !== 'string')
+            return;
+          const event = { room, sender, sub, key };
+          const chain = `${room} pin`;
+          const next = (statuses.get(chain) ?? Promise.resolve()).then(async () => {
+            let pin: ChatPin | null = null;
+            try {
+              if (record && typeof record === 'object')
+                pin = await this.#pin(room, record as e2ee.ChatPinRecord);
+            } catch (error) {
+              options.onError?.(error, room);
+            }
+            report(() => options.onPin?.({ ...event, pin }));
+          });
+          statuses.set(chain, next);
         }
       },
       replay,

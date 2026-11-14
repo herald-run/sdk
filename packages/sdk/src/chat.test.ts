@@ -1345,3 +1345,124 @@ it('wakes refreshes keys once to open a status, then reports one it cannot open'
   socket.close();
   await done;
 });
+const pinFromOwner = async (room: e2ee.ChatRoom, key: string, text: string, bound = key) => {
+  const id = crypto.randomUUID();
+  const envelope = await e2ee.sealChat(await ownerKeys(), room, {
+    id,
+    text,
+    kind: 'pin',
+    pin: { key: bound },
+  });
+  const at = 9;
+  return {
+    seq: 0,
+    id,
+    sender: human,
+    sub: '',
+    at,
+    kind: 'pin',
+    audience: 'all',
+    key,
+    pinnedAt: 8,
+    envelope,
+  };
+};
+it('pins sealed to the room as an agent, coalesces rapid updates and clears', async () => {
+  const room = await makeRoom();
+  let release = () => {};
+  const held = new Promise<void>((done) => (release = done));
+  let puts = 0;
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`PUT /api/v1/chats/${room.id}/pins/todo`]: async () => {
+      if (!puts++) await held;
+      return {};
+    },
+    [`DELETE /api/v1/chats/${room.id}/pins/todo`]: { cleared: true },
+  });
+  const chat = client();
+  const first = chat.pin(room.id, 'todo', '- [ ] one', { sub: 'plan' });
+  await new Promise((done) => setTimeout(done, 20));
+  const second = chat.pin(room.id, 'todo', '- [ ] two', { sub: 'plan' });
+  const third = chat.pin(room.id, 'todo', '- [x] three', { sub: 'plan' });
+  release();
+  await Promise.all([first, second, third]);
+  const bodies = seen.filter((s) => s.route.startsWith('PUT')).map((s) => s.body!);
+  expect(bodies).toHaveLength(2);
+  expect(JSON.stringify(bodies)).not.toContain('three');
+  expect(bodies[1]).toMatchObject({ sub: 'plan', headVersion: 1 });
+  const record = {
+    seq: 0,
+    id: bodies[1]!.id as string,
+    sender: agent,
+    sub: 'plan',
+    at: 1,
+    kind: 'pin' as const,
+    audience: 'all' as const,
+    key: 'todo',
+    pinnedAt: 1,
+    envelope: bodies[1]!.envelope as e2ee.SealedEnvelope,
+  };
+  expect(await e2ee.openChat(await ownerKeys(), room.id, record)).toMatchObject({
+    kind: 'pin',
+    text: '- [x] three',
+    pin: { key: 'todo' },
+  });
+  // A pin sealed under another key does not open as this one.
+  await expect(
+    e2ee.openChat(await ownerKeys(), room.id, { ...record, key: 'other' }),
+  ).rejects.toThrow(/pin/);
+  expect(await chat.unpin(room.id, 'todo', { sub: 'plan' })).toBe(true);
+  expect(seen.at(-1)!.route).toBe(`DELETE /api/v1/chats/${room.id}/pins/todo`);
+  await expect(chat.pin(room.id, 'bad key', 'x')).rejects.toThrow(/key/);
+  await expect(chat.pin(room.id, 'todo', 'x'.repeat(16_001))).rejects.toThrow(/16000/);
+});
+it('lists pins it can open and passes pin frames to onPin', async () => {
+  const room = await makeRoom();
+  const good = await pinFromOwner(room, 'notes', '**Plan**');
+  const forged = await pinFromOwner(room, 'swap', 'x', 'notes');
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/pins`]: { pins: [good, forged] },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  expect(await client().pins(room.id)).toEqual([
+    { key: 'notes', sender: human, sub: '', text: '**Plan**', at: 9, pinnedAt: 8 },
+  ]);
+  const keys = await ownerKeys();
+  const keyed = { state: async () => ({ ws: false }), chatKeys: async () => keys } as never;
+  const socket = new FakeSocket();
+  const request = (async (p: string) => {
+    if (p === `/chats/${room.id}`) return room;
+    throw new Error('unused ' + p);
+  }) as never;
+  const chat = new ChatClient(
+    request,
+    () => keyed,
+    () => socket,
+    () => Promise.reject(new Error('unused')),
+  );
+  const stop = new AbortController();
+  const got: unknown[] = [];
+  const done = chat.wakes(() => {}, { signal: stop.signal, onPin: (e) => void got.push(e) });
+  const frame = { type: 'pin', room: room.id, seq: 0, sender: human, sub: '', key: 'notes' };
+  socket.emit({ ...frame, pin: good });
+  socket.emit({ ...frame, pin: null });
+  await vi.waitFor(() => expect(got).toHaveLength(2));
+  expect(got[0]).toMatchObject({ key: 'notes', pin: { text: '**Plan**' } });
+  expect(got[1]).toMatchObject({ key: 'notes', pin: null });
+  stop.abort();
+  await done;
+});
+it('marks an agent read and acks as one', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 3, agentReadSeq: 3 },
+  });
+  expect(await client().markRead(room.id, 3, { sub: 'plan' })).toEqual({
+    readSeq: 3,
+    agentReadSeq: 3,
+  });
+  expect(seen[0]!.body).toEqual({ seq: 3, sub: 'plan' });
+});

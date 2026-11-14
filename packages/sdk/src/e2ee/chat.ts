@@ -62,6 +62,8 @@ export interface ChatMember {
   joinedSeq?: number;
   notify?: NotifyRule | 'default';
   context?: ContextMode;
+  /** Read marks of this connection's agents people can reach, by agent key. */
+  agentReads?: Record<string, number>;
 }
 /** Folded by clients; an edit counts only from the original sender. */
 export type ChatEvent =
@@ -94,6 +96,12 @@ export interface ChatRecord {
 }
 /** A room's sealed status: a record that never sits in the message stream (`seq` is 0). */
 export type ChatStatusRecord = Omit<ChatRecord, 'kind'> & { kind: 'status' };
+/** A pinned message: sealed like a message, kept beside the stream (`seq` 0) under its `key`. */
+export type ChatPinRecord = Omit<ChatRecord, 'kind'> & {
+  kind: 'pin';
+  key: string;
+  pinnedAt: number;
+};
 export interface ChatRoom {
   id: string;
   kind: RoomKind;
@@ -142,7 +150,7 @@ export interface ChatAttachment {
 }
 /** What a chat envelope seals. `seen` is the sender's last-seen seq, so readers can spot gaps. */
 export interface ChatPayload extends Record<string, unknown> {
-  kind: ChatRecord['kind'] | 'status';
+  kind: ChatRecord['kind'] | 'status' | 'pin';
   text: string;
   seen: number;
   mentions?: string[];
@@ -156,6 +164,8 @@ export interface ChatPayload extends Record<string, unknown> {
   summary?: string;
   /** A room status: its `state` is one of `presenceStates`; `text` is a short note. */
   status?: { state: string; text?: string };
+  /** A pinned message's key, bound to the record it was pinned under. */
+  pin?: { key: string };
   /** A sender-quoted copy of an Inbox request; never fetched or re-verified from the Inbox. */
   reference?: Record<string, unknown>;
   /** A message in another room that readers open with their own access; nothing of it is copied. */
@@ -320,7 +330,7 @@ export async function shareHistory(
 export type ChatSealInput = Partial<Omit<ChatPayload, 'kind' | 'text' | 'seen'>> & {
   id: string;
   text: string;
-  kind?: ChatRecord['kind'] | 'status';
+  kind?: ChatRecord['kind'] | 'status' | 'pin';
   audience?: ChatRecord['audience'];
   sub?: string;
   seen?: number;
@@ -361,7 +371,7 @@ const fieldsMatch = (a: ChatRecord['event'], b: ChatEvent | undefined) =>
 export async function openChat(
   keys: ChatKeys,
   roomOf: string,
-  record: ChatRecord | ChatStatusRecord,
+  record: ChatRecord | ChatStatusRecord | ChatPinRecord,
   options: { heads?: ReadonlyMap<string, string[]> } = {},
 ): Promise<OpenedChat> {
   const envelope = record.envelope ?? fail('The message has no content.');
@@ -387,6 +397,8 @@ export async function openChat(
   });
   if (payload.kind !== record.kind || typeof payload.text !== 'string')
     fail('The message content is invalid.');
+  if (record.kind === 'pin' && payload.pin?.key !== record.key)
+    fail('The pin does not match its record.');
   if (!fieldsMatch(record.event, payload.event)) fail('The event does not match its record.');
   if (isWorkspace(keys.account) && humanP(record.sender))
     keys.sawPolicy?.(envelope.ctx.policy as number);

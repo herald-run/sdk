@@ -33,7 +33,7 @@ type Io = {
 };
 const ROOM_ID = /^[\w-]{43}$/;
 const USAGE =
-  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|group|title [ROOM] [SEQ] [TEXT]';
+  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|group|title|pin|pins [ROOM] [SEQ] [TEXT]';
 /** `ROOM:SEQ` as a forward, with the id of the message read there. */
 async function forwardOf(client: Pick<Herald, 'chat'>, value?: string) {
   if (value === undefined) return undefined;
@@ -181,6 +181,28 @@ export async function chat(
         hopLimit: values.hopLimit,
       });
       print(made.id, made);
+      return 0;
+    }
+    case 'pin': {
+      const key = need(rest[0], 'KEY');
+      if (values.remove) {
+        const cleared = await client.chat.unpin(need(room, 'ROOM'), key, { sub: values.as });
+        print(cleared ? 'Cleared.' : 'No such pin.', { cleared });
+        return 0;
+      }
+      await client.chat.pin(need(room, 'ROOM'), key, await body(rest[1], 'TEXT'), {
+        sub: values.as,
+      });
+      print('Pinned.', { pinned: true });
+      return 0;
+    }
+    case 'pins': {
+      const pins = await client.chat.pins(need(room, 'ROOM'));
+      const shown = pins.map(
+        (p) =>
+          `${clean(p.key)}  ${clean(p.sub ? `${p.sender}/${p.sub}` : p.sender)}\n${clean(p.text)}`,
+      );
+      print(shown.join('\n\n') || 'No pins.', { pins });
       return 0;
     }
     case 'title':

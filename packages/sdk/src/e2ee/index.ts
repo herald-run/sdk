@@ -22,6 +22,7 @@ export {
   type ChatRecord,
   type ChatRoom,
   type ChatStatusRecord,
+  type ChatPinRecord,
   type AgentReach,
   type RoomAgent,
   type SubagentReach,

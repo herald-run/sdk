@@ -99,6 +99,8 @@ it('lists every tool with a description', async () => {
       'chat_edit',
       'chat_group',
       'chat_list',
+      'chat_pin',
+      'chat_pins',
       'chat_react',
       'chat_read',
       'chat_send',

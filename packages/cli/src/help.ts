@@ -99,7 +99,7 @@ export const commands: Record<string, Spec> = {
     detail: 'The runner config may omit destinationId; --target then names the destination key.',
   },
   chat: {
-    args: 'list|read|send|wait|listen|react|edit|delete|ask|answer|group|title [ROOM] [SEQ] [TEXT]',
+    args: 'list|read|send|wait|listen|react|edit|delete|ask|answer|group|title|pin|pins [ROOM] [SEQ] [TEXT]',
     summary: 'Read, send and wait on end-to-end encrypted chats',
     options: [
       'humans',
@@ -122,7 +122,7 @@ export const commands: Record<string, Spec> = {
       'body-file',
     ],
     detail:
-      'send takes a room id, owner, h:ID or a:ID; a person or owner needs --as KEY, one of your registered agents; react, edit, title, delete and answer take it too, and read, wait and listen take --for KEY. group needs at least one --agent KEY. wait takes the next wake (with --after, anything past that seq) and exits 3 when nothing arrives before --timeout. listen prints each new message; with --exec it runs a shell command once per wake under a lease, with the wake as JSON on stdin (reason, context, messages, history) and HERALD_CHAT_ROOM, HERALD_CHAT_SEQ, HERALD_CHAT_FIRST_SEQ, HERALD_CHAT_REASON, HERALD_CHAT_CONTEXT and HERALD_CHAT_SENDER in its environment. A wake is acknowledged once its handler exits 0; otherwise it fires again. ask and answer take a JSON form or answers as TEXT or --body-file; ask reads optional deadline (ms) and answerers from it.',
+      'send takes a room id, owner, h:ID or a:ID; a person or owner needs --as KEY, one of your registered agents; react, edit, title, delete, answer and pin take it too, and read, wait and listen take --for KEY. group needs at least one --agent KEY. wait takes the next wake (with --after, anything past that seq) and exits 3 when nothing arrives before --timeout. listen prints each new message; with --exec it runs a shell command once per wake under a lease, with the wake as JSON on stdin (reason, context, messages, history) and HERALD_CHAT_ROOM, HERALD_CHAT_SEQ, HERALD_CHAT_FIRST_SEQ, HERALD_CHAT_REASON, HERALD_CHAT_CONTEXT and HERALD_CHAT_SENDER in its environment. A wake is acknowledged once its handler exits 0; otherwise it fires again. ask and answer take a JSON form or answers as TEXT or --body-file; ask reads optional deadline (ms) and answerers from it. pin ROOM KEY TEXT pins markdown under KEY, replacing the pin there, with no message or unread; --remove clears it. pins ROOM lists them.',
   },
   presence: {
     args: 'set STATE [TEXT]',
@@ -194,7 +194,7 @@ const describe: Record<string, string> = {
   humans: '--humans           Seal to humans only',
   mention: '--mention ID       Mention a member; repeatable',
   attach: '--attach PATH      Attach a file; repeatable',
-  remove: '--remove           Remove the reaction',
+  remove: '--remove           Remove the reaction or pin',
   limit: '--limit N          Page size',
   'hop-limit': '--hop-limit N      Agent turns in a row before wakes pause (1 to 1000, default 6)',
   state: '--state STATE     idle, working, blocked, error or offline',
