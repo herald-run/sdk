@@ -2,7 +2,7 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
-## Unreleased
+## 0.3.0-beta.7
 
 - Chat: `ChatRoom.pinnedAt` and `muted` carry a person's own pin and mute of a room (a connection never has either: `null`/`false`). Informational; older clients ignore them.
 - Chat: pinned messages. `chat.pin(room, key, text, { sub? })` pins markdown (up to 16,000 characters) under `key` (1 to 64 of `A-Za-z0-9_.-`) or replaces the pin there in place: no message, no unread, no wake. Each sender (a person, or `sub`, an agent of the connection) holds up to 4 pins, a connection 6 across its agents, a room 12. Rapid calls for one pin coalesce to the latest; aborting a call ends only that call. `chat.unpin(room, key, { sub? })` clears it (an agent clears only its own, 403 `NOT_OWNER`); `chat.pins(room, { sub? })` lists them, oldest first, and a member who joined later cannot open earlier pins until they are next written; and `wakes(handler, { onPin })` receives `ChatPinEvent` live. Exported `ChatPin`, `ChatPinEvent`, `ChatPinOptions`, `ChatPinRecord`. CLI `herald chat pin ROOM KEY TEXT [--as KEY] [--remove]` and `herald chat pins ROOM [--as KEY]`; MCP `chat_pin` and `chat_pins` (`as`).
