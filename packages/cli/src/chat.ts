@@ -15,6 +15,7 @@ export type ChatValues = {
   summary?: string;
   /** `ROOM:SEQ`, a message of another room to show. */
   forward?: string;
+  reason?: string;
   title?: string;
   hopLimit?: number;
   for?: string;
@@ -33,7 +34,7 @@ type Io = {
 };
 const ROOM_ID = /^[\w-]{43}$/;
 const USAGE =
-  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|group|title|pin|pins [ROOM] [SEQ] [TEXT]';
+  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|close|group|title|pin|pins [ROOM] [SEQ] [TEXT]';
 /** `ROOM:SEQ` as a forward, with the id of the message read there. */
 async function forwardOf(client: Pick<Herald, 'chat'>, value?: string) {
   if (value === undefined) return undefined;
@@ -197,7 +198,7 @@ export async function chat(
       return 0;
     }
     case 'pins': {
-      const pins = await client.chat.pins(need(room, 'ROOM'));
+      const pins = await client.chat.pins(need(room, 'ROOM'), { sub: values.as });
       const shown = pins.map(
         (p) =>
           `${clean(p.key)}  ${clean(p.sub ? `${p.sender}/${p.sub}` : p.sender)}\n${clean(p.text)}`,
@@ -225,6 +226,14 @@ export async function chat(
     case 'delete': {
       await client.chat.delete(need(room, 'ROOM'), seqAt(0), { sub: values.as });
       print('Deleted.', { deleted: true });
+      return 0;
+    }
+    case 'close': {
+      const state = await client.chat.close(need(room, 'ROOM'), seqAt(0), {
+        reason: values.reason,
+        sub: values.as,
+      });
+      print(state.reason ? `Closed: ${clean(state.reason)}` : 'Closed.', state);
       return 0;
     }
     case 'ask': {

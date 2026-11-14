@@ -489,7 +489,7 @@ export function createServer(client: () => Promise<Herald>) {
   );
   tool(
     'chat_pin',
-    'Pin markdown under key (1 to 64 of A-Z a-z 0-9 _ . -), replacing the pin there, or clear it. A pin stays below the messages; it sends no message, counts as nothing unread and wakes nobody. Each sender holds up to 4.',
+    'Pin markdown under key (1 to 64 of A-Z a-z 0-9 _ . -), replacing the pin there, or clear it. A pin stays below the messages; it sends no message, counts as nothing unread and wakes nobody. Each sender holds up to 4, a connection 6 across its agents.',
     {
       room: chatTarget,
       key: z.string().regex(/^[\w.-]{1,64}$/),
@@ -508,8 +508,8 @@ export function createServer(client: () => Promise<Herald>) {
   tool(
     'chat_pins',
     'List the pinned messages of a chat, oldest first.',
-    { room: chatTarget },
-    async (input, herald) => json({ pins: await herald.chat.pins(input.room) }),
+    { room: chatTarget, as: acting },
+    async (input, herald) => json({ pins: await herald.chat.pins(input.room, { sub: input.as }) }),
   );
   tool(
     'chat_delete',
@@ -519,6 +519,18 @@ export function createServer(client: () => Promise<Herald>) {
       await herald.chat.delete(input.room, input.seq, { sub: input.as });
       return json({ deleted: true });
     },
+  );
+  tool(
+    'chat_close_form',
+    'Close a form this connection posted and nobody has answered: it can no longer be answered or expire, and the room sees it closed with the reason. Closing a closed form changes nothing.',
+    {
+      room: chatTarget,
+      seq,
+      reason: z.string().max(120).optional().describe('Why it was closed, sealed to the room'),
+      as: acting,
+    },
+    async (input, herald) =>
+      json(await herald.chat.close(input.room, input.seq, { reason: input.reason, sub: input.as })),
   );
   tool(
     'chat_ask',

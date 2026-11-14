@@ -1466,3 +1466,263 @@ it('marks an agent read and acks as one', async () => {
   });
   expect(seen[0]!.body).toEqual({ seq: 3, sub: 'plan' });
 });
+const sealedPut = async (room: e2ee.ChatRoom, body: Record<string, unknown>) =>
+  e2ee.openChat(await ownerKeys(), room.id, {
+    seq: 0,
+    id: body.id as string,
+    sender: agent,
+    sub: 'plan',
+    at: 1,
+    kind: 'pin',
+    audience: 'all',
+    key: 'todo',
+    pinnedAt: 1,
+    envelope: body.envelope as e2ee.SealedEnvelope,
+  });
+it('keys pin writes by the resolved room and keeps pin and unpin in order', async () => {
+  const room = await makeRoom();
+  let release = () => {};
+  const held = new Promise<void>((done) => (release = done));
+  let puts = 0;
+  const seen = serve({
+    ...keysRoute,
+    [`PUT /api/v1/chats/${room.id}/pins/todo`]: async () => {
+      if (!puts++) await held;
+      return {};
+    },
+    [`DELETE /api/v1/chats/${room.id}/pins/todo`]: { cleared: true },
+    [`GET /api/v1/chats/${room.id}`]: room,
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  const one = chat.pin('owner', 'todo', 'one', { sub: 'plan' });
+  await new Promise((done) => setTimeout(done, 20));
+  const two = chat.pin(room.id, 'todo', 'two', { sub: 'plan' });
+  const gone = chat.unpin('owner', 'todo', { sub: 'plan' });
+  const three = chat.pin(room.id, 'todo', 'three', { sub: 'plan' });
+  const four = chat.pin('owner', 'todo', 'four', { sub: 'plan' });
+  release();
+  await Promise.all([one, two, three, four]);
+  expect(await gone).toBe(true);
+  const writes = seen.filter((s) => /^(PUT|DELETE) /.test(s.route));
+  expect(writes.map((s) => s.route.split(' ')[0])).toEqual(['PUT', 'PUT', 'DELETE', 'PUT']);
+  const texts = await Promise.all(
+    writes.filter((s) => s.body).map(async (s) => (await sealedPut(room, s.body!)).text),
+  );
+  expect(texts).toEqual(['one', 'two', 'four']);
+});
+it('lets an aborted pin call fail alone', async () => {
+  const room = await makeRoom();
+  let release = () => {};
+  const held = new Promise<void>((done) => (release = done));
+  let puts = 0;
+  const seen = serve({
+    ...keysRoute,
+    [`PUT /api/v1/chats/${room.id}/pins/todo`]: async () => {
+      if (!puts++) await held;
+      return {};
+    },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const chat = client();
+  const first = chat.pin(room.id, 'todo', 'one', { sub: 'plan' });
+  await new Promise((done) => setTimeout(done, 20));
+  const quit = new AbortController();
+  const aborted = chat.pin(room.id, 'todo', 'two', { sub: 'plan', signal: quit.signal });
+  const kept = chat.pin(room.id, 'todo', 'three', { sub: 'plan' });
+  const alone = new AbortController();
+  const lonely = chat.pin(room.id, 'other', 'x', { sub: 'plan', signal: alone.signal });
+  quit.abort();
+  alone.abort();
+  await expect(aborted).rejects.toThrow();
+  await expect(lonely).rejects.toThrow();
+  release();
+  await Promise.all([first, kept]);
+  const bodies = seen.filter((s) => s.route.startsWith('PUT')).map((s) => s.body!);
+  expect(bodies).toHaveLength(2);
+  expect((await sealedPut(room, bodies[1]!)).text).toBe('three');
+  await expect(
+    chat.pin(room.id, 'todo', 'late', { sub: 'plan', signal: AbortSignal.abort() }),
+  ).rejects.toThrow();
+  expect(seen.filter((s) => s.route.startsWith('PUT'))).toHaveLength(2);
+});
+it('resolves direct-chat targets for pins and read marks', async () => {
+  const room = await makeRoom();
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/pins`]: { pins: [] },
+    [`POST /api/v1/chats/${room.id}/read`]: { readSeq: 3, agentReadSeq: 3 },
+    'POST /api/v1/chats': room,
+  });
+  const chat = client();
+  expect(await chat.pins('owner', { sub: 'plan' })).toEqual([]);
+  expect(await chat.markRead('owner', 3, { sub: 'plan' })).toMatchObject({ agentReadSeq: 3 });
+  expect(seen.filter((s) => s.route === 'POST /api/v1/chats').map((s) => s.body)).toEqual([
+    { kind: 'dm', with: 'owner', agent: 'plan' },
+    { kind: 'dm', with: 'owner', agent: 'plan' },
+  ]);
+  await expect(chat.pins('owner')).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
+  await expect(chat.markRead(human, 1)).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
+});
+it('seals the longest allowed pin to a full room within the server cap', async () => {
+  const room = await makeRoom();
+  const owner = await ownerKeys();
+  const to = Array.from({ length: 64 }, (_, n) => ({
+    ...owner.recipient(human)!,
+    kid: `kid${n}`.padEnd(22, 'A'),
+  }));
+  const envelope = await e2ee.sealChat(
+    owner,
+    room,
+    { id: crypto.randomUUID(), text: '字'.repeat(16_000), kind: 'pin', pin: { key: 'k' }, to },
+    undefined,
+  );
+  // The server's PIN_BYTES (128 KiB) bounds the sealed envelope as JSON.
+  expect(JSON.stringify(envelope).length).toBeLessThanOrEqual(131_072);
+});
+const closeFrom = async (room: e2ee.ChatRoom, seq: number, text: string, sub = '') => {
+  const owner = await ownerKeys();
+  const id = crypto.randomUUID();
+  const envelope = await e2ee.sealChat(owner, room, {
+    id,
+    text,
+    kind: 'close',
+    sub,
+    close: { seq },
+  });
+  return { id, sub, at: 9, envelope };
+};
+it('closes a form with a reason sealed to the room, or none, and opens what comes back', async () => {
+  const room = await makeRoom();
+  let state: unknown;
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages/4/close`]: () => ({ closed: true, state }),
+  });
+  const chat = client();
+  const keys = await ownerKeys();
+  state = { status: 'closed', by: agent };
+  expect(await chat.close(room.id, 4)).toEqual({ status: 'closed', by: agent });
+  expect(seen.find((s) => s.route.endsWith('/close'))!.body).toEqual({});
+  const reasoned = vi.mocked(fetch);
+  reasoned.mockClear();
+  state = undefined;
+  const post = async () => {
+    const call = reasoned.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    return JSON.parse(String(call[1]!.body)) as Record<string, unknown>;
+  };
+  const pending = chat.close(room.id, 4, { reason: 'Moved on', sub: 'plan' }).catch((e) => e);
+  await flush();
+  const body = await post();
+  expect(JSON.stringify(body)).not.toContain('Moved on');
+  expect(Object.keys(body).sort()).toEqual(['envelope', 'headVersion', 'id', 'sub']);
+  const record = {
+    seq: 0,
+    id: body.id as string,
+    sender: agent,
+    sub: 'plan',
+    at: 9,
+    kind: 'close' as const,
+    audience: 'all' as const,
+    envelope: body.envelope as e2ee.SealedEnvelope,
+  };
+  expect(await e2ee.openChat(keys, room.id, record)).toMatchObject({
+    kind: 'close',
+    text: 'Moved on',
+    close: { seq: 4 },
+  });
+  await pending;
+  await expect(chat.close(room.id, 4, { reason: 'x'.repeat(121) })).rejects.toThrow(/120/);
+  await expect(chat.close('owner', 4)).rejects.toMatchObject({ code: 'AGENT_REQUIRED' });
+});
+it('returns the reason of a closed form it can open and drops one it cannot trust', async () => {
+  const room = await makeRoom();
+  const good = await closeFrom(room, 4, 'Moved on');
+  const other = await closeFrom(room, 5, 'Another form');
+  const answer = (close: object, by = human) => ({
+    closed: true,
+    state: { status: 'closed', by, close },
+  });
+  let reply: unknown;
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages/4/close`]: () => reply,
+  });
+  const chat = client();
+  // The server relays a reason it did not seal: the signer must be the form's asker.
+  reply = answer(good, agent);
+  expect(await chat.close(room.id, 4)).toEqual({ status: 'closed', by: agent });
+  reply = answer(other, agent);
+  expect((await chat.close(room.id, 4)).reason).toBeUndefined();
+  reply = { closed: true, state: { status: 'closed', by: agent } };
+  expect((await chat.close(room.id, 4)).reason).toBeUndefined();
+});
+it('reseals a close once after ROOM_STALE', async () => {
+  const room = await makeRoom();
+  let n = 0;
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/messages/4/close`]: () =>
+      n++ ? { closed: true, state: { status: 'closed', by: agent } } : stale(),
+  });
+  expect(await client().close(room.id, 4, { reason: 'Done' })).toEqual({
+    status: 'closed',
+    by: agent,
+  });
+  expect(seen.filter((s) => s.route.endsWith('/close'))).toHaveLength(2);
+});
+const stale = () => Response.json({ error: 'stale', code: 'ROOM_STALE' }, { status: 409 });
+it('opens a closed form state in read, and wakes passes form frames to onForm', async () => {
+  const room = await makeRoom();
+  const keys = await ownerKeys();
+  const good = await closeFrom(room, 3, 'Moved on');
+  const keyed = { state: async () => ({ ws: false }), chatKeys: async () => keys } as never;
+  const socket = new FakeSocket();
+  const request = (async (path: string) => {
+    if (path === `/chats/${room.id}`) return room;
+    throw new Error('unused ' + path);
+  }) as never;
+  const chat = new ChatClient(
+    request,
+    () => keyed,
+    () => socket,
+    () => Promise.reject(new Error('unused')),
+  );
+  const stop = new AbortController();
+  const got: unknown[] = [];
+  const done = chat.wakes(() => {}, { signal: stop.signal, onForm: (e) => void got.push(e) });
+  const frame = (seq: number, state: object) =>
+    socket.emit({ type: 'form', room: room.id, seq, state });
+  frame(3, { status: 'closed', by: human, close: good });
+  frame(3, { status: 'closed', by: human });
+  frame(4, { status: 'closed', by: human, close: good });
+  frame(3, { status: 'answered', by: agent, answer: 8 });
+  frame(3, { status: 'later-status' });
+  socket.emit({ type: 'form', room: room.id, seq: 'x', state: { status: 'open' } });
+  await flush();
+  expect(got).toEqual([
+    { room: room.id, seq: 3, status: 'closed', by: human, reason: 'Moved on' },
+    { room: room.id, seq: 3, status: 'closed', by: human },
+    { room: room.id, seq: 4, status: 'closed', by: human },
+    { room: room.id, seq: 3, status: 'answered', by: agent, answer: 8 },
+    { room: room.id, seq: 3, status: 'later-status' },
+  ]);
+  stop.abort();
+  socket.close();
+  await done;
+  const form = {
+    ...(await fromOwner(room, 3, 'ask')),
+    kind: 'form',
+    formState: { status: 'closed', by: human, close: good },
+  };
+  serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}/messages`]: { messages: [form], hasMore: false },
+    [`GET /api/v1/chats/${room.id}`]: room,
+  });
+  const page = await client().read(room.id);
+  expect(page.messages[0].formState).toEqual({ status: 'closed', by: human, reason: 'Moved on' });
+});

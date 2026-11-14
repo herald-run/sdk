@@ -16,8 +16,10 @@ import type { KeyedSession } from './keyed.js';
 import { backoff, KEEPALIVE, type EventSocket } from './socket.js';
 export type { AgentReach, ChatForward, ChatRoom, RoomAgent } from './e2ee/index.js';
 /** An opened chat message; `locked` when it could not be decrypted or verified. */
-export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event'> & {
+export type ChatMessage = Omit<ChatRecord, 'envelope' | 'secrets' | 'event' | 'formState'> & {
   room: string;
+  /** A form's state; a `closed` one carries the asker's `reason` when readable. */
+  formState?: ChatFormState;
   text: string;
   mine: boolean;
   locked?: boolean;
@@ -72,12 +74,30 @@ export type ChatPinEvent = {
   pin: ChatPin | null;
 };
 export type ChatPinOptions = { sub?: string; signal?: AbortSignal };
-type PinSlot = {
-  running: Promise<unknown>;
-  queued?: { text: string | null; done: Promise<boolean> };
+/**
+ * A form's state. `closed`: its asker withdrew it; `reason` is their note, absent when none was
+ * given or this client cannot open it. Treat any other status as not answerable.
+ */
+export type ChatFormState = {
+  status: 'open' | 'answered' | 'expired' | 'closed';
+  by?: string;
+  answer?: number;
+  reason?: string;
 };
+/** A form's state changed, as the `form` frame says. */
+export type ChatFormEvent = ChatFormState & { room: string; seq: number };
+export type ChatCloseOptions = { reason?: string; sub?: string; signal?: AbortSignal };
+/** `sub` resolves a person or `owner` target to that agent's DM, like the other calls. */
+export type ChatRoomOptions = { sub?: string };
+type PinWaiter = {
+  text: string | null;
+  resolve: (done: unknown) => void;
+  reject: (error: unknown) => void;
+};
+type PinJob = { clear: boolean; waiters: PinWaiter[]; abort: AbortController };
+type PinSlot = { tail: Promise<unknown>; jobs: number; queued?: PinJob };
 const PIN_KEY = /^[\w.-]{1,64}$/;
-const PIN_TEXT = 16_000;
+const PIN_TEXT = 16_000; // chars; the server's PIN_BYTES fits it as CJK sealed to 64 members
 export type WakeReason = 'form_answer' | 'mention' | 'reply' | 'message';
 /** One handled batch: new `messages` from others, and earlier `history` per the context mode. */
 export type ChatWake = {
@@ -197,6 +217,8 @@ type Socketed = {
   sub?: unknown;
   key?: unknown;
   pin?: unknown;
+  seq?: unknown;
+  state?: unknown;
 };
 const fromOthers = (m: ChatMessage) => !m.mine && m.kind === 'message' && !m.locked;
 const defined = <T extends object>(o: T) =>
@@ -217,6 +239,7 @@ export class ChatClient {
   /** Newest head verified per group, so the server cannot roll one back during this process. */
   #pins = new Map<string, { version: number; hash: string }>();
   #pinning = new Map<string, PinSlot>();
+  #pinTurn: Promise<void> = Promise.resolve();
   #heads = new Map<string, ReadonlyMap<string, string[]> | null>();
   #recent = new Map<string, Set<string>>();
   constructor(
@@ -427,8 +450,11 @@ export class ChatClient {
     delete base.envelope;
     delete base.secrets;
     delete base.event;
+    delete base.formState;
     const mine = record.sender === keys.principal;
     const out = { ...base, room, mine, text: '' } as ChatMessage;
+    if (record.formState)
+      out.formState = await this.#formState(room, record.seq, record.formState, record.sender);
     if (!record.envelope) return out;
     let payload: OpenedChat | undefined;
     let current = keys;
@@ -530,6 +556,82 @@ export class ChatClient {
       kind: 'event',
       event: { type: 'edit', target: seq },
     });
+  }
+  /**
+   * A form's state with its sealed close reason opened; the reason is dropped when it cannot be
+   * opened, is not signed by the asker, or names another form.
+   */
+  async #formState(
+    room: string,
+    seq: number,
+    state: e2ee.FormState,
+    asker: string,
+  ): Promise<ChatFormState> {
+    const { status, by, answer, close } = state;
+    const out: ChatFormState = { status, ...defined({ by, answer }) };
+    if (status !== 'closed' || !close?.envelope || !by || by !== asker) return out;
+    const record: e2ee.ChatCloseRecord = {
+      seq: 0,
+      id: close.id,
+      sender: asker,
+      sub: close.sub,
+      at: close.at,
+      kind: 'close',
+      audience: 'all',
+      envelope: close.envelope,
+    };
+    for (const refresh of [false, true]) {
+      try {
+        const keys = await this.#keys(refresh);
+        const heads = await this.#headsOf(room, refresh);
+        const opened = await e2ee.openChat(keys, room, record, heads ? { heads } : {});
+        if (opened.close?.seq !== seq) return out;
+        return opened.text.length <= 120 && opened.text ? { ...out, reason: opened.text } : out;
+      } catch {
+        // A membership or group head change may be newer than the cached view.
+      }
+    }
+    return out;
+  }
+  /**
+   * Closes your open form at `seq`: its asker withdraws it, so nobody can answer. `reason` (up to
+   * 120 characters) is sealed to the room. Closing a closed form changes nothing; an answered or
+   * expired one cannot be closed (`FORM_CLOSED`) and only its asker may close it (`NOT_ASKER`).
+   * A person or `owner` target needs `sub`.
+   */
+  async close(target: string, seq: number, options: ChatCloseOptions = {}): Promise<ChatFormState> {
+    const { reason, sub, signal } = options;
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 120))
+      throw new HeraldError('A close reason is at most 120 characters.', 400);
+    const room = await this.#dm(target, sub);
+    const route = `${path(room.id)}/messages/${seq}/close`;
+    if (!reason) {
+      const done = await this.#request<{ state: e2ee.FormState }>(route, defined({ sub }), {
+        signal,
+      });
+      return this.#formState(room.id, seq, done.state, done.state.by ?? '');
+    }
+    const id = crypto.randomUUID();
+    for (let attempt = 0; ; attempt++) {
+      const view = attempt ? await this.open(room.id) : room;
+      const keys = await this.#keys(attempt ? 'force' : false);
+      const envelope = await e2ee.sealChat(
+        keys,
+        view,
+        { id, text: reason, kind: 'close', sub: sub ?? '', close: { seq } },
+        this.#trust(view.id),
+      );
+      try {
+        const done = await this.#request<{ state: e2ee.FormState }>(
+          route,
+          { id, envelope, headVersion: view.headVersion, ...defined({ sub }) },
+          { signal },
+        );
+        return this.#formState(room.id, seq, done.state, keys.principal);
+      } catch (error) {
+        if (attempt || !(error instanceof HeraldError) || error.code !== 'ROOM_STALE') throw error;
+      }
+    }
   }
   /** Removes a message's content, leaving a tombstone. A person or `owner` target needs `sub`. */
   async delete(target: string, seq: number, options: { sub?: string } = {}): Promise<void> {
@@ -661,8 +763,9 @@ export class ChatClient {
   }
   /**
    * Pins `text` (markdown) under `key`, or replaces the pin there in place: no message, no unread,
-   * no wake. Each sender (a person, or `sub`, an agent of this connection) holds up to 4 pins, a room
-   * 12. Calls for the same pin while one is in flight coalesce: only the latest is sent.
+   * no wake. Each sender (a person, or `sub`, an agent of this connection) holds up to 4 pins, a
+   * connection 6 across its agents, a room 12. Pins for the same slot while one is in flight
+   * coalesce: only the latest is sent. Aborting a call ends only that call.
    */
   async pin(room: string, key: string, text: string, options: ChatPinOptions = {}): Promise<void> {
     if (typeof text !== 'string' || text.length > PIN_TEXT)
@@ -673,46 +776,98 @@ export class ChatClient {
   unpin(room: string, key: string, options: ChatPinOptions = {}): Promise<boolean> {
     return this.#queuePin(room, key, null, options);
   }
-  #queuePin(room: string, key: string, text: string | null, options: ChatPinOptions) {
+  /**
+   * Writes to one slot (resolved room, agent, key) run in call order. A pin queued behind a
+   * running write absorbs later pins; an unpin never merges. Each caller settles on its own and
+   * a write is cancelled only when every caller it serves has aborted.
+   */
+  async #queuePin(room: string, key: string, text: string | null, options: ChatPinOptions) {
     if (typeof key !== 'string' || !PIN_KEY.test(key))
       throw new HeraldError('A pin key is 1 to 64 of A-Z, a-z, 0-9, _, . and -.', 400);
-    const id = `${room}\n${options.sub ?? ''}\n${key}`;
-    const slot: PinSlot = this.#pinning.get(id) ?? { running: Promise.resolve() };
-    if (slot.queued) {
-      slot.queued.text = text;
-      return slot.queued.done;
-    }
-    const queued = { text } as NonNullable<PinSlot['queued']>;
-    queued.done = slot.running
-      .catch(() => {})
-      .then(() => {
-        slot.queued = undefined;
-        return this.#writePin(room, key, queued.text, options);
-      });
-    slot.queued = queued;
-    slot.running = queued.done;
-    this.#pinning.set(id, slot);
-    void queued.done
-      .catch(() => {})
-      .then(() => {
-        if (slot.running === queued.done) this.#pinning.delete(id);
-      });
-    return queued.done;
-  }
-  async #writePin(room: string, key: string, text: string | null, options: ChatPinOptions) {
     const { signal } = options;
-    const pinPath = (id: string) => `${path(id)}/pins/${encodeURIComponent(key)}`;
-    const view = await this.#dm(room, options.sub);
     const sub = options.sub ?? '';
+    // Calls enter one at a time, so resolving a person or `owner` cannot reorder them.
+    const before = this.#pinTurn;
+    let leave = () => {};
+    this.#pinTurn = new Promise<void>((done) => (leave = done));
+    let queued: Promise<boolean>;
+    try {
+      await before;
+      signal?.throwIfAborted();
+      const id = ROOM_ID.test(room) ? room : (await this.#dm(room, options.sub)).id;
+      signal?.throwIfAborted();
+      queued = this.#enqueuePin(id, key, sub, text, signal);
+    } finally {
+      leave();
+    }
+    return queued;
+  }
+  #enqueuePin(
+    id: string,
+    key: string,
+    sub: string,
+    text: string | null,
+    signal: AbortSignal | undefined,
+  ) {
+    const name = `${id}\n${sub}\n${key}`;
+    const slot = this.#pinning.get(name) ?? { tail: Promise.resolve(), jobs: 0 };
+    return new Promise<boolean>((resolve, reject) => {
+      let job = slot.queued;
+      if (!job || job.clear || text === null) {
+        const made: PinJob = { clear: text === null, waiters: [], abort: new AbortController() };
+        job = made;
+        slot.queued = made;
+        slot.jobs++;
+        slot.tail = slot.tail.then(async () => {
+          if (slot.queued === made) slot.queued = undefined;
+          if (!made.waiters.length) return;
+          try {
+            const body = made.clear ? null : made.waiters.at(-1)!.text;
+            const done = await this.#writePin(id, key, body, sub, made.abort.signal);
+            for (const w of made.waiters) w.resolve(done);
+          } catch (error) {
+            for (const w of made.waiters) w.reject(error);
+          }
+        });
+        void slot.tail.then(() => {
+          if (!--slot.jobs) this.#pinning.delete(name);
+        });
+        this.#pinning.set(name, slot);
+      }
+      const mine = job;
+      const waiter = { text, resolve: resolve as (v: unknown) => void, reject };
+      mine.waiters.push(waiter);
+      signal?.addEventListener(
+        'abort',
+        () => {
+          const at = mine.waiters.indexOf(waiter);
+          if (at < 0) return;
+          mine.waiters.splice(at, 1);
+          if (!mine.waiters.length) mine.abort.abort(signal.reason);
+          reject(signal.reason);
+        },
+        { once: true },
+      );
+    });
+  }
+  async #writePin(
+    room: string,
+    key: string,
+    text: string | null,
+    sub: string,
+    signal: AbortSignal,
+  ) {
+    const pinPath = (id: string) => `${path(id)}/pins/${encodeURIComponent(key)}`;
     if (text === null) {
       const query = sub ? `?sub=${encodeURIComponent(sub)}` : '';
-      const done = await this.#request<{ cleared: boolean }>(pinPath(view.id) + query, undefined, {
+      const done = await this.#request<{ cleared: boolean }>(pinPath(room) + query, undefined, {
         method: 'DELETE',
         signal,
       });
       return done.cleared;
     }
     const id = crypto.randomUUID();
+    const view = await this.open(room);
     for (let attempt = 0; ; attempt++) {
       const fresh = attempt ? await this.open(view.id) : view;
       const keys = await this.#keys(attempt ? 'force' : false);
@@ -735,8 +890,8 @@ export class ChatClient {
     }
   }
   /** The room's pins this client can open, oldest first. */
-  async pins(room: string): Promise<ChatPin[]> {
-    const view = await this.open(room);
+  async pins(room: string, options: ChatRoomOptions = {}): Promise<ChatPin[]> {
+    const view = await this.#dm(room, options.sub);
     const { pins } = await this.#request<{ pins: e2ee.ChatPinRecord[] }>(`${path(view.id)}/pins`);
     const opened = await Promise.all(
       pins.map((record) => this.#pin(view.id, record).catch(() => undefined)),
@@ -762,12 +917,13 @@ export class ChatClient {
    * Marks the room read up to `seq`; `sub`, an agent of this connection people can reach, also
    * moves that agent's own mark, which members see as its read receipt.
    */
-  markRead(
+  async markRead(
     room: string,
     seq: number,
-    options: { sub?: string } = {},
+    options: ChatRoomOptions = {},
   ): Promise<{ readSeq: number; agentReadSeq?: number }> {
-    return this.#request(`${path(room)}/read`, { seq, ...defined({ sub: options.sub }) });
+    const id = ROOM_ID.test(room) ? room : (await this.#dm(room, options.sub)).id;
+    return this.#request(`${path(id)}/read`, { seq, ...defined({ sub: options.sub }) });
   }
   /** Signs the next head of a group, named by its room id; an agent owner may add or remove agents only. */
   async updateGroup(
@@ -1046,7 +1202,8 @@ export class ChatClient {
    * Runs `handler` once per coalesced wake under a lease, replaying pending wakes on connect; each
    * room keeps one wake per subagent. A handler that throws is not acknowledged, so its wake fires
    * again when the lease lapses. `onStop` gets stop requests, `onRoom` archive, restore, delete and status
-   * changes, and `onPin` pins set or cleared, as they arrive; none is replayed.
+   * changes, `onPin` pins set or cleared, and `onForm` a form answered, expired or closed, as they
+   * arrive; none is replayed.
    */
   wakes(
     handler: (wake: ChatWake) => void | Promise<void>,
@@ -1058,6 +1215,7 @@ export class ChatClient {
       onStop?: (stop: ChatStop) => void | Promise<void>;
       onRoom?: (event: ChatRoomEvent) => void | Promise<void>;
       onPin?: (event: ChatPinEvent) => void | Promise<void>;
+      onForm?: (event: ChatFormEvent) => void | Promise<void>;
     } = {},
   ): Promise<void> {
     const { signal } = options;
@@ -1131,6 +1289,27 @@ export class ChatClient {
             }
           });
           statuses.set(room, next);
+        } else if (frame.type === 'form' && options.onForm) {
+          const { seq, state } = frame;
+          if (
+            typeof seq !== 'number' ||
+            !Number.isSafeInteger(seq) ||
+            !state ||
+            typeof state !== 'object'
+          )
+            return;
+          const chain = `${room} form`;
+          const next = (statuses.get(chain) ?? Promise.resolve()).then(async () => {
+            try {
+              const wire = state as e2ee.FormState;
+              if (typeof wire.status !== 'string') return;
+              const event = await this.#formState(room, seq, wire, wire.by ?? '');
+              await options.onForm?.({ ...event, room, seq });
+            } catch (error) {
+              options.onError?.(error, room);
+            }
+          });
+          statuses.set(chain, next);
         } else if (frame.type === 'pin' && options.onPin) {
           const { sender, sub, key, pin: record } = frame;
           if (typeof sender !== 'string' || typeof sub !== 'string' || typeof key !== 'string')
