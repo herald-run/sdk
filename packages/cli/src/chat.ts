@@ -15,6 +15,7 @@ export type ChatValues = {
   summary?: string;
   /** `ROOM:SEQ`, a message of another room to show. */
   forward?: string;
+  reason?: string;
   title?: string;
   hopLimit?: number;
   for?: string;
@@ -33,7 +34,7 @@ type Io = {
 };
 const ROOM_ID = /^[\w-]{43}$/;
 const USAGE =
-  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|group|title [ROOM] [SEQ] [TEXT]';
+  'Usage: herald chat list|read|send|wait|listen|react|edit|delete|ask|answer|close|group|title|pin|pins [ROOM] [SEQ] [TEXT]';
 /** `ROOM:SEQ` as a forward, with the id of the message read there. */
 async function forwardOf(client: Pick<Herald, 'chat'>, value?: string) {
   if (value === undefined) return undefined;
@@ -183,6 +184,28 @@ export async function chat(
       print(made.id, made);
       return 0;
     }
+    case 'pin': {
+      const key = need(rest[0], 'KEY');
+      if (values.remove) {
+        const cleared = await client.chat.unpin(need(room, 'ROOM'), key, { sub: values.as });
+        print(cleared ? 'Cleared.' : 'No such pin.', { cleared });
+        return 0;
+      }
+      await client.chat.pin(need(room, 'ROOM'), key, await body(rest[1], 'TEXT'), {
+        sub: values.as,
+      });
+      print('Pinned.', { pinned: true });
+      return 0;
+    }
+    case 'pins': {
+      const pins = await client.chat.pins(need(room, 'ROOM'), { sub: values.as });
+      const shown = pins.map(
+        (p) =>
+          `${clean(p.key)}  ${clean(p.sub ? `${p.sender}/${p.sub}` : p.sender)}\n${clean(p.text)}`,
+      );
+      print(shown.join('\n\n') || 'No pins.', { pins });
+      return 0;
+    }
     case 'title':
       return done(
         await client.chat.title(need(room, 'ROOM'), need(rest[0], 'TEXT'), { sub: values.as }),
@@ -203,6 +226,14 @@ export async function chat(
     case 'delete': {
       await client.chat.delete(need(room, 'ROOM'), seqAt(0), { sub: values.as });
       print('Deleted.', { deleted: true });
+      return 0;
+    }
+    case 'close': {
+      const state = await client.chat.close(need(room, 'ROOM'), seqAt(0), {
+        reason: values.reason,
+        sub: values.as,
+      });
+      print(state.reason ? `Closed: ${clean(state.reason)}` : 'Closed.', state);
       return 0;
     }
     case 'ask': {

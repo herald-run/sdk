@@ -488,6 +488,30 @@ export function createServer(client: () => Promise<Herald>) {
       json(await herald.chat.edit(input.room, input.seq, input.text, { sub: input.as })),
   );
   tool(
+    'chat_pin',
+    'Pin markdown under key (1 to 64 of A-Z a-z 0-9 _ . -), replacing the pin there, or clear it. A pin stays below the messages; it sends no message, counts as nothing unread and wakes nobody. Each sender holds up to 4, a connection 6 across its agents.',
+    {
+      room: chatTarget,
+      key: z.string().regex(/^[\w.-]{1,64}$/),
+      text: z.string().min(1).max(16_000).optional(),
+      clear: z.boolean().optional(),
+      as: acting,
+    },
+    async (input, herald) => {
+      if (input.clear)
+        return json({ cleared: await herald.chat.unpin(input.room, input.key, { sub: input.as }) });
+      if (!input.text) throw new Error('Pass text, or clear.');
+      await herald.chat.pin(input.room, input.key, input.text, { sub: input.as });
+      return json({ pinned: true });
+    },
+  );
+  tool(
+    'chat_pins',
+    'List the pinned messages of a chat, oldest first.',
+    { room: chatTarget, as: acting },
+    async (input, herald) => json({ pins: await herald.chat.pins(input.room, { sub: input.as }) }),
+  );
+  tool(
     'chat_delete',
     'Delete a chat message this connection sent, leaving a tombstone.',
     { room: chatTarget, seq, as: acting },
@@ -495,6 +519,18 @@ export function createServer(client: () => Promise<Herald>) {
       await herald.chat.delete(input.room, input.seq, { sub: input.as });
       return json({ deleted: true });
     },
+  );
+  tool(
+    'chat_close_form',
+    'Close a form this connection posted (by any of its agents) and nobody has answered: it can no longer be answered or expire, and the room sees it closed with the reason. Closing a closed form changes nothing.',
+    {
+      room: chatTarget,
+      seq,
+      reason: z.string().max(120).optional().describe('Why it was closed, sealed to the room'),
+      as: acting,
+    },
+    async (input, herald) =>
+      json(await herald.chat.close(input.room, input.seq, { reason: input.reason, sub: input.as })),
   );
   tool(
     'chat_ask',

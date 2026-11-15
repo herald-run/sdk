@@ -146,3 +146,32 @@ it('passes --as to delete and --for to wait', async () => {
   await chat(c, ['wait', 'owner'], { ...base, for: 'lead', after: 3 }, io());
   expect(wait).toHaveBeenCalledWith('owner', expect.objectContaining({ for: 'lead', after: 3 }));
 });
+it('closes a form with a reason as an agent', async () => {
+  const close = vi.fn(async () => ({ status: 'closed' as const, by: 'a:one', reason: 'moved on' }));
+  const lines: string[] = [];
+  const c = fake({ close });
+  const out = { ...io(), out: (l: string) => void lines.push(l) };
+  await chat(c, ['close', 'owner', '4'], { ...base, as: 'lead', reason: 'moved on' }, out);
+  expect(close).toHaveBeenCalledWith('owner', 4, { reason: 'moved on', sub: 'lead' });
+  expect(lines[0]).toBe('Closed: moved on');
+  await expect(chat(c, ['close', 'owner'], base, io())).rejects.toThrow(/SEQ/);
+});
+it('pins, clears and lists pins as an agent', async () => {
+  const pin = vi.fn(async () => {});
+  const unpin = vi.fn(async () => true);
+  const pins = vi.fn(async () => [
+    { key: 'todo', sender: 'a:one', sub: 'lead', text: '- [ ] ship', at: 1, pinnedAt: 1 },
+  ]);
+  const lines: string[] = [];
+  const c = fake({ pin, unpin, pins });
+  await chat(c, ['pin', 'room', 'todo', '- [ ] ship'], { ...base, as: 'lead' }, io());
+  expect(pin).toHaveBeenCalledWith('room', 'todo', '- [ ] ship', { sub: 'lead' });
+  await chat(c, ['pin', 'room', 'todo'], { ...base, as: 'lead', remove: true }, io());
+  expect(unpin).toHaveBeenCalledWith('room', 'todo', { sub: 'lead' });
+  await chat(c, ['pins', 'room'], base, { ...io(), out: (l: string) => void lines.push(l) });
+  expect(lines[0]).toBe('todo  a:one/lead\n- [ ] ship');
+  expect(pins).toHaveBeenLastCalledWith('room', { sub: undefined });
+  await chat(c, ['pins', 'owner'], { ...base, as: 'lead' }, io());
+  expect(pins).toHaveBeenLastCalledWith('owner', { sub: 'lead' });
+  await expect(chat(c, ['pin', 'room'], base, io())).rejects.toThrow(/KEY/);
+});

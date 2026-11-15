@@ -94,11 +94,14 @@ it('lists every tool with a description', async () => {
       'cancel',
       'chat_answer',
       'chat_ask',
+      'chat_close_form',
       'chat_delete',
       'chat_download',
       'chat_edit',
       'chat_group',
       'chat_list',
+      'chat_pin',
+      'chat_pins',
       'chat_react',
       'chat_read',
       'chat_send',
@@ -359,12 +362,16 @@ it('chat_delete takes as, chat_wait and chat_read take for, and an owner target 
   const props = (name: string) =>
     Object.keys(tools.find((t) => t.name === name)!.inputSchema.properties!);
   expect(props('chat_delete')).toContain('as');
+  expect(props('chat_close_form')).toEqual(['room', 'seq', 'reason', 'as']);
+  expect(props('chat_pins')).toContain('as');
   expect(props('chat_wait')).toContain('for');
   expect(props('chat_read')).toContain('for');
   for (const [name, args] of [
     ['chat_wait', { room: 'owner', wait: '1s' }],
     ['chat_wait', { room: 'owner', after: 0, wait: '1s' }],
     ['chat_delete', { room: 'owner', seq: 1 }],
+    ['chat_close_form', { room: 'owner', seq: 1 }],
+    ['chat_pins', { room: 'owner' }],
     ['chat_answer', { room: 'owner', seq: 1, answers: {} }],
   ] as const) {
     const refused = await call(name, args);
