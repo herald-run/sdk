@@ -10,7 +10,8 @@ import type {
 } from './e2ee/index.js';
 import * as e2ee from './e2ee/index.js';
 import { z } from 'zod';
-import { messageInputSchema } from './schema/index.js';
+import { chatFileLimits, fileTypeOf, limits, messageInputSchema } from './schema/index.js';
+import { shrinkImage, type ChatFile } from './images.js';
 import { HeraldError, readError, sleep } from './http.js';
 import type { KeyedSession } from './keyed.js';
 import { backoff, KEEPALIVE, type EventSocket } from './socket.js';
@@ -132,6 +133,12 @@ export type ChatSendOptions = {
   signal?: AbortSignal;
   mentions?: string[];
   attachments?: ChatAttachment[];
+  /**
+   * Files to encrypt, upload and attach: local paths (Node) or `{ name, data, type? }`, the type
+   * from the name when absent. With `attachments`, at most `chatFileLimits.count` (10). Images
+   * are shrunk first when the optional `sharp` package is installed (see `shrinkImage`).
+   */
+  files?: (string | ChatFileInput)[];
   /** A quoted snapshot of an Inbox request, sealed with the message. */
   reference?: Record<string, unknown>;
   /** Shows a message of another room (`room` id, `seq`); only its address is sealed. */
@@ -147,6 +154,7 @@ export type ChatSendOptions = {
    */
   names?: Record<string, string>;
 };
+export type ChatFileInput = { name: string; data: Uint8Array; type?: string };
 const validName = (name: unknown): name is string =>
   typeof name === 'string' && !!name.trim() && name.length <= 60;
 /** The `names` entries for `keys` that are well formed. */
@@ -1013,8 +1021,14 @@ export class ChatClient {
   }
   async #post(target: string, text: string, options: ChatSendOptions, extra: Posted = {}) {
     const id = options.id ?? crypto.randomUUID();
-    const { audience, sub, replyTo, mentions, attachments, reference, signal, tags, summary } =
-      options;
+    const { audience, sub, replyTo, mentions, reference, signal, tags, summary } = options;
+    const files = await Promise.all((options.files ?? []).map(readFileInput));
+    const count = (options.attachments?.length ?? 0) + files.length;
+    if (count > chatFileLimits.count)
+      throw new HeraldError(`A message carries at most ${chatFileLimits.count} files.`, 400);
+    for (const file of files)
+      if (e2ee.sealedSize(file.data.byteLength) > limits.fileBytes)
+        throw new HeraldError(`${file.name} is over ${limits.fileBytes / 1e6} MB.`, 413);
     if (summary !== undefined && summary.length > 200)
       throw new HeraldError('A summary is at most 200 characters.', 400);
     const forward = options.forward && e2ee.chatForward(options.forward);
@@ -1025,13 +1039,21 @@ export class ChatClient {
       );
     const names = this.#sealedNames([sub, ...(tags ?? [])], options.names);
     const { kind, event, form, rules } = extra;
+    const uploaded = await Promise.all(
+      files.map(async (file) => {
+        const { name, data, type } = await shrinkImage(file);
+        return this.attach(target, name, data, type, { signal, sub });
+      }),
+    );
+    const attachments = [...(options.attachments ?? []), ...uploaded];
     for (let attempt = 0; ; attempt++) {
       const room = await this.#dm(target, sub);
       const keys = await this.#keys(attempt ? 'force' : false);
       const input = {
         id,
         text,
-        ...defined({ kind, audience, sub, mentions, attachments, reference, forward, event, form }),
+        ...defined({ kind, audience, sub, mentions, reference, forward, event, form }),
+        ...(attachments.length ? { attachments } : {}),
         ...defined({ summary }),
         ...(tags?.length ? { tags } : {}),
         ...defined({ names }),
@@ -1043,7 +1065,7 @@ export class ChatClient {
         ...defined({ audience, replyTo, kind, mentions }),
         ...(sub ? { sub } : {}),
         ...(tags?.length ? { tags } : {}),
-        ...(attachments?.length ? { attachments: attachments.map((a) => a.id) } : {}),
+        ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}),
         ...(event ? { event: { type: event.type, target: event.target } } : {}),
         ...(form ? { form: defined(rules ?? {}) } : {}),
       };
@@ -1562,4 +1584,11 @@ export class ChatClient {
       await sleep(backoff(Math.max(attempt, 0)), signal).catch(() => {});
     }
   }
+}
+/** A path is read in Node; its name is the base name. */
+async function readFileInput(file: string | ChatFileInput): Promise<ChatFile> {
+  if (typeof file !== 'string') return { ...file, type: file.type || fileTypeOf(file.name) };
+  const { readFile } = await import('node:fs/promises');
+  const name = file.split(/[\\/]/).pop() || file;
+  return { name, data: new Uint8Array(await readFile(file)), type: fileTypeOf(name) };
 }

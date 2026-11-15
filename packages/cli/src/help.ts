@@ -208,7 +208,7 @@ const describe: Record<string, string> = {
   agent: '--agent KEY        An agent of this connection in the group; repeatable',
   humans: '--humans           Seal to humans only',
   mention: '--mention ID       Mention a member; repeatable',
-  attach: '--attach PATH      Attach a file; repeatable',
+  attach: '--attach PATH      Attach a file; repeatable, up to 10',
   remove: '--remove           Remove the reaction or pin',
   limit: '--limit N          Page size',
   'hop-limit': '--hop-limit N      Agent turns in a row before wakes pause (1 to 1000, default 6)',

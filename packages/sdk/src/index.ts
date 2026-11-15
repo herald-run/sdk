@@ -63,6 +63,7 @@ export type {
   ThreadSummary,
 } from './schema/index.js';
 export { createKeys, seal, unseal } from './schema/crypto.js';
+export { chatFileLimits, chatImageLimits, fileTypeOf } from './schema/index.js';
 export { HeraldError, parseRetryAfter } from './http.js';
 export { agentDetailLimits, agentLinkError, E2eeError } from './e2ee/index.js';
 export type { FileAttachment, OpenedLog, WorkspaceInfo } from './keyed.js';
@@ -85,6 +86,7 @@ export type {
   SubagentReach,
 } from './agents.js';
 export { ChatClient } from './chat.js';
+export { shrinkImage, type ChatFile } from './images.js';
 export type {
   ChatFormRules,
   ChatForward,
@@ -103,6 +105,7 @@ export type {
   ChatReadOptions,
   ChatRoom,
   ChatSendOptions,
+  ChatFileInput,
   ChatWake,
   ChatRoomEvent,
   ChatRoomStatus,

@@ -44,6 +44,9 @@ stage(
     main: './index.js',
     types: './index.d.ts',
     sideEffects: false,
+    // Shrinks chat images when installed; see `shrinkImage`.
+    peerDependencies: { sharp: '>=0.33' },
+    peerDependenciesMeta: { sharp: { optional: true } },
   },
   files,
 );

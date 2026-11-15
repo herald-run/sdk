@@ -115,6 +115,41 @@ it('seals a send to exactly the room and the owner can open it', async () => {
   const payload = await e2ee.openChat(await ownerKeys(), room.id, record);
   expect(payload).toMatchObject({ kind: 'message', text: 'secret words', seen: 0 });
 });
+it('sends several files in one message and caps the count', async () => {
+  const room = await makeRoom();
+  let n = 0;
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/files`]: () => ({ id: 'f' + ++n }),
+    [`PUT /api/v1/chats/${room.id}/files/`]: () => new Response(null),
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+  });
+  const files = [1, 2, 3].map((i) => ({ name: `p${i}.png`, data: new Uint8Array([i]) }));
+  await client().send(room.id, 'album', { sub: 'plan', files });
+  const post = seen.find((s) => s.route === `POST /api/v1/chats/${room.id}/messages`)!;
+  expect(post.body!.attachments).toEqual(['f1', 'f2', 'f3']);
+  const record = { seq: 1, id: post.body!.id as string, sender: agent, sub: 'plan', at: 1 };
+  const payload = await e2ee.openChat(await ownerKeys(), room.id, {
+    ...record,
+    kind: 'message',
+    audience: 'all',
+    envelope: post.body!.envelope as e2ee.SealedEnvelope,
+  });
+  expect(payload.attachments?.map((a) => [a.name, a.type, a.size])).toEqual([
+    ['p1.png', 'image/png', 1],
+    ['p2.png', 'image/png', 1],
+    ['p3.png', 'image/png', 1],
+  ]);
+  const eleven = Array.from({ length: 11 }, (_, i) => ({
+    name: `${i}.jpg`,
+    data: new Uint8Array(1),
+  }));
+  await expect(client().send(room.id, 'x', { sub: 'plan', files: eleven })).rejects.toMatchObject({
+    status: 400,
+  });
+  expect(n).toBe(3);
+});
 it('refuses a room the server tampered with, before sealing', async () => {
   const room = await makeRoom();
   const third = { principal: 'a:other', type: 'agent' as const, kid: 'k'.repeat(22), readSeq: 0 };
