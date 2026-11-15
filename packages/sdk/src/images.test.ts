@@ -19,3 +19,14 @@ it('re-encodes through sharp to WebP within the edge', async () => {
   const gif = { ...file, name: 'a.gif', type: 'image/gif' };
   expect(await shrinkImage(gif, async () => () => pipe)).toBe(gif);
 });
+it('re-encodes small stills too, which drops their metadata', async () => {
+  const pipe = {
+    metadata: async () => ({ width: 100, height: 80 }),
+    rotate: () => pipe,
+    resize: () => pipe,
+    webp: () => pipe,
+    toBuffer: async () => new Uint8Array(20),
+  };
+  const out = await shrinkImage(file, async () => () => pipe);
+  expect(out).toMatchObject({ type: 'image/webp', data: new Uint8Array(20) });
+});

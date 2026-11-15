@@ -24,6 +24,8 @@ export const fileTypeOf = (name: string) =>
   types[/\.([^./]+)$/.exec(name)?.[1].toLowerCase() ?? ''] ?? 'application/octet-stream';
 /** Re-encodable stills; GIF and SVG pass through. */
 const stills = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/heic']);
+/** Stills whose re-encode always replaces the source: it is what drops the metadata. */
+const always = new Set(['image/jpeg', 'image/png', 'image/webp']);
 /** An animated PNG or WebP, from the file's first bytes (64 KB is enough). */
 export function isAnimated(head: Uint8Array) {
   const tag = (at: number) => String.fromCharCode(...head.subarray(at, at + 4));
@@ -40,19 +42,20 @@ export function isAnimated(head: Uint8Array) {
 }
 /**
  * The size to re-encode an image at, or undefined to send it as is: GIFs, SVGs and animations
- * pass, as do small images within `edge` (JPEGs are always re-encoded, which drops EXIF).
+ * pass. Every JPEG, PNG and WebP still is re-encoded whatever its size, which drops its EXIF
+ * and GPS; AVIF and HEIC only when over `edge` or `keepBytes`.
  */
 export function imagePlan(image: { type: string; size: number; width: number; height: number }) {
   if (!stills.has(image.type) || !(image.width > 0 && image.height > 0)) return undefined;
   const scale = Math.min(1, chatImageLimits.edge / Math.max(image.width, image.height));
-  if (scale === 1 && image.type !== 'image/jpeg' && image.size <= chatImageLimits.keepBytes)
+  if (scale === 1 && !always.has(image.type) && image.size <= chatImageLimits.keepBytes)
     return undefined;
   const width = Math.max(1, Math.round(image.width * scale));
   return { width, height: Math.max(1, Math.round(image.height * scale)), resized: scale < 1 };
 }
-/** Whether a re-encoded image replaces its source: not when it only grew (JPEGs always do). */
+/** Whether a re-encoded image replaces its source: always for JPEG, PNG and WebP, else when smaller. */
 export const encodedWins = (type: string, before: number, after: number, resized: boolean) =>
-  resized || type === 'image/jpeg' || after < before;
+  resized || always.has(type) || after < before;
 /** The file name for a new type: `photo.HEIC` as WebP is `photo.webp`. */
 export const nameForType = (name: string, type: string) =>
   name.replace(/(\.[^./]*)?$/, '.' + (type.split('/')[1] === 'jpeg' ? 'jpg' : type.split('/')[1]));

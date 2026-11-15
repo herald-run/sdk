@@ -1022,10 +1022,10 @@ export class ChatClient {
   async #post(target: string, text: string, options: ChatSendOptions, extra: Posted = {}) {
     const id = options.id ?? crypto.randomUUID();
     const { audience, sub, replyTo, mentions, reference, signal, tags, summary } = options;
-    const files = await Promise.all((options.files ?? []).map(readFileInput));
-    const count = (options.attachments?.length ?? 0) + files.length;
+    const count = (options.attachments?.length ?? 0) + (options.files?.length ?? 0);
     if (count > chatFileLimits.count)
       throw new HeraldError(`A message carries at most ${chatFileLimits.count} files.`, 400);
+    const files = await Promise.all((options.files ?? []).map(readFileInput));
     for (const file of files)
       if (e2ee.sealedSize(file.data.byteLength) > limits.fileBytes)
         throw new HeraldError(`${file.name} is over ${limits.fileBytes / 1e6} MB.`, 413);
@@ -1039,12 +1039,16 @@ export class ChatClient {
       );
     const names = this.#sealedNames([sub, ...(tags ?? [])], options.names);
     const { kind, event, form, rules } = extra;
-    const uploaded = await Promise.all(
-      files.map(async (file) => {
-        const { name, data, type } = await shrinkImage(file);
-        return this.attach(target, name, data, type, { signal, sub });
-      }),
-    );
+    // The room is opened once, so uploads never race to create a DM; they then go one at a time.
+    const home =
+      files.length && !ROOM_ID.test(target)
+        ? (await this.#dm(target, sub, 'sub', signal)).id
+        : target;
+    const uploaded: ChatAttachment[] = [];
+    for (const file of files) {
+      const { name, data, type } = await shrinkImage(file);
+      uploaded.push(await this.attach(home, name, data, type, { signal, sub }));
+    }
     const attachments = [...(options.attachments ?? []), ...uploaded];
     for (let attempt = 0; ; attempt++) {
       const room = await this.#dm(target, sub);

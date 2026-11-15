@@ -150,6 +150,27 @@ it('sends several files in one message and caps the count', async () => {
   });
   expect(n).toBe(3);
 });
+it('opens a DM once for a file send, and checks the count before reading files', async () => {
+  const room = await makeRoom();
+  let n = 0;
+  const seen = serve({
+    ...keysRoute,
+    [`GET /api/v1/chats/${room.id}`]: room,
+    [`POST /api/v1/chats/${room.id}/files`]: () => ({ id: 'f' + ++n }),
+    [`PUT /api/v1/chats/${room.id}/files/`]: () => new Response(null),
+    [`POST /api/v1/chats/${room.id}/messages`]: { seq: 1, id: 'x' },
+    'POST /api/v1/chats': room,
+  });
+  const files = [1, 2, 3].map((i) => ({ name: `p${i}.png`, data: new Uint8Array([i]) }));
+  await client().send('owner', 'album', { sub: 'plan', files });
+  // One to resolve the room before the uploads, one for the message.
+  expect(seen.filter((s) => s.route === 'POST /api/v1/chats')).toHaveLength(2);
+  expect(n).toBe(3);
+  const many = Array.from({ length: 11 }, () => '/no/such/file');
+  await expect(client().send(room.id, 'x', { sub: 'plan', files: many })).rejects.toMatchObject({
+    status: 400,
+  });
+});
 it('refuses a room the server tampered with, before sealing', async () => {
   const room = await makeRoom();
   const third = { principal: 'a:other', type: 'agent' as const, kid: 'k'.repeat(22), readSeq: 0 };
