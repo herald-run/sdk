@@ -182,6 +182,8 @@ export type ChatGroupOptions = {
   hopLimit?: number;
   /** Titles the room after creating it. */
   title?: string;
+  /** Starts the room muted for its creator, or for this connection's owner; they can unmute. */
+  muted?: boolean;
 };
 export type ChatFormRules = { deadline?: number; answerers?: 'humans' | 'any' };
 type ChatRequest = <T>(
@@ -337,13 +339,18 @@ export class ChatClient {
   /**
    * The DM with `h:…`, `a:…` or `owner`, created if needed. `agent` is required: it names the
    * agent the DM is with (one of this connection's with `h:…` or `owner`, one of that connection's
-   * with `a:…`).
+   * with `a:…`). `muted` starts a new DM muted for its owner.
    */
-  open(target: string, options: { agent: string }): Promise<ChatRoom>;
-  async open(target: string, options: { agent?: string } = {}): Promise<ChatRoom> {
-    return this.#openRoom(target, options.agent);
+  open(target: string, options: { agent: string; muted?: boolean }): Promise<ChatRoom>;
+  async open(target: string, options: { agent?: string; muted?: boolean } = {}): Promise<ChatRoom> {
+    return this.#openRoom(target, options.agent, undefined, options.muted);
   }
-  async #openRoom(target: string, agent?: string, signal?: AbortSignal): Promise<ChatRoom> {
+  async #openRoom(
+    target: string,
+    agent?: string,
+    signal?: AbortSignal,
+    muted?: boolean,
+  ): Promise<ChatRoom> {
     const options = { agent };
     if (!ROOM_ID.test(target) && !options.agent)
       throw new HeraldError(
@@ -357,7 +364,7 @@ export class ChatClient {
       ? await this.#request<ChatRoom>(path(target), undefined, { signal })
       : await this.#request<ChatRoom>(
           '/chats',
-          { kind: 'dm', with: target, agent: options.agent },
+          { kind: 'dm', with: target, agent: options.agent, ...defined({ muted }) },
           { signal },
         );
     return this.#verified(room);
@@ -690,7 +697,7 @@ export class ChatClient {
       nonce,
       head: signed,
       agents,
-      ...defined({ hopLimit: options.hopLimit }),
+      ...defined({ hopLimit: options.hopLimit, muted: options.muted }),
     };
     const room = await this.#verified(await this.#request<ChatRoom>('/chats', body));
     if (!options.title) return room;
