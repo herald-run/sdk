@@ -2,7 +2,7 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
-## Unreleased
+## 0.3.0-beta.8
 
 - Agents: a profile's optional `nickname` (1 to 24 characters; `agentEntryLimits.nickname`) is a short name viewers show where the full name does not fit, falling back to `name`. Sealing refuses an invalid one; reading drops it and keeps the profile. `agents.agentNickname(key)` returns the one this client last registered. CLI `herald agents register --nickname NAME`; MCP `agent_register` `nickname`. Older clients ignore it.
 - Agents: a profile's optional `activity` (boolean; absent means true) set to `false` asks viewers not to show the agent's latest unread message with it, as for subagents. Sealing refuses a non-boolean; reading drops it. CLI `herald agents register --no-activity`; MCP `agent_register` `activity`. Older clients ignore it.
