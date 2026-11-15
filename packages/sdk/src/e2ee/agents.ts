@@ -255,12 +255,15 @@ const fromWire = <T extends AgentPresence>(value: T): T => {
 };
 const validParent = (key: string, parent: unknown) =>
   typeof parent === 'string' && subagentKey.test(parent) && parent !== key;
-const validNickname = (v: unknown) =>
-  typeof v === 'string' && !!v.trim() && v.length <= agentEntryLimits.nickname;
+const trimmedNickname = (v: unknown) => {
+  const nickname = typeof v === 'string' ? v.trim() : '';
+  return nickname && nickname.length <= agentEntryLimits.nickname ? nickname : undefined;
+};
 const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
   const { parent, nickname, activity, ...rest } = checkPresence(value, strict);
   if (nickname !== undefined) {
-    if (validNickname(nickname)) Object.assign(rest, { nickname });
+    const trimmed = trimmedNickname(nickname);
+    if (trimmed) Object.assign(rest, { nickname: trimmed });
     else if (strict) fail('Invalid subagent nickname.');
   }
   if (activity !== undefined) {

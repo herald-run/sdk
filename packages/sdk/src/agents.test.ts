@@ -213,6 +213,8 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
   expect(seen.at(-1)!.route).toBe('DELETE /api/v1/agents/me/subagents/lead');
   expect(agents.agentName('lead')).toBe('Lead');
   expect(agents.agentNickname('lead')).toBe('Ld');
+  await agents.register('trim', { name: 'Trim', state: 'idle', nickname: ' Tm ' });
+  expect(agents.agentNickname('trim')).toBe('Tm');
   // Registered again, it rejoins its room.
   await agents.register('lead', { name: 'Lead', state: 'busy', ...entry });
   expect(seen.filter((s) => s.route.includes('/chats/'))).toHaveLength(2);
@@ -226,7 +228,7 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
   const bad = (presence: Partial<e2ee.AgentPresence>) =>
     agents.register('lead', { name: 'Lead', state: 'idle', ...presence });
   await expect(bad({ section: [] })).rejects.toThrow('section');
-  for (const nickname of [' ', 'x'.repeat(25)])
+  for (const nickname of [' ', 'x'.repeat(25), ' ' + 'x'.repeat(25)])
     await expect(
       agents.register('lead', { name: 'Lead', state: 'idle', nickname }),
     ).rejects.toThrow('Invalid subagent nickname.');
@@ -373,6 +375,7 @@ it('opens a subagent tolerantly: a bad or own-key parent shows it at the top lev
     return e2ee.openSubagent(owner, human, 'tests', env);
   };
   expect(await nick('Tee')).toMatchObject({ name: 'T', nickname: 'Tee' });
+  expect(await nick('  Tee  ')).toMatchObject({ nickname: 'Tee' });
   for (const nickname of ['', ' ', 7, 'x'.repeat(25)])
     expect(await nick(nickname)).not.toHaveProperty('nickname');
   const act = async (activity: unknown) => {

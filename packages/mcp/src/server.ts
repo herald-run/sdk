@@ -662,6 +662,7 @@ export function createServer(client: () => Promise<Herald>) {
       name: z.string().min(1).max(60),
       nickname: z
         .string()
+        .trim()
         .min(1)
         .max(24)
         .optional()

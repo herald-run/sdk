@@ -91,7 +91,7 @@ export class AgentsClient {
       { method: 'PUT' },
     );
     this.#names.set(key, profile.name);
-    if (profile.nickname) this.#nicknames.set(key, profile.nickname);
+    if (profile.nickname?.trim()) this.#nicknames.set(key, profile.nickname.trim());
     else this.#nicknames.delete(key);
     const room = typeof profile.chat === 'object' ? profile.chat.room : undefined;
     if (room && !this.#rooms.has(`${room}/${key}`)) {
