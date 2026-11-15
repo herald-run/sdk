@@ -2,6 +2,13 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
+## 0.3.0-beta.8
+
+- Chat: `send` takes `files` (paths or `{ name, data, type? }`, exported `ChatFileInput`) and encrypts, uploads and attaches them in one call, up to 10 per message with `attachments` (`chatFileLimits`); the type comes from the name when absent. With the optional peer `sharp` installed, still JPEG, PNG and WebP images are always re-encoded as WebP within 2048 px, which drops EXIF and GPS (`shrinkImage`, `chatImageLimits`); animated images, other types, images `sharp` cannot decode, and every image without `sharp` are sent as they are, metadata included. CLI `chat send --attach` and MCP `chat_send` `paths` use it, so attached images get their type and show as an album.
+- Agents: a profile's optional `nickname` (1 to 24 characters; `agentEntryLimits.nickname`) is a short name viewers show where the full name does not fit, falling back to `name`. Sealing refuses an invalid one; reading drops it and keeps the profile. `agents.agentNickname(key)` returns the one this client last registered. CLI `herald agents register --nickname NAME`; MCP `agent_register` `nickname`. Older clients ignore it.
+- Agents: a profile's optional `activity` (boolean; absent means true) set to `false` asks viewers not to show the agent's latest unread message with it, as for subagents. Sealing refuses a non-boolean; reading drops it. CLI `herald agents register --no-activity`; MCP `agent_register` `activity`. Older clients ignore it.
+- Chat: `chat.group(members, { muted: true })` and `chat.open(target, { agent, muted: true })` start a new room muted for its creator, or for a connection's owner (an existing room keeps its mute; they can unmute it). Servers before this release refuse the field.
+
 ## 0.3.0-beta.7
 
 - Chat: `ChatRoom.pinnedAt` and `muted` carry a person's own pin and mute of a room (a connection never has either: `null`/`false`). Informational; older clients ignore them.

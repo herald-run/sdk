@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { basename } from 'node:path';
 import type { ChatListing, ChatMessage, ChatWake, Herald } from '@herald-run/sdk';
 import { UsageError } from './compose';
 export type ChatValues = {
@@ -155,16 +154,11 @@ export async function chat(
       const text =
         forward && rest[0] === undefined && !values.bodyFile ? '' : await body(rest[0], 'TEXT');
       const target = await dm(to);
-      const attachments = [];
-      for (const file of values.attach ?? [])
-        attachments.push(
-          await client.chat.attach(target, basename(file), new Uint8Array(await readFile(file))),
-        );
       return done(
         await client.chat.send(target, text, {
           audience: values.humans ? 'humans' : undefined,
           mentions: values.mention,
-          attachments: attachments.length ? attachments : undefined,
+          files: values.attach,
           sub: values.as,
           tags: values.tag,
           summary: values.summary,

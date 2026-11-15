@@ -1,6 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { stat, unlink, writeFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -377,7 +376,11 @@ export function createServer(client: () => Promise<Herald>) {
       humansOnly: z.boolean().optional().describe('Seal to humans only'),
       replyTo: z.number().int().positive().optional(),
       mentions: z.array(z.string().min(1)).optional().describe('Principals to tag'),
-      paths: z.array(z.string().min(1)).optional().describe('Local files to attach'),
+      paths: z
+        .array(z.string().min(1))
+        .max(10)
+        .optional()
+        .describe('Local files to attach, up to 10; images show as an album'),
       ...posting,
       tags: z.array(z.string().min(1)).optional().describe('Subagent keys to address'),
       forward: z
@@ -390,17 +393,12 @@ export function createServer(client: () => Promise<Herald>) {
     async ({ as, ...input }, herald) => {
       if (!input.text && !input.forward) throw new Error('Pass text, forward or both.');
       const target = await dm(input.to, as, input.paths?.length, herald);
-      const attachments = [];
-      for (const file of input.paths ?? [])
-        attachments.push(
-          await herald.chat.attach(target, basename(file), new Uint8Array(await readFile(file))),
-        );
       return json(
         await herald.chat.send(target, input.text ?? '', {
           audience: input.humansOnly ? 'humans' : undefined,
           replyTo: input.replyTo,
           mentions: input.mentions,
-          attachments: attachments.length ? attachments : undefined,
+          files: input.paths,
           sub: as,
           tags: input.tags,
           summary: input.summary,
@@ -660,6 +658,17 @@ export function createServer(client: () => Promise<Herald>) {
     {
       key: subagentKey,
       name: z.string().min(1).max(60),
+      nickname: z
+        .string()
+        .trim()
+        .min(1)
+        .max(24)
+        .optional()
+        .describe('A short name shown where the full name does not fit'),
+      activity: z
+        .boolean()
+        .optional()
+        .describe('false: viewers show no latest unread message with it'),
       parent: subagentKey.optional().describe('The agent key that started this one'),
       chat: z.boolean().optional().describe('People can DM it and add it to groups'),
       section: z
