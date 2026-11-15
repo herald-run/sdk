@@ -135,6 +135,7 @@ export const commands: Record<string, Spec> = {
     summary: 'Register the agents of this connection',
     options: [
       'nickname',
+      'no-activity',
       'chat',
       'parent',
       'section',
@@ -202,6 +203,7 @@ const describe: Record<string, string> = {
   message: '--message ID       Message with the attachment (decrypts it)',
   chat: '--chat             People can DM it and add it to groups',
   nickname: '--nickname NAME    A short name for tight spaces (24)',
+  'no-activity': '--no-activity      Show no latest unread message with it',
   section: '--section A/B      Group it under these section names',
   agent: '--agent KEY        An agent of this connection in the group; repeatable',
   humans: '--humans           Seal to humans only',

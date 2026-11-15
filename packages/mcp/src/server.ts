@@ -666,6 +666,10 @@ export function createServer(client: () => Promise<Herald>) {
         .max(24)
         .optional()
         .describe('A short name shown where the full name does not fit'),
+      activity: z
+        .boolean()
+        .optional()
+        .describe('false: viewers show no latest unread message with it'),
       parent: subagentKey.optional().describe('The agent key that started this one'),
       chat: z.boolean().optional().describe('People can DM it and add it to groups'),
       section: z

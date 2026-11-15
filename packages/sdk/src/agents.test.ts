@@ -194,6 +194,7 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
     stoppable: true,
     about: 'Leads one task.',
     nickname: 'Ld',
+    activity: false,
   };
   await agents.register('lead', { name: 'Lead', state: 'busy', ...entry }, { reach: 'all' });
   const put = seen.find((s) => s.route === 'PUT /api/v1/agents/me/subagents/lead')!;
@@ -229,6 +230,9 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
     await expect(
       agents.register('lead', { name: 'Lead', state: 'idle', nickname }),
     ).rejects.toThrow('Invalid subagent nickname.');
+  await expect(
+    agents.register('lead', { name: 'Lead', state: 'idle', activity: 'no' as never }),
+  ).rejects.toThrow('Invalid subagent activity.');
   await expect(bad({ section: [' '] })).rejects.toThrow('section');
   await expect(bad({ section: ['x'.repeat(61)] })).rejects.toThrow('section');
   await expect(bad({ section: ['a', 'b', 'c', 'd', 'e'] })).rejects.toThrow('section');
@@ -371,6 +375,12 @@ it('opens a subagent tolerantly: a bad or own-key parent shows it at the top lev
   expect(await nick('Tee')).toMatchObject({ name: 'T', nickname: 'Tee' });
   for (const nickname of ['', ' ', 7, 'x'.repeat(25)])
     expect(await nick(nickname)).not.toHaveProperty('nickname');
+  const act = async (activity: unknown) => {
+    const { owner, env } = await raw('subagent', { state: 'idle', name: 'T', activity });
+    return e2ee.openSubagent(owner, human, 'tests', env);
+  };
+  expect(await act(false)).toMatchObject({ activity: false });
+  expect(await act('no')).not.toHaveProperty('activity');
   const { owner, env } = await raw('subagent', { state: 'idle', name: '' });
   await expect(e2ee.openSubagent(owner, human, 'tests', env)).rejects.toThrow('name');
 });

@@ -53,6 +53,8 @@ export interface SubagentProfile extends AgentPresence {
   name: string;
   /** A short name, 1 to 24 characters, shown where the full name does not fit. */
   nickname?: string;
+  /** Whether viewers show its latest unread message with it; absent means true. */
+  activity?: boolean;
   /**
    * Another agent key of the same connection that started this one, so viewers can show a
    * tree. A missing or circular parent shows the agent at the top level of its section.
@@ -143,7 +145,7 @@ export const agentLinkError = (link: unknown): string | undefined => {
   }
   return message;
 };
-/** Sealing refuses what opening drops: a bad `task`, `links`, `details`, `parent` or `nickname` never costs the profile. */
+/** Sealing refuses what opening drops: a bad `task`, `links`, `details`, `parent`, `nickname` or `activity` never costs the profile. */
 const detailText = (v: unknown, max: number) =>
   typeof v === 'string' && v.trim().length >= 1 && v.trim().length <= max ? v.trim() : undefined;
 const cleanDetail = (detail: unknown): AgentDetail | undefined => {
@@ -256,10 +258,14 @@ const validParent = (key: string, parent: unknown) =>
 const validNickname = (v: unknown) =>
   typeof v === 'string' && !!v.trim() && v.length <= agentEntryLimits.nickname;
 const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
-  const { parent, nickname, ...rest } = checkPresence(value, strict);
+  const { parent, nickname, activity, ...rest } = checkPresence(value, strict);
   if (nickname !== undefined) {
     if (validNickname(nickname)) Object.assign(rest, { nickname });
     else if (strict) fail('Invalid subagent nickname.');
+  }
+  if (activity !== undefined) {
+    if (typeof activity === 'boolean') Object.assign(rest, { activity });
+    else if (strict) fail('Invalid subagent activity.');
   }
   if (parent === undefined) return rest as SubagentProfile;
   if (validParent(key, parent)) return { ...rest, parent } as SubagentProfile;

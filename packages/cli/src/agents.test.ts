@@ -98,7 +98,7 @@ it('registers, lists and unregisters agents', async () => {
   await agents(
     client,
     ['register', 'lead', 'Lead'],
-    { chat: true, parent: 'boss', section: 'Team/Dev', nickname: 'L', ttl: 60 },
+    { chat: true, parent: 'boss', section: 'Team/Dev', nickname: 'L', activity: false, ttl: 60 },
     out,
   );
   expect(register).toHaveBeenCalledWith(
@@ -107,6 +107,7 @@ it('registers, lists and unregisters agents', async () => {
       state: 'idle',
       name: 'Lead',
       nickname: 'L',
+      activity: false,
       parent: 'boss',
       chat: 'dm',
       section: ['Team', 'Dev'],

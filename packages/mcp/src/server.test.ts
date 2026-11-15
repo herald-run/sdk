@@ -318,6 +318,7 @@ it('registers, lists and unregisters agents', async () => {
     key: 'lead',
     name: 'Lead',
     nickname: 'L',
+    activity: false,
     state: 'idle',
     chat: true,
     section: ['Team'],
@@ -329,6 +330,7 @@ it('registers, lists and unregisters agents', async () => {
   expect(await sealed.openForOwner(body.envelope, ctx)).toMatchObject({
     name: 'Lead',
     nickname: 'L',
+    activity: false,
     chat: 'dm',
     section: ['Team'],
   });
