@@ -41,6 +41,7 @@ export class AgentsClient {
   #keyed: () => KeyedSession;
   #last?: { presence: AgentPresence; at: number; ttl: number };
   #names = new Map<string, string>();
+  #nicknames = new Map<string, string>();
   #rooms = new Set<string>();
   constructor(request: AgentsRequest, keyed: () => KeyedSession) {
     this.#request = request;
@@ -90,6 +91,8 @@ export class AgentsClient {
       { method: 'PUT' },
     );
     this.#names.set(key, profile.name);
+    if (profile.nickname) this.#nicknames.set(key, profile.nickname);
+    else this.#nicknames.delete(key);
     const room = typeof profile.chat === 'object' ? profile.chat.room : undefined;
     if (room && !this.#rooms.has(`${room}/${key}`)) {
       await this.#request(
@@ -130,6 +133,10 @@ export class AgentsClient {
    */
   agentName(key: string): string | undefined {
     return this.#names.get(key);
+  }
+  /** The nickname this client last registered for an agent key, kept like `agentName`. */
+  agentNickname(key: string): string | undefined {
+    return this.#nicknames.get(key);
   }
   /** @deprecated Use `register`. */
   setSubagent(key: string, profile: SubagentProfile, options: SubagentOptions = {}) {

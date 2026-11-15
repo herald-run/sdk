@@ -103,6 +103,7 @@ const options = {
   status: { type: 'string' },
   direction: { type: 'string' },
   name: { type: 'string' },
+  nickname: { type: 'string' },
   scopes: { type: 'string' },
   'no-browser': { type: 'boolean' },
   'safety-code': { type: 'string' },
@@ -569,6 +570,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
           parent: values.parent,
           chat: values.chat,
           section: values.section,
+          nickname: values.nickname,
         };
         return await { presence, agents, subagents }[command](
           client,

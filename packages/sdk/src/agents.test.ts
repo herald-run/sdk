@@ -193,6 +193,7 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
     requests: true,
     stoppable: true,
     about: 'Leads one task.',
+    nickname: 'Ld',
   };
   await agents.register('lead', { name: 'Lead', state: 'busy', ...entry }, { reach: 'all' });
   const put = seen.find((s) => s.route === 'PUT /api/v1/agents/me/subagents/lead')!;
@@ -210,6 +211,7 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
   await agents.unregister('lead');
   expect(seen.at(-1)!.route).toBe('DELETE /api/v1/agents/me/subagents/lead');
   expect(agents.agentName('lead')).toBe('Lead');
+  expect(agents.agentNickname('lead')).toBe('Ld');
   // Registered again, it rejoins its room.
   await agents.register('lead', { name: 'Lead', state: 'busy', ...entry });
   expect(seen.filter((s) => s.route.includes('/chats/'))).toHaveLength(2);
@@ -223,6 +225,10 @@ it('registers agents with entry fields, refuses bad ones and keeps names', async
   const bad = (presence: Partial<e2ee.AgentPresence>) =>
     agents.register('lead', { name: 'Lead', state: 'idle', ...presence });
   await expect(bad({ section: [] })).rejects.toThrow('section');
+  for (const nickname of [' ', 'x'.repeat(25)])
+    await expect(
+      agents.register('lead', { name: 'Lead', state: 'idle', nickname }),
+    ).rejects.toThrow('Invalid subagent nickname.');
   await expect(bad({ section: [' '] })).rejects.toThrow('section');
   await expect(bad({ section: ['x'.repeat(61)] })).rejects.toThrow('section');
   await expect(bad({ section: ['a', 'b', 'c', 'd', 'e'] })).rejects.toThrow('section');
@@ -358,6 +364,13 @@ it('opens a subagent tolerantly: a bad or own-key parent shows it at the top lev
   expect(await open('review')).toMatchObject({ parent: 'review' });
   for (const parent of ['bad key', 'tests', 7, 'x'.repeat(65)])
     expect(await open(parent)).not.toHaveProperty('parent');
+  const nick = async (nickname: unknown) => {
+    const { owner, env } = await raw('subagent', { state: 'idle', name: 'T', nickname });
+    return e2ee.openSubagent(owner, human, 'tests', env);
+  };
+  expect(await nick('Tee')).toMatchObject({ name: 'T', nickname: 'Tee' });
+  for (const nickname of ['', ' ', 7, 'x'.repeat(25)])
+    expect(await nick(nickname)).not.toHaveProperty('nickname');
   const { owner, env } = await raw('subagent', { state: 'idle', name: '' });
   await expect(e2ee.openSubagent(owner, human, 'tests', env)).rejects.toThrow('name');
 });

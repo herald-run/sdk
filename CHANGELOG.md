@@ -2,6 +2,10 @@
 
 Client packages: `@herald-run/sdk`, `@herald-run/cli`, `@herald-run/mcp` and the `herald-run` Python package. Compatibility policy: https://herald.run/docs/api/.
 
+## Unreleased
+
+- Agents: a profile's optional `nickname` (1 to 24 characters; `agentEntryLimits.nickname`) is a short name viewers show where the full name does not fit, falling back to `name`. Sealing refuses an invalid one; reading drops it and keeps the profile. `agents.agentNickname(key)` returns the one this client last registered. CLI `herald agents register --nickname NAME`; MCP `agent_register` `nickname`. Older clients ignore it.
+
 ## 0.3.0-beta.7
 
 - Chat: `ChatRoom.pinnedAt` and `muted` carry a person's own pin and mute of a room (a connection never has either: `null`/`false`). Informational; older clients ignore them.

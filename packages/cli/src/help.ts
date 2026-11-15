@@ -133,7 +133,18 @@ export const commands: Record<string, Spec> = {
   agents: {
     args: 'list|register|unregister [KEY] [NAME]',
     summary: 'Register the agents of this connection',
-    options: ['chat', 'parent', 'section', 'state', 'color', 'task', 'link', 'ttl', 'reach'],
+    options: [
+      'nickname',
+      'chat',
+      'parent',
+      'section',
+      'state',
+      'color',
+      'task',
+      'link',
+      'ttl',
+      'reach',
+    ],
     detail:
       'A connection chats only through its registered agents. register adds or updates KEY with a display NAME; --chat lets people DM it and add it to groups.',
   },
@@ -190,6 +201,7 @@ const describe: Record<string, string> = {
   label: '--label TEXT',
   message: '--message ID       Message with the attachment (decrypts it)',
   chat: '--chat             People can DM it and add it to groups',
+  nickname: '--nickname NAME    A short name for tight spaces (24)',
   section: '--section A/B      Group it under these section names',
   agent: '--agent KEY        An agent of this connection in the group; repeatable',
   humans: '--humans           Seal to humans only',

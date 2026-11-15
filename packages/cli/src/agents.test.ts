@@ -98,12 +98,19 @@ it('registers, lists and unregisters agents', async () => {
   await agents(
     client,
     ['register', 'lead', 'Lead'],
-    { chat: true, parent: 'boss', section: 'Team/Dev', ttl: 60 },
+    { chat: true, parent: 'boss', section: 'Team/Dev', nickname: 'L', ttl: 60 },
     out,
   );
   expect(register).toHaveBeenCalledWith(
     'lead',
-    { state: 'idle', name: 'Lead', parent: 'boss', chat: 'dm', section: ['Team', 'Dev'] },
+    {
+      state: 'idle',
+      name: 'Lead',
+      nickname: 'L',
+      parent: 'boss',
+      chat: 'dm',
+      section: ['Team', 'Dev'],
+    },
     { ttl: 60, reach: undefined },
   );
   expect(out.out).toHaveBeenLastCalledWith('lead  Lead');

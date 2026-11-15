@@ -12,6 +12,7 @@ export type AgentValues = {
   parent?: string;
   chat?: boolean;
   section?: string;
+  nickname?: string;
 };
 type Io = { out: (line: string) => void };
 const STATES: PresenceState[] = ['idle', 'working', 'busy', 'blocked', 'error', 'offline'];
@@ -71,12 +72,13 @@ export async function agents(
   } else if (action === 'register') {
     if (!key || !name)
       throw new UsageError(
-        'Usage: herald agents register KEY NAME [--chat] [--parent KEY] [--section A/B] [--ttl S]',
+        'Usage: herald agents register KEY NAME [--nickname NAME] [--chat] [--parent KEY] [--section A/B] [--ttl S]',
       );
     const section = values.section?.split('/').map((s) => s.trim());
     const profile = {
       ...shape(values.state ? state(values.state) : 'idle', undefined, values),
       name,
+      ...(values.nickname && { nickname: values.nickname }),
       ...(values.parent && { parent: values.parent }),
       ...(values.chat && { chat: 'dm' as const }),
       ...(section && { section }),

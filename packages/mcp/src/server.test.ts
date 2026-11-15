@@ -317,6 +317,7 @@ it('registers, lists and unregisters agents', async () => {
   await call('agent_register', {
     key: 'lead',
     name: 'Lead',
+    nickname: 'L',
     state: 'idle',
     chat: true,
     section: ['Team'],
@@ -327,6 +328,7 @@ it('registers, lists and unregisters agents', async () => {
   const body = JSON.parse(put.body);
   expect(await sealed.openForOwner(body.envelope, ctx)).toMatchObject({
     name: 'Lead',
+    nickname: 'L',
     chat: 'dm',
     section: ['Team'],
   });

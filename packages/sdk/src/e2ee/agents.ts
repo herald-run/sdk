@@ -51,6 +51,8 @@ export type AgentChat = 'dm' | { room: string };
 /** An agent a connection registers: a name it asserts for itself, with optional presence. */
 export interface SubagentProfile extends AgentPresence {
   name: string;
+  /** A short name, 1 to 24 characters, shown where the full name does not fit. */
+  nickname?: string;
   /**
    * Another agent key of the same connection that started this one, so viewers can show a
    * tree. A missing or circular parent shows the agent at the top level of its section.
@@ -62,7 +64,7 @@ export type AgentProfile = SubagentProfile;
 /** An agent key: 1 to 64 letters, digits, `.`, `_` or `-`. */
 export const subagentKey = /^[\w.-]{1,64}$/;
 export const agentLinkLimits = { links: 8, label: 60, url: 2048, task: 200 } as const;
-export const agentEntryLimits = { section: 60, sectionDepth: 4, about: 500 } as const;
+export const agentEntryLimits = { section: 60, sectionDepth: 4, about: 500, nickname: 24 } as const;
 export const agentDetailLimits = { entries: 12, label: 40, value: 200 } as const;
 /** At most `colors` stored hues, keyed by ids of up to `id` characters. */
 export const agentLayoutLimits = { colors: 512, id: 200 } as const;
@@ -141,7 +143,7 @@ export const agentLinkError = (link: unknown): string | undefined => {
   }
   return message;
 };
-/** Sealing refuses what opening drops: a bad `task`, `links`, `details` or `parent` never costs the profile. */
+/** Sealing refuses what opening drops: a bad `task`, `links`, `details`, `parent` or `nickname` never costs the profile. */
 const detailText = (v: unknown, max: number) =>
   typeof v === 'string' && v.trim().length >= 1 && v.trim().length <= max ? v.trim() : undefined;
 const cleanDetail = (detail: unknown): AgentDetail | undefined => {
@@ -251,8 +253,14 @@ const fromWire = <T extends AgentPresence>(value: T): T => {
 };
 const validParent = (key: string, parent: unknown) =>
   typeof parent === 'string' && subagentKey.test(parent) && parent !== key;
+const validNickname = (v: unknown) =>
+  typeof v === 'string' && !!v.trim() && v.length <= agentEntryLimits.nickname;
 const checkSubagent = (key: string, value: SubagentProfile, strict = true) => {
-  const { parent, ...rest } = checkPresence(value, strict);
+  const { parent, nickname, ...rest } = checkPresence(value, strict);
+  if (nickname !== undefined) {
+    if (validNickname(nickname)) Object.assign(rest, { nickname });
+    else if (strict) fail('Invalid subagent nickname.');
+  }
   if (parent === undefined) return rest as SubagentProfile;
   if (validParent(key, parent)) return { ...rest, parent } as SubagentProfile;
   if (strict) fail('Invalid subagent parent.');
